@@ -16,44 +16,7 @@ import { useRouter } from 'next/navigation';
 import { accionGuardarPerfume, type RespuestaPerfume } from '@/app/acciones';
 import type { Estacion, Momento } from '@/dominio/tipos';
 import type { FichaFragrantica, VotoEje } from '@/dominio/fragrantica';
-
-type Nivel = 'SALIDA' | 'CORAZON' | 'FONDO';
-
-export interface ValoresPerfume {
-  nombre: string;
-  marca: string;
-  concentracion: string;
-  anioLanzamiento: string;
-  volumenMl: string;
-  fechaCompra: string;
-  estado: 'LO_TENGO' | 'LO_TUVE';
-  valoracion: string;
-  notasPersonales: string;
-  fragranticaUrl: string;
-  notas: { nombre: string; nivel: Nivel }[];
-  familiaIds: string[];
-  contextoIds: string[];
-  estaciones: Estacion[];
-  momentos: Momento[];
-}
-
-export const VALORES_VACIOS: ValoresPerfume = {
-  nombre: '',
-  marca: '',
-  concentracion: '',
-  anioLanzamiento: '',
-  volumenMl: '',
-  fechaCompra: '',
-  estado: 'LO_TENGO',
-  valoracion: '',
-  notasPersonales: '',
-  fragranticaUrl: '',
-  notas: [],
-  familiaIds: [],
-  contextoIds: [],
-  estaciones: [],
-  momentos: [],
-};
+import { VALORES_VACIOS, type Nivel, type ValoresPerfume } from '@/componentes/valores-perfume';
 
 const NIVELES: { clave: Nivel; titulo: string }[] = [
   { clave: 'SALIDA', titulo: 'Salida' },

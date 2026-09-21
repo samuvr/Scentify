@@ -1,6 +1,7 @@
 /** Seccion 4.1 — Alta de perfume. */
 import { redirect } from 'next/navigation';
-import { FormularioPerfume, VALORES_VACIOS } from '@/componentes/FormularioPerfume';
+import { FormularioPerfume } from '@/componentes/FormularioPerfume';
+import { VALORES_VACIOS } from '@/componentes/valores-perfume';
 import { usuarioActual } from '@/servicios/auth';
 import { listarContextos, listarFamilias, listarNotas } from '@/servicios/consultas';
 

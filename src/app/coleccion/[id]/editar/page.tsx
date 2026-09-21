@@ -1,6 +1,7 @@
 /** Edicion de la ficha: los mismos pasos del alta, ya rellenos. */
 import { notFound, redirect } from 'next/navigation';
-import { FormularioPerfume, type ValoresPerfume } from '@/componentes/FormularioPerfume';
+import { FormularioPerfume } from '@/componentes/FormularioPerfume';
+import type { ValoresPerfume } from '@/componentes/valores-perfume';
 import { usuarioActual } from '@/servicios/auth';
 import { fichaDePerfume, listarContextos, listarFamilias, listarNotas } from '@/servicios/consultas';
 
