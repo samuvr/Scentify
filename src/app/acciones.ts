@@ -17,6 +17,14 @@ import {
   type DatosPerfume,
 } from '@/servicios/perfumes';
 import { crearDeseo, actualizarDeseo, borrarDeseo } from '@/servicios/wishlist';
+import {
+  importarColeccion,
+  previsualizarImportacion,
+  restaurarCopia,
+  type Copia,
+  type PrevisualizacionImportacion,
+  type ResultadoImportacionFinal,
+} from '@/servicios/datos';
 import { guardarAjuste, guardarUmbrales } from '@/servicios/ajustes';
 import {
   borrarUso,
@@ -284,4 +292,39 @@ export async function accionBorrarDeseo(datos: FormData) {
   const id = String(datos.get('id') ?? '');
   if (id) await borrarDeseo(userId, id);
   revalidatePath('/mas/wishlist');
+}
+
+/* ------------------------------------------------------------------ datos */
+
+export async function accionPrevisualizarImportacion(
+  texto: string,
+): Promise<PrevisualizacionImportacion> {
+  const userId = await exigirUsuario();
+  return previsualizarImportacion(userId, texto);
+}
+
+export async function accionImportar(
+  texto: string,
+  omitirDuplicados: boolean,
+): Promise<ResultadoImportacionFinal> {
+  const userId = await exigirUsuario();
+  const previa = await previsualizarImportacion(userId, texto);
+  const resultado = await importarColeccion(userId, previa.filas, { omitirDuplicados });
+  revalidatePath('/coleccion');
+  revalidatePath('/estadisticas');
+  return resultado;
+}
+
+export async function accionRestaurarCopia(json: string): Promise<{ ok: boolean; error?: string }> {
+  const userId = await exigirUsuario();
+  try {
+    const copia = JSON.parse(json) as Copia;
+    await restaurarCopia(userId, copia);
+    revalidatePath('/');
+    revalidatePath('/coleccion');
+    revalidatePath('/estadisticas');
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : 'Copia no válida.' };
+  }
 }

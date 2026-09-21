@@ -28,10 +28,27 @@ const esNeonHttp = () => /\.neon\.tech/.test(url()) && process.env.SCENTIFY_DB_D
  */
 export type Db = PostgresJsDatabase<typeof schema>;
 
+/**
+ * Cliente unico por proceso.
+ *
+ * Sin esto, cada consulta abriria su propio pool: en una importacion de CSV de
+ * cuarenta filas eso agota las conexiones del servidor. En Vercel cada funcion
+ * es un proceso de vida corta, asi que un cliente por proceso es exactamente lo
+ * que se quiere.
+ */
+let cliente: Db | undefined;
+
 export function crearDb(): Db {
-  const cliente = esNeonHttp()
+  if (cliente) return cliente;
+
+  const nuevo = esNeonHttp()
     ? drizzleNeon(neon(url()), { schema, casing: 'snake_case' })
-    : drizzlePostgres(postgres(url(), { max: 1 }), { schema, casing: 'snake_case' });
-  return cliente as unknown as Db;
+    : drizzlePostgres(postgres(url(), { max: 5, idle_timeout: 20 }), {
+        schema,
+        casing: 'snake_case',
+      });
+
+  cliente = nuevo as unknown as Db;
+  return cliente;
 }
 export { schema };

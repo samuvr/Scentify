@@ -97,6 +97,12 @@ Y dos más, menores, que aparecieron al implementar:
    que la cuenta salga como salga, no falta ninguno. Dime si por «cinco umbrales»
    entendías otra cosa.
 
+7. **La importación CSV no exige contexto, estación ni momento.** El alta manual sí los
+   exige, porque la sección 4.1 los marca como mínimo uno. Pero el CSV del primer día
+   trae la colección entera y bloquear cuarenta filas por eso lo haría inservible, así
+   que la importación los deja pasar y lo que entre sin categorizar se completa después
+   desde la ficha. Dímelo si prefieres que la importación también los exija.
+
 **Orden del bloque «Nunca los has usado»:** la especificación no lo fija. Se ordena por
 idoneidad descendente y luego por nombre, para que la lista sea estable entre recargas.
 
@@ -104,17 +110,19 @@ idoneidad descendente y luego por nombre, para que la lista sea estable entre re
 
 ## Estado del proyecto
 
+MVP completo. Fase 2 (sección 10) pendiente.
+
 | Bloque | Estado |
 |---|---|
-| Esquema de base de datos y migraciones (secc. 3) | Hecho |
-| Semillas: contextos, notas, familias, umbrales (secc. 11) | Hecho |
-| Lógica de idoneidad (secc. 6.2) | Hecho, con tests |
-| Estación efectiva por temperatura (secc. 7.1) | Hecho, con tests |
-| Orden del motor de recomendación (secc. 7.2) | Hecho, con tests |
-| Interfaz: colección, registro, recomendación, estadísticas | Pendiente |
-| Integración Fragrantica (secc. 5) | Pendiente |
-| Importación/exportación y backup (secc. 9) | Pendiente |
-| PWA: manifest, service worker, cola offline | Pendiente |
+| Esquema, migraciones y semillas (secc. 3 y 11) | Hecho |
+| Idoneidad, estación efectiva y recomendación (secc. 6.2, 7.1, 7.2) | Hecho, con tests |
+| Colección: listado, filtros, ficha y alta en pasos (secc. 4) | Hecho |
+| Integración Fragrantica con sus dos fallbacks (secc. 5) | Hecho, con tests |
+| Registro diario (secc. 6) | Hecho |
+| Estadísticas (secc. 8) | Hecho, con tests |
+| Importar, exportar y copia de seguridad (secc. 9) | Hecho, con tests |
+| PWA: manifest, service worker, cola offline (secc. 11) | Hecho |
+| Fase 2: huecos, solapamiento, viaje, recordatorio (secc. 10) | Pendiente |
 
 ---
 
@@ -125,15 +133,41 @@ npm install
 cp .env.example .env            # y rellena DATABASE_URL con tu cadena de Neon
 npm run db:migrate              # aplica drizzle/*.sql en orden
 npm run db:seed                 # contextos, notas, familias y umbrales por defecto
-npm test                        # tests de las tres piezas con lógica real
+npm run dev                     # http://localhost:3000
+npm test                        # tests de dominio
 ```
+
+Para incluir los tests de integración hace falta una base de datos de usar y tirar; sin
+`DATABASE_URL` se saltan solos y `npm test` sigue siendo instantáneo:
+
+```bash
+createdb scentify_test
+DATABASE_URL=postgresql://…/scentify_test SCENTIFY_DB_DRIVER=tcp npm run db:migrate
+DATABASE_URL=postgresql://…/scentify_test SCENTIFY_DB_DRIVER=tcp npm run db:seed
+DATABASE_URL=postgresql://…/scentify_test SCENTIFY_DB_DRIVER=tcp npm test
+```
+
+`SCENTIFY_USER_PASSWORD` en el entorno de `db:seed` fija la contraseña del único usuario;
+sin ella el usuario se crea sin acceso.
 
 ## Estructura
 
 ```
 drizzle/            Migraciones SQL versionadas + journal
-src/db/schema.ts    Esquema Drizzle (fuente de verdad del modelo)
-src/db/seed.ts      Semillas idempotentes
-src/dominio/        Lógica pura: idoneidad, estación efectiva, recomendación
-tests/              Tests de las tres piezas con lógica real
+public/             Manifest, service worker e iconos de la PWA
+src/app/            Pantallas (App Router), acciones de servidor y API
+src/cliente/        Cola offline en IndexedDB
+src/componentes/    Componentes compartidos
+src/db/             Esquema Drizzle, migración y semillas
+src/dominio/        Lógica pura: idoneidad, estación, recomendación, CSV,
+                    parser de Fragrantica y aritmética de estadísticas
+src/servicios/      Acceso a datos, auth, clima, Fragrantica, importación
+tests/              Tests de dominio; tests/integracion/ contra PostgreSQL
 ```
+
+### Sobre la lógica de dominio
+
+Todo lo de `src/dominio/` son funciones puras: sin red, sin base de datos y sin reloj
+implícito (la fecha entra por parámetro). Es lo que permite que el mismo cálculo corra en
+el servidor al guardar un uso y en el cliente al encolarlo sin conexión, y que se pueda
+probar sin levantar nada.

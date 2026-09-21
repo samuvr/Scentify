@@ -37,9 +37,20 @@ export interface DatosPerfume {
 
 export class ErrorValidacion extends Error {}
 
-function validar(datos: DatosPerfume): void {
+export interface OpcionesAlta {
+  /**
+   * Salta las cardinalidades minimas. Solo lo usa la importacion CSV: el
+   * fichero del primer dia trae la coleccion entera y bloquear cuarenta filas
+   * por falta de contexto la haria inservible (seccion 9).
+   */
+  permitirIncompleto?: boolean;
+}
+
+function validar(datos: DatosPerfume, opciones: OpcionesAlta = {}): void {
   if (!datos.nombre.trim()) throw new ErrorValidacion('El nombre es obligatorio.');
   if (!datos.marca.trim()) throw new ErrorValidacion('La marca es obligatoria.');
+  if (opciones.permitirIncompleto) return;
+
   if (datos.contextoIds.length === 0) {
     throw new ErrorValidacion('Marca al menos un contexto.');
   }
@@ -105,18 +116,30 @@ async function sincronizarRelaciones(perfumeId: string, datos: DatosPerfume): Pr
           .insert(schema.perfumeFamilia)
           .values(datos.familiaIds.map((familiaId, orden) => ({ perfumeId, familiaId, orden })))
       : null,
-    db
-      .insert(schema.perfumeContexto)
-      .values(datos.contextoIds.map((contextoId) => ({ perfumeId, contextoId }))),
-    db
-      .insert(schema.perfumeEstacion)
-      .values(datos.estaciones.map((estacion) => ({ perfumeId, estacion }))),
-    db.insert(schema.perfumeMomento).values(datos.momentos.map((momento) => ({ perfumeId, momento }))),
+    datos.contextoIds.length
+      ? db
+          .insert(schema.perfumeContexto)
+          .values(datos.contextoIds.map((contextoId) => ({ perfumeId, contextoId })))
+      : null,
+    datos.estaciones.length
+      ? db
+          .insert(schema.perfumeEstacion)
+          .values(datos.estaciones.map((estacion) => ({ perfumeId, estacion })))
+      : null,
+    datos.momentos.length
+      ? db
+          .insert(schema.perfumeMomento)
+          .values(datos.momentos.map((momento) => ({ perfumeId, momento })))
+      : null,
   ]);
 }
 
-export async function crearPerfume(userId: string, datos: DatosPerfume): Promise<string> {
-  validar(datos);
+export async function crearPerfume(
+  userId: string,
+  datos: DatosPerfume,
+  opciones: OpcionesAlta = {},
+): Promise<string> {
+  validar(datos, opciones);
   const db = crearDb();
 
   const [creado] = await db

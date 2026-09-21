@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Scentify">
+  <rect width="512" height="512" rx="112" fill="#12100e"/>
+  <!-- Frasco -->
+  <rect x="196" y="96" width="120" height="56" rx="14" fill="#8a6a34"/>
+  <path d="M176 172c0-13 11-24 24-24h112c13 0 24 11 24 24v20c0 44 36 44 36 100v88c0 33-27 60-60 60H200c-33 0-60-27-60-60v-88c0-56 36-56 36-100z" fill="#d6a35c"/>
+  <!-- Vaporizador -->
+  <circle cx="368" cy="128" r="18" fill="#7a4a2b"/>
+  <path d="M330 124h24" stroke="#7a4a2b" stroke-width="12" stroke-linecap="round"/>
+  <!-- Nivel del liquido -->
+  <path d="M164 352h184v48c0 20-16 36-36 36H200c-20 0-36-16-36-36z" fill="#7a4a2b" opacity="0.7"/>
+</svg>

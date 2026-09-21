@@ -28,12 +28,22 @@ export function SincronizadorOffline() {
 
     const desconectar = () => setSinConexion(true);
 
+    // El service worker avisa cuando ha vaciado la cola con Background Sync.
+    const desdeWorker = (evento: MessageEvent) => {
+      if (evento.data?.tipo === 'usos-sincronizados') {
+        contar();
+        router.refresh();
+      }
+    };
+    navigator.serviceWorker?.addEventListener('message', desdeWorker);
+
     setSinConexion(!navigator.onLine);
     window.addEventListener('online', sincronizar);
     window.addEventListener('offline', desconectar);
     return () => {
       window.removeEventListener('online', sincronizar);
       window.removeEventListener('offline', desconectar);
+      navigator.serviceWorker?.removeEventListener('message', desdeWorker);
     };
   }, [router]);
 
