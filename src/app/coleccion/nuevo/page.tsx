@@ -1,0 +1,41 @@
+/** Seccion 4.1 — Alta de perfume. */
+import { redirect } from 'next/navigation';
+import { FormularioPerfume, VALORES_VACIOS } from '@/componentes/FormularioPerfume';
+import { usuarioActual } from '@/servicios/auth';
+import { listarContextos, listarFamilias, listarNotas } from '@/servicios/consultas';
+
+export const dynamic = 'force-dynamic';
+
+export default async function PaginaNuevoPerfume({
+  searchParams,
+}: {
+  searchParams: Promise<{ nombre?: string; marca?: string; url?: string }>;
+}) {
+  const userId = await usuarioActual();
+  if (!userId) redirect('/login');
+
+  const previos = await searchParams;
+  const [contextos, familias, notas] = await Promise.all([
+    listarContextos(userId),
+    listarFamilias(),
+    listarNotas(),
+  ]);
+
+  return (
+    <div className="space-y-5">
+      <h1 className="text-2xl font-bold">Añadir perfume</h1>
+      <FormularioPerfume
+        // Prerrellenado al convertir un deseo de la wishlist (4.5).
+        iniciales={{
+          ...VALORES_VACIOS,
+          nombre: previos.nombre ?? '',
+          marca: previos.marca ?? '',
+          fragranticaUrl: previos.url ?? '',
+        }}
+        contextos={contextos.map((c) => ({ id: c.id, nombre: c.nombre }))}
+        familias={familias.map((f) => ({ id: f.id, nombre: f.nombre }))}
+        notasConocidas={notas.map((n) => n.nombre)}
+      />
+    </div>
+  );
+}

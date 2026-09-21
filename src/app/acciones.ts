@@ -8,6 +8,15 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { cerrarSesion, exigirUsuario, iniciarSesion } from '@/servicios/auth';
+import {
+  actualizarPerfume,
+  archivarPerfume,
+  cambiarEstado,
+  crearPerfume,
+  ErrorValidacion,
+  type DatosPerfume,
+} from '@/servicios/perfumes';
+import { crearDeseo, actualizarDeseo, borrarDeseo } from '@/servicios/wishlist';
 import { guardarAjuste, guardarUmbrales } from '@/servicios/ajustes';
 import {
   borrarUso,
@@ -172,4 +181,107 @@ export async function accionGuardarConfiguracion(datos: FormData) {
 
   revalidatePath('/mas/configuracion');
   revalidatePath('/recomendacion');
+}
+
+/* --------------------------------------------------------------- perfumes */
+
+const esquemaPerfume = z.object({
+  nombre: z.string().min(1).max(200),
+  marca: z.string().min(1).max(200),
+  concentracion: z
+    .enum(['EDC', 'EDT', 'EDP', 'EXTRAIT', 'PARFUM', 'ACEITE', 'OTRO'])
+    .nullable()
+    .optional(),
+  anioLanzamiento: z.coerce.number().int().min(1700).max(2200).nullable().optional(),
+  volumenMl: z.coerce.number().int().positive().nullable().optional(),
+  fechaCompra: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  estado: z.enum(['LO_TENGO', 'LO_TUVE']),
+  valoracion: z.coerce.number().int().min(1).max(5).nullable().optional(),
+  notasPersonales: z.string().max(4000).nullable().optional(),
+  fragranticaUrl: z.string().url().max(500).nullable().optional(),
+  notas: z.array(
+    z.object({
+      nombre: z.string().min(1).max(80),
+      nivel: z.enum(['SALIDA', 'CORAZON', 'FONDO']),
+      orden: z.number().int().optional(),
+    }),
+  ),
+  familiaIds: z.array(z.string().uuid()),
+  contextoIds: z.array(z.string().uuid()).min(1, 'Marca al menos un contexto.'),
+  estaciones: z.array(z.enum(ESTACIONES)).min(1, 'Marca al menos una estación.'),
+  momentos: z.array(z.enum(MOMENTOS)).min(1, 'Marca al menos un momento del día.'),
+});
+
+export type RespuestaPerfume = { ok: true; id: string } | { ok: false; error: string };
+
+export async function accionGuardarPerfume(
+  perfumeId: string | null,
+  entrada: unknown,
+): Promise<RespuestaPerfume> {
+  const userId = await exigirUsuario();
+  const analisis = esquemaPerfume.safeParse(entrada);
+  if (!analisis.success) {
+    return { ok: false, error: analisis.error.issues[0]?.message ?? 'Datos no válidos.' };
+  }
+
+  try {
+    const datos = analisis.data as DatosPerfume;
+    const id = perfumeId
+      ? (await actualizarPerfume(userId, perfumeId, datos), perfumeId)
+      : await crearPerfume(userId, datos);
+
+    revalidatePath('/coleccion');
+    revalidatePath(`/coleccion/${id}`);
+    return { ok: true, id };
+  } catch (error) {
+    if (error instanceof ErrorValidacion) return { ok: false, error: error.message };
+    throw error;
+  }
+}
+
+export async function accionArchivar(datos: FormData) {
+  const userId = await exigirUsuario();
+  const perfumeId = String(datos.get('perfumeId') ?? '');
+  const archivar = datos.get('archivar') === '1';
+  if (perfumeId) await archivarPerfume(userId, perfumeId, archivar);
+  revalidatePath('/coleccion');
+  revalidatePath(`/coleccion/${perfumeId}`);
+}
+
+export async function accionCambiarEstado(datos: FormData) {
+  const userId = await exigirUsuario();
+  const perfumeId = String(datos.get('perfumeId') ?? '');
+  const estado = datos.get('estado') === 'LO_TUVE' ? 'LO_TUVE' : 'LO_TENGO';
+  if (perfumeId) await cambiarEstado(userId, perfumeId, estado);
+  revalidatePath('/coleccion');
+  revalidatePath(`/coleccion/${perfumeId}`);
+}
+
+/* --------------------------------------------------------------- wishlist */
+
+const esquemaDeseo = z.object({
+  nombre: z.string().min(1).max(200),
+  marca: z.string().min(1).max(200),
+  prioridad: z.enum(['EN_EL_RADAR', 'LO_QUIERO', 'LO_NECESITO']),
+  precioObjetivo: z.coerce.number().min(0).nullable().optional(),
+  notas: z.string().max(2000).nullable().optional(),
+  fragranticaUrl: z.string().url().max(500).nullable().optional(),
+});
+
+export async function accionGuardarDeseo(datos: FormData) {
+  const userId = await exigirUsuario();
+  const id = String(datos.get('id') ?? '');
+  const analisis = esquemaDeseo.safeParse(desdeFormulario(datos));
+  if (!analisis.success) return;
+
+  if (id) await actualizarDeseo(userId, id, analisis.data);
+  else await crearDeseo(userId, analisis.data);
+  revalidatePath('/mas/wishlist');
+}
+
+export async function accionBorrarDeseo(datos: FormData) {
+  const userId = await exigirUsuario();
+  const id = String(datos.get('id') ?? '');
+  if (id) await borrarDeseo(userId, id);
+  revalidatePath('/mas/wishlist');
 }
