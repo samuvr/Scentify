@@ -132,12 +132,24 @@ MVP y fase 2 completos.
 
 ```bash
 npm install
-cp .env.example .env            # y rellena DATABASE_URL con tu cadena de Neon
+cp .env.example .env            # y rellena DATABASE_URL, AUTH_SECRET y SCENTIFY_USER_PASSWORD
 npm run db:migrate              # aplica drizzle/*.sql en orden
-npm run db:seed                 # contextos, notas, familias y umbrales por defecto
+npm run db:seed                 # usuario, contextos y umbrales por defecto
 npm run dev                     # http://localhost:3000
 npm test                        # tests de dominio
 ```
+
+Todos los scripts leen `.env`, no solo `next dev`: `src/db/entorno.ts` carga el fichero
+con el mismo cargador que usa Next, y lo importan `db:migrate`, `db:seed`,
+`drizzle.config.ts` y los tests. Así no hay que exportar nada en el terminal, que además
+es lo único que funciona igual en Windows, macOS y Linux.
+
+En `.env` hacen falta tres cosas para arrancar. `DATABASE_URL` es la cadena de Neon —la
+directa, sin `-pooler`, que sirve igual para migrar, sembrar y servir la app—.
+`AUTH_SECRET` es cualquier cadena larga y aleatoria. `SCENTIFY_USER_PASSWORD` fija la
+contraseña del único usuario: **sin ella el usuario se crea sin acceso posible**. El
+correo de `SCENTIFY_USER_EMAIL` se guarda siempre en minúsculas, porque así es como lo
+busca el login.
 
 Para incluir los tests de integración hace falta una base de datos de usar y tirar; sin
 `DATABASE_URL` se saltan solos y `npm test` sigue siendo instantáneo:
@@ -149,8 +161,9 @@ DATABASE_URL=postgresql://…/scentify_test SCENTIFY_DB_DRIVER=tcp npm run db:se
 DATABASE_URL=postgresql://…/scentify_test SCENTIFY_DB_DRIVER=tcp npm test
 ```
 
-`SCENTIFY_USER_PASSWORD` en el entorno de `db:seed` fija la contraseña del único usuario;
-sin ella el usuario se crea sin acceso.
+No hay `npm run lint`: `next lint` está retirado desde Next 15.5 y no se ha sustituido
+todavía por una configuración de ESLint propia. La comprobación estática es
+`npm run typecheck`.
 
 ## Estructura
 

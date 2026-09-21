@@ -10,7 +10,6 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
@@ -19,6 +18,7 @@
     "db:seed": "tsx src/db/seed.ts"
   },
   "dependencies": {
+    "@next/env": "^15.5.25",
     "@neondatabase/serverless": "^0.10.4",
     "drizzle-orm": "^0.36.4",
     "next": "^15.5.25",
