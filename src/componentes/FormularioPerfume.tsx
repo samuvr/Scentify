@@ -259,18 +259,19 @@ export function FormularioPerfume({
               <div>
                 <label htmlFor="pegado">O pega aquí el texto copiado del navegador</label>
                 {/*
-                  Decir exactamente que seleccionar no es un adorno: pegar la
-                  pagina entera funciona, pero el texto de las resenias habla de
-                  inviernos y veranos y desplaza el recuento de votos. Acotar la
-                  seleccion a este tramo da los mismos numeros que la lectura
-                  automatica.
+                  Se pide la pagina entera a proposito. Acotar la seleccion a un
+                  tramo concreto obligaba a nombrar rotulos que no estan en todas
+                  las fichas —hay maquetaciones sin "Votar por ingredientes", y en
+                  otras la piramide va al final, detras de las fotos—, asi que la
+                  instruccion fallaba justo cuando mas falta hacia. El parser acota
+                  por su cuenta el bloque de votos, de modo que el ruido de
+                  resenias y noticias ya no le afecta.
                 */}
                 <p className="mt-1 text-sm text-texto-tenue">
-                  Abre la ficha en el navegador y selecciona desde{' '}
-                  <strong className="text-texto">«acordes principales»</strong> hasta justo antes
-                  de <strong className="text-texto">«Votar por ingredientes»</strong>. Ese tramo
-                  lleva los acordes, la pirámide de notas y los votos de estación y momento.
-                  Copia y pega aquí.
+                  Abre la ficha en el navegador, selecciona{' '}
+                  <strong className="text-texto">toda la página</strong> con Ctrl+A (⌘+A en Mac),
+                  cópiala y pégala aquí. No hace falta que recortes nada: de todo eso se sacan
+                  los acordes, la pirámide de notas y los votos de estación y momento.
                 </p>
                 <textarea
                   id="pegado"

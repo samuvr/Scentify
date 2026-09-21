@@ -240,6 +240,18 @@ Lo que la ficha real hace y no era evidente:
 - Entre el rótulo de una nota y la siguiente hay miles de caracteres de SVG e
   imágenes, así que cualquier tope por longitud tiene que ser holgado.
 - La ficha en español dice «se lanzó en 2022», no «launched in».
+- La maquetación no es una sola: hay fichas donde la pirámide va al final, detrás de
+  las fotos y las reseñas, y donde no aparece «Votar por ingredientes» por ningún
+  lado. Cualquier instrucción al usuario que nombre rótulos concretos se rompe en
+  alguna ficha, así que la pantalla pide la página entera y es el parser quien acota.
+- Buscar las etiquetas de voto por toda la fuente es una trampa. En una ficha real, el
+  titular «9 PM NIGHT OUT Afnan» de las noticias del pie daba «night» con un 9 al
+  lado, que ganaba a los 3.300 votos reales de noche: el eje quedaba en 100 % día y
+  0 % noche, un número rotundo y falso. Por eso los votos se buscan solo dentro del
+  bloque «Cuándo usarlo», igual que la pirámide se ancla a su contenedor. El fixture
+  `fragrantica-pegado-ruidoso.txt` es esa página entera y lo fija.
+- La misma página repite cada nota dos veces y el bloque de votos entero otra vez más;
+  el parser deduplica y se queda con el primer bloque.
 
 **Expectativa realista:** Cloudflare bloquea las IP de centro de datos, así que la
 petición automática desde Vercel fallará a menudo. Los dos fallbacks de la 5.2 están

@@ -70,6 +70,34 @@ const ETIQUETAS_NIVEL: Record<keyof PiramideNotas, string[]> = {
   fondo: ['notas de fondo', 'notas de base', 'base notes', 'fondo', 'base'],
 };
 
+/**
+ * El bloque de votos de estacion y momento.
+ *
+ * Buscar las etiquetas por toda la fuente es peligroso en el texto pegado: una
+ * ficha real traia el titular "9 PM NIGHT OUT Afnan" entre las noticias del
+ * pie, y de ahi salia "night" con un 9 al lado, que ganaba a los 3.300 votos
+ * reales de noche y dejaba el eje en 100 % dia. Acotar al bloque es lo mismo
+ * que ya se hace con la piramide y su contenedor.
+ */
+const INICIO_VOTOS = ['cuándo usarlo', 'cuando usarlo', 'when to wear'];
+
+/** Lo que Fragrantica pinta justo despues del bloque de votos. */
+const FIN_VOTOS = [
+  'calificación',
+  'calificacion',
+  'rating',
+  'reseñas',
+  'resenas',
+  'reviews',
+  'composición de la fragancia',
+  'composicion de la fragancia',
+  'pirámide del perfume',
+  'piramide del perfume',
+  'fragrance pyramid',
+  'votar por ingredientes',
+  'vote for ingredients',
+];
+
 /** La piramide estructurada vive en este contenedor. */
 const ANCLA_PIRAMIDE = 'id="pyramid"';
 
@@ -276,6 +304,23 @@ function datoDe(
     }
   }
   return { votos: null, anchura: null };
+}
+
+/**
+ * Recorta la fuente al bloque de votos. Si no se encuentra el rotulo de
+ * apertura se devuelve la fuente entera, que es el comportamiento de siempre.
+ */
+function bloqueDeVotos(fuente: string, esHtml: boolean): string {
+  const inicio = INICIO_VOTOS.flatMap((rotulo) =>
+    posicionesDeRotulo(fuente, rotulo, esHtml),
+  ).sort((a, b) => a - b)[0];
+  if (inicio === undefined) return fuente;
+
+  const resto = fuente.slice(inicio);
+  const fin = FIN_VOTOS.flatMap((rotulo) => posicionesDeRotulo(resto, rotulo, esHtml))
+    .filter((posicion) => posicion > 0)
+    .sort((a, b) => a - b)[0];
+  return fin === undefined ? resto : resto.slice(0, fin);
 }
 
 /** Normaliza un eje a porcentajes sobre su propio total (paso 4 de la 5.1). */
@@ -538,9 +583,18 @@ function extraerAcordes(fuente: string): string[] {
  */
 export function leerFichaFragrantica(fuente: string): FichaFragrantica {
   const esHtml = pareceHtml(fuente);
+  const votos = bloqueDeVotos(fuente, esHtml);
+  /**
+   * Si el recorte no da nada —una maquetacion sin el rotulo esperado, o un
+   * pegado que empieza ya dentro del bloque— se vuelve a intentar con la
+   * fuente entera, que es como se comportaba antes.
+   */
+  const respaldo = <C extends string>(etiquetas: Record<C, string[]>) =>
+    votos === fuente ? null : normalizarEje(fuente, etiquetas, esHtml);
+
   return {
-    estaciones: normalizarEje(fuente, ETIQUETAS_ESTACION, esHtml),
-    momentos: normalizarEje(fuente, ETIQUETAS_MOMENTO, esHtml),
+    estaciones: normalizarEje(votos, ETIQUETAS_ESTACION, esHtml) ?? respaldo(ETIQUETAS_ESTACION),
+    momentos: normalizarEje(votos, ETIQUETAS_MOMENTO, esHtml) ?? respaldo(ETIQUETAS_MOMENTO),
     notas: extraerPiramide(fuente),
     marca: extraerMarca(fuente),
     anio: extraerAnio(fuente),
