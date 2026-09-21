@@ -1,18 +1,17 @@
 /**
- * Fichas de prueba para el parser de la seccion 5.
+ * Casos sinteticos del parser.
  *
- * IMPORTANTE: son sinteticas, escritas a mano reproduciendo las dos formas en
- * que se renderiza el bloque "Cuando usarlo". No son capturas de Fragrantica:
- * la especificacion prohibe la recoleccion automatizada y estos tests no tocan
- * la red. Sirven para fijar el comportamiento del parser; el ajuste fino contra
- * el HTML real hay que hacerlo pegando una ficha de verdad.
+ * Las dos fichas de verdad viven en `fragrantica-popular.html` y
+ * `fragrantica-nicho.html`, recortadas de fragrantica.es. Aqui solo queda lo
+ * que esas dos no cubren: la maquetacion del sitio en ingles, el texto pegado
+ * a mano del fallback de la 5.2, y una pagina sin datos.
  */
 
 /**
- * Ficha muy votada: el bloque enseña el numero de votos Y la anchura de la
- * barra. Es la maquetacion habitual de un superventas.
+ * Maquetacion del sitio en ingles, con los rotulos "Top/Middle/Base Notes" y
+ * el recuento de votos sin abreviar.
  */
-export const FICHA_MUY_VOTADA = `
+export const FICHA_EN_INGLES = `
 <!doctype html>
 <html>
 <head><title>Khamrah by Lattafa Perfumes</title></head>
@@ -88,63 +87,16 @@ export const FICHA_MUY_VOTADA = `
 `;
 
 /**
- * Ficha de nicho con pocos datos: el bloque se renderiza SIN el numero visible,
- * solo con la anchura de la barra, y falta la piramide de corazon. El parser
- * tiene que apañarse igual.
- */
-export const FICHA_DE_NICHO = `
-<!doctype html>
-<html>
-<head><title>Oud Sahraa by Asdaaf</title></head>
-<body>
-  <h1>Oud Sahraa</h1>
-  <p>This fragrance was launched in 2021.</p>
-
-  <div id="pyramid">
-    <h4>Top Notes</h4>
-    <div><img src="saffron.jpg"><div>Saffron</div></div>
-    <h4>Base Notes</h4>
-    <div><img src="oud.jpg"><div>Agarwood (Oud)</div></div>
-    <div><img src="sandal.jpg"><div>Sandalwood</div></div>
-  </div>
-
-  <div class="when-to-wear">
-    <h5>When to wear</h5>
-    <div class="grid-x">
-      <div class="cell small-3">winter</div>
-      <div class="cell small-9"><div style="width: 100.0%; background: #cc9966;"></div></div>
-    </div>
-    <div class="grid-x">
-      <div class="cell small-3">spring</div>
-      <div class="cell small-9"><div style="width: 25.0%; background: #cc9966;"></div></div>
-    </div>
-    <div class="grid-x">
-      <div class="cell small-3">summer</div>
-      <div class="cell small-9"><div style="width: 0.0%; background: #cc9966;"></div></div>
-    </div>
-    <div class="grid-x">
-      <div class="cell small-3">fall</div>
-      <div class="cell small-9"><div style="width: 75.0%; background: #cc9966;"></div></div>
-    </div>
-    <div class="grid-x">
-      <div class="cell small-3">day</div>
-      <div class="cell small-9"><div style="width: 20.0%; background: #cc9966;"></div></div>
-    </div>
-    <div class="grid-x">
-      <div class="cell small-3">night</div>
-      <div class="cell small-9"><div style="width: 80.0%; background: #cc9966;"></div></div>
-    </div>
-  </div>
-</body>
-</html>
-`;
-
-/**
  * Lo que el usuario pega en el textarea cuando la peticion falla (fallback 1 de
  * la 5.2): texto plano copiado del navegador, sin una sola etiqueta HTML.
+ * Incluye la frase del resumen, que es de donde salen las notas cuando no hay
+ * bloque estructurado que leer.
  */
 export const TEXTO_PEGADO = `
-When to wear Khamrah
+Club De Nuit Urban Elixir de Armaf se lanzó en 2022. Las Notas de Salida son
+bergamota, pimienta rosa y jazmín; las Notas de Fondo son ámbar, cedro y ládano.
+
+Cuándo usarlo
 winter 268
 spring 119
 summer 42

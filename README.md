@@ -116,7 +116,7 @@ MVP y fase 2 completos.
 | Esquema, migraciones y semillas (secc. 3 y 11) | Hecho |
 | Idoneidad, estación efectiva y recomendación (secc. 6.2, 7.1, 7.2) | Hecho, con tests |
 | Colección: listado, filtros, ficha y alta en pasos (secc. 4) | Hecho |
-| Integración Fragrantica con sus dos fallbacks (secc. 5) | Hecho, con tests |
+| Integración Fragrantica con sus dos fallbacks (secc. 5) | Hecho, con tests sobre fichas reales |
 | Registro diario (secc. 6) | Hecho |
 | Estadísticas (secc. 8) | Hecho, con tests |
 | Importar, exportar y copia de seguridad (secc. 9) | Hecho, con tests |
@@ -183,6 +183,31 @@ La sección 10.4 necesita tres cosas en producción, todas gratuitas:
 
 El envío es idempotente: la tarea puede dispararse varias veces el mismo día y solo
 manda un aviso, porque queda anotado en `recordatorio_enviado`.
+
+### Sobre el parser de Fragrantica
+
+Los tests corren contra dos fragmentos **reales** de fragrantica.es guardados en
+`tests/fixtures/`: un superventas con miles de votos y una novedad con pocos, que es
+lo que pide la sección 5.3. No son las páginas enteras, solo los bloques que el parser
+mira, y hay una comprobación de que el recorte da exactamente el mismo resultado que
+la página completa de la que salió.
+
+Lo que la ficha real hace y no era evidente:
+
+- Los recuentos vienen abreviados: `2.8k` son 2800 votos, `140K` son 140000.
+- Los niveles de la pirámide se titulan «Notas de Salida», «Corazón» y «Base», y ese
+  «Base» aparece también dentro de clases CSS como `text-base`, así que los rótulos se
+  buscan como nodos de texto completos y no como palabras sueltas.
+- «Notas de Salida» sale además en el `<meta description>` y en la prosa del resumen,
+  mucho antes que la pirámide de verdad; por eso la búsqueda se ancla al contenedor
+  `id="pyramid"`.
+- Entre el rótulo de una nota y la siguiente hay miles de caracteres de SVG e
+  imágenes, así que cualquier tope por longitud tiene que ser holgado.
+- La ficha en español dice «se lanzó en 2022», no «launched in».
+
+**Expectativa realista:** Cloudflare bloquea las IP de centro de datos, así que la
+petición automática desde Vercel fallará a menudo. Los dos fallbacks de la 5.2 están
+implementados y probados, y el de pegar el texto es el que más se va a usar.
 
 ### Sobre el modo viaje
 
