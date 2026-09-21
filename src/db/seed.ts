@@ -19,7 +19,9 @@ if (!DATABASE_URL) {
 }
 
 const userId = process.env.SCENTIFY_USER_ID ?? randomUUID();
-const email = process.env.SCENTIFY_USER_EMAIL ?? 'yo@scentify.local';
+// En minusculas: el login normaliza asi el correo antes de buscarlo, y si
+// aqui se guardara con mayusculas no habria forma de entrar.
+const email = (process.env.SCENTIFY_USER_EMAIL ?? 'yo@scentify.local').trim().toLowerCase();
 const password = process.env.SCENTIFY_USER_PASSWORD;
 
 /** scrypt con sal por usuario. Formato: scrypt$<sal hex>$<derivada hex>. */

@@ -334,6 +334,31 @@ export const wishlist = pgTable(
   ],
 );
 
+/**
+ * Notas de fondo de un deseo (seccion 10.2).
+ *
+ * Se guardan normalizadas contra el mismo vocabulario que los perfumes, y no
+ * como texto suelto en `wishlist.notas`, por lo mismo que en la seccion 3: si
+ * no, no se pueden cruzar con la coleccion para detectar el solapamiento.
+ * Solo el fondo: es lo que hace que dos frascos sean redundantes.
+ */
+export const wishlistNota = pgTable(
+  'wishlist_nota',
+  {
+    wishlistId: uuid('wishlist_id')
+      .notNull()
+      .references(() => wishlist.id, { onDelete: 'cascade' }),
+    notaId: uuid('nota_id')
+      .notNull()
+      .references(() => nota.id, { onDelete: 'restrict' }),
+    orden: smallint('orden').notNull().default(0),
+  },
+  (t) => [
+    primaryKey({ name: 'pk_wishlist_nota', columns: [t.wishlistId, t.notaId] }),
+    index('idx_wishlist_nota_nota').on(t.notaId),
+  ],
+);
+
 /* -------------------------------------------------------------- ajustes */
 
 /**
@@ -375,6 +400,43 @@ export const recomendacionDescarte = pgTable(
   (t) => [
     primaryKey({ name: 'pk_recomendacion_descarte', columns: [t.userId, t.perfumeId, t.fecha] }),
   ],
+);
+
+/**
+ * Suscripcion de avisos del navegador (seccion 10.4).
+ *
+ * Un mismo usuario puede tener varias: el movil, la tablet, el escritorio. El
+ * endpoint que da el navegador es la clave, y cuando caduca el servicio de push
+ * devuelve 410 y la fila se borra.
+ */
+export const pushSuscripcion = pgTable(
+  'push_suscripcion',
+  {
+    endpoint: text('endpoint').primaryKey(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => usuario.id, { onDelete: 'cascade' }),
+    p256dh: text('p256dh').notNull(),
+    auth: text('auth').notNull(),
+    creadoEn: timestamp('creado_en', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('idx_push_usuario').on(t.userId)],
+);
+
+/**
+ * Avisos ya enviados, para no repetir el recordatorio del mismo dia si la tarea
+ * programada se ejecuta mas de una vez.
+ */
+export const recordatorioEnviado = pgTable(
+  'recordatorio_enviado',
+  {
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => usuario.id, { onDelete: 'cascade' }),
+    fecha: date('fecha').notNull(),
+    enviadoEn: timestamp('enviado_en', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ name: 'pk_recordatorio_enviado', columns: [t.userId, t.fecha] })],
 );
 
 /**
@@ -457,10 +519,16 @@ export const usoRelations = relations(uso, ({ one }) => ({
   contexto: one(contexto, { fields: [uso.contextoId], references: [contexto.id] }),
 }));
 
-export const wishlistRelations = relations(wishlist, ({ one }) => ({
+export const wishlistRelations = relations(wishlist, ({ one, many }) => ({
   usuario: one(usuario, { fields: [wishlist.userId], references: [usuario.id] }),
   perfumeConvertido: one(perfume, {
     fields: [wishlist.convertidoAPerfumeId],
     references: [perfume.id],
   }),
+  notasFondo: many(wishlistNota),
+}));
+
+export const wishlistNotaRelations = relations(wishlistNota, ({ one }) => ({
+  deseo: one(wishlist, { fields: [wishlistNota.wishlistId], references: [wishlist.id] }),
+  nota: one(nota, { fields: [wishlistNota.notaId], references: [nota.id] }),
 }));

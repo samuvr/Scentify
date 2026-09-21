@@ -97,6 +97,11 @@ Y dos más, menores, que aparecieron al implementar:
    que la cuenta salga como salga, no falta ninguno. Dime si por «cinco umbrales»
    entendías otra cosa.
 
+7. **La importación CSV exige lo mismo que el alta manual**: nombre, marca y al menos un
+   contexto, una estación y un momento. Un perfume a medio categorizar no sirve para el
+   motor de recomendación, así que la fila se rechaza en la previsualización, con su
+   número de línea y el motivo, en vez de entrar coja.
+
 **Orden del bloque «Nunca los has usado»:** la especificación no lo fija. Se ordena por
 idoneidad descendente y luego por nombre, para que la lista sea estable entre recargas.
 
@@ -104,17 +109,22 @@ idoneidad descendente y luego por nombre, para que la lista sea estable entre re
 
 ## Estado del proyecto
 
+MVP y fase 2 completos.
+
 | Bloque | Estado |
 |---|---|
-| Esquema de base de datos y migraciones (secc. 3) | Hecho |
-| Semillas: contextos, notas, familias, umbrales (secc. 11) | Hecho |
-| Lógica de idoneidad (secc. 6.2) | Hecho, con tests |
-| Estación efectiva por temperatura (secc. 7.1) | Hecho, con tests |
-| Orden del motor de recomendación (secc. 7.2) | Hecho, con tests |
-| Interfaz: colección, registro, recomendación, estadísticas | Pendiente |
-| Integración Fragrantica (secc. 5) | Pendiente |
-| Importación/exportación y backup (secc. 9) | Pendiente |
-| PWA: manifest, service worker, cola offline | Pendiente |
+| Esquema, migraciones y semillas (secc. 3 y 11) | Hecho |
+| Idoneidad, estación efectiva y recomendación (secc. 6.2, 7.1, 7.2) | Hecho, con tests |
+| Colección: listado, filtros, ficha y alta en pasos (secc. 4) | Hecho |
+| Integración Fragrantica con sus dos fallbacks (secc. 5) | Hecho, con tests sobre fichas reales |
+| Registro diario (secc. 6) | Hecho |
+| Estadísticas (secc. 8) | Hecho, con tests |
+| Importar, exportar y copia de seguridad (secc. 9) | Hecho, con tests |
+| PWA: manifest, service worker, cola offline (secc. 11) | Hecho |
+| Detección de huecos (secc. 10.1) | Hecho, con tests |
+| Solapamiento en wishlist (secc. 10.2) | Hecho, con tests |
+| Modo viaje (secc. 10.3) | Hecho, con tests |
+| Recordatorio diario (secc. 10.4) | Hecho, con tests |
 
 ---
 
@@ -125,15 +135,93 @@ npm install
 cp .env.example .env            # y rellena DATABASE_URL con tu cadena de Neon
 npm run db:migrate              # aplica drizzle/*.sql en orden
 npm run db:seed                 # contextos, notas, familias y umbrales por defecto
-npm test                        # tests de las tres piezas con lógica real
+npm run dev                     # http://localhost:3000
+npm test                        # tests de dominio
 ```
+
+Para incluir los tests de integración hace falta una base de datos de usar y tirar; sin
+`DATABASE_URL` se saltan solos y `npm test` sigue siendo instantáneo:
+
+```bash
+createdb scentify_test
+DATABASE_URL=postgresql://…/scentify_test SCENTIFY_DB_DRIVER=tcp npm run db:migrate
+DATABASE_URL=postgresql://…/scentify_test SCENTIFY_DB_DRIVER=tcp npm run db:seed
+DATABASE_URL=postgresql://…/scentify_test SCENTIFY_DB_DRIVER=tcp npm test
+```
+
+`SCENTIFY_USER_PASSWORD` en el entorno de `db:seed` fija la contraseña del único usuario;
+sin ella el usuario se crea sin acceso.
 
 ## Estructura
 
 ```
 drizzle/            Migraciones SQL versionadas + journal
-src/db/schema.ts    Esquema Drizzle (fuente de verdad del modelo)
-src/db/seed.ts      Semillas idempotentes
-src/dominio/        Lógica pura: idoneidad, estación efectiva, recomendación
-tests/              Tests de las tres piezas con lógica real
+public/             Manifest, service worker e iconos de la PWA
+src/app/            Pantallas (App Router), acciones de servidor y API
+src/cliente/        Cola offline en IndexedDB
+src/componentes/    Componentes compartidos
+src/db/             Esquema Drizzle, migración y semillas
+src/dominio/        Lógica pura: idoneidad, estación, recomendación, CSV,
+                    parser de Fragrantica, estadísticas, huecos,
+                    solapamiento y cobertura del modo viaje
+src/servicios/      Acceso a datos, auth, clima, Fragrantica, importación
+tests/              Tests de dominio; tests/integracion/ contra PostgreSQL
 ```
+
+### El recordatorio diario
+
+La sección 10.4 necesita tres cosas en producción, todas gratuitas:
+
+1. Un par de claves VAPID (`npx web-push generate-vapid-keys`) en
+   `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` y `NEXT_PUBLIC_VAPID_PUBLIC_KEY`.
+2. Un `CRON_SECRET` cualquiera, que es lo que protege `/api/cron/recordatorio`.
+3. El cron de `vercel.json`, configurado cada hora para poder respetar la hora que
+   elijas. **En el plan Hobby de Vercel los crons se ejecutan una vez al día**, así que
+   ahí el aviso llegará a la hora que Vercel decida, no a la tuya. Si eso molesta, la
+   alternativa gratuita es un ping horario desde un servicio externo (cron-job.org o
+   similar) a esa misma URL con la cabecera `Authorization: Bearer <CRON_SECRET>`.
+
+El envío es idempotente: la tarea puede dispararse varias veces el mismo día y solo
+manda un aviso, porque queda anotado en `recordatorio_enviado`.
+
+### Sobre el parser de Fragrantica
+
+Los tests corren contra dos fragmentos **reales** de fragrantica.es guardados en
+`tests/fixtures/`: un superventas con miles de votos y una novedad con pocos, que es
+lo que pide la sección 5.3. No son las páginas enteras, solo los bloques que el parser
+mira, y hay una comprobación de que el recorte da exactamente el mismo resultado que
+la página completa de la que salió.
+
+Lo que la ficha real hace y no era evidente:
+
+- Los recuentos vienen abreviados: `2.8k` son 2800 votos, `140K` son 140000.
+- Los niveles de la pirámide se titulan «Notas de Salida», «Corazón» y «Base», y ese
+  «Base» aparece también dentro de clases CSS como `text-base`, así que los rótulos se
+  buscan como nodos de texto completos y no como palabras sueltas.
+- «Notas de Salida» sale además en el `<meta description>` y en la prosa del resumen,
+  mucho antes que la pirámide de verdad; por eso la búsqueda se ancla al contenedor
+  `id="pyramid"`.
+- Entre el rótulo de una nota y la siguiente hay miles de caracteres de SVG e
+  imágenes, así que cualquier tope por longitud tiene que ser holgado.
+- La ficha en español dice «se lanzó en 2022», no «launched in».
+
+**Expectativa realista:** Cloudflare bloquea las IP de centro de datos, así que la
+petición automática desde Vercel fallará a menudo. Los dos fallbacks de la 5.2 están
+implementados y probados, y el de pegar el texto es el que más se va a usar.
+
+### Sobre el modo viaje
+
+Resolver «el set mínimo de frascos» es un problema de cobertura de conjuntos, NP-duro
+en general. Aquí se resuelve de forma **exacta**, no con un voraz: seis contextos por
+dos momentos son doce requisitos, o sea 4096 subconjuntos, y eso se recorre con
+programación dinámica sobre máscaras de bits ramificando solo por el primer requisito
+sin cubrir. Importa que sea exacto porque «llévate tres» cuando bastaban dos es justo
+lo que no quieres al hacer la maleta. Por encima de veinte requisitos cae a voraz y lo
+dice (`esOptimo: false`).
+
+### Sobre la lógica de dominio
+
+Todo lo de `src/dominio/` son funciones puras: sin red, sin base de datos y sin reloj
+implícito (la fecha entra por parámetro). Es lo que permite que el mismo cálculo corra en
+el servidor al guardar un uso y en el cliente al encolarlo sin conexión, y que se pueda
+probar sin levantar nada.
