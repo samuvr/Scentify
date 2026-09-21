@@ -11,49 +11,12 @@
  * Los votos que llegan de Fragrantica se pintan junto a cada casilla y mueren
  * aqui: lo que se envia al servidor son unicamente mis selecciones (5.3).
  */
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { accionGuardarPerfume, type RespuestaPerfume } from '@/app/acciones';
 import type { Estacion, Momento } from '@/dominio/tipos';
 import type { FichaFragrantica, VotoEje } from '@/dominio/fragrantica';
-
-type Nivel = 'SALIDA' | 'CORAZON' | 'FONDO';
-
-export interface ValoresPerfume {
-  nombre: string;
-  marca: string;
-  concentracion: string;
-  anioLanzamiento: string;
-  volumenMl: string;
-  fechaCompra: string;
-  estado: 'LO_TENGO' | 'LO_TUVE';
-  valoracion: string;
-  notasPersonales: string;
-  fragranticaUrl: string;
-  notas: { nombre: string; nivel: Nivel }[];
-  familiaIds: string[];
-  contextoIds: string[];
-  estaciones: Estacion[];
-  momentos: Momento[];
-}
-
-export const VALORES_VACIOS: ValoresPerfume = {
-  nombre: '',
-  marca: '',
-  concentracion: '',
-  anioLanzamiento: '',
-  volumenMl: '',
-  fechaCompra: '',
-  estado: 'LO_TENGO',
-  valoracion: '',
-  notasPersonales: '',
-  fragranticaUrl: '',
-  notas: [],
-  familiaIds: [],
-  contextoIds: [],
-  estaciones: [],
-  momentos: [],
-};
+import { VALORES_VACIOS, type Nivel, type ValoresPerfume } from '@/componentes/valores-perfume';
 
 const NIVELES: { clave: Nivel; titulo: string }[] = [
   { clave: 'SALIDA', titulo: 'Salida' },
@@ -88,8 +51,8 @@ function BarraVoto({ voto }: { voto: VotoEje | undefined }) {
   if (!voto) return null;
   return (
     <span className="ml-2 inline-flex items-center gap-1.5 text-xs text-texto-tenue">
-      <span className="inline-block h-1.5 w-12 overflow-hidden rounded-full bg-borde">
-        <span className="block h-full bg-ambar/70" style={{ width: `${voto.pct}%` }} />
+      <span className="inline-block h-1.5 w-12 overflow-hidden bg-borde">
+        <span className="block h-full bg-acento/70" style={{ width: `${voto.pct}%` }} />
       </span>
       {voto.pct}%{voto.votos !== null ? ` · ${voto.votos}` : ''}
     </span>
@@ -110,7 +73,13 @@ export function FormularioPerfume({
   notasConocidas: string[];
 }) {
   const router = useRouter();
-  const [paso, setPaso] = useState(0);
+  /**
+   * Llegando por «Compartir → Scentify» la URL ya viene puesta, y con ella el
+   * nombre y la marca sacados de la propia direccion. Empezar en el paso 1
+   * seria pedir lo que ya se tiene, asi que se salta al de Fragrantica.
+   */
+  const compartida = !perfumeId && Boolean(iniciales?.fragranticaUrl);
+  const [paso, setPaso] = useState(compartida ? 1 : 0);
   const [v, setV] = useState<ValoresPerfume>(iniciales ?? VALORES_VACIOS);
   const [duplicados, setDuplicados] = useState<{ id: string; nombre: string; marca: string }[]>([]);
   const [ficha, setFicha] = useState<FichaFragrantica | null>(null);
@@ -121,6 +90,21 @@ export function FormularioPerfume({
   const [guardando, setGuardando] = useState(false);
 
   const cambiar = (parcial: Partial<ValoresPerfume>) => setV((previo) => ({ ...previo, ...parcial }));
+
+  /**
+   * Y se intenta leer la ficha sola, que es lo que se espera al compartir. El
+   * ref evita repetirlo: sin el, cada render volveria a lanzar la peticion.
+   * Si falla, el aviso y el cuadro de pegar el texto aparecen igual que
+   * cuando se pulsa el boton a mano.
+   */
+  const yaConsultada = useRef(false);
+  useEffect(() => {
+    if (!compartida || yaConsultada.current) return;
+    yaConsultada.current = true;
+    void consultarFragrantica({ url: iniciales?.fragranticaUrl ?? '' });
+    // Solo al montar: `compartida` se calcula de los valores iniciales.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function comprobarDuplicados() {
     if (perfumeId || v.nombre.trim().length < 3) return;
@@ -210,9 +194,9 @@ export function FormularioPerfume({
         <p className="text-sm text-texto-tenue">
           Paso {paso + 1} de {PASOS.length} · {PASOS[paso]}
         </p>
-        <div className="h-1.5 overflow-hidden rounded-full bg-borde">
+        <div className="h-1.5 overflow-hidden bg-borde">
           <div
-            className="h-full bg-ambar transition-all"
+            className="h-full bg-acento transition-all"
             style={{ width: `${((paso + 1) / PASOS.length) * 100}%` }}
           />
         </div>
@@ -241,8 +225,8 @@ export function FormularioPerfume({
             />
           </div>
           {duplicados.length > 0 ? (
-            <div className="rounded-xl border border-id-parcial/40 bg-id-parcial/10 p-3 text-sm">
-              <p className="text-id-parcial">Puede que ya lo tengas:</p>
+            <div className="aviso-atencion">
+              <p className="font-medium">Puede que ya lo tengas:</p>
               <ul className="mt-1 space-y-0.5 text-texto-tenue">
                 {duplicados.map((d) => (
                   <li key={d.id}>
@@ -277,37 +261,52 @@ export function FormularioPerfume({
             type="button"
             disabled={consultando || !v.fragranticaUrl}
             onClick={() => consultarFragrantica({ url: v.fragranticaUrl })}
-            className="boton-secundario w-full disabled:opacity-60"
+            className="boton-secundario w-full"
           >
             {consultando ? 'Consultando…' : 'Consultar ficha'}
           </button>
 
           {ficha ? (
-            <p className="rounded-xl border border-id-total/40 bg-id-total/10 px-4 py-3 text-sm text-id-total">
+            <p className="aviso-hecho">
               Ficha leída. Los votos aparecen en los pasos de estaciones y momento.
             </p>
           ) : null}
 
           {avisoFragrantica ? (
             <div className="space-y-3">
-              <p className="rounded-xl border border-id-parcial/40 bg-id-parcial/10 px-4 py-3 text-sm text-id-parcial">
+              <p className="aviso-atencion">
                 {avisoFragrantica}
               </p>
               <div>
                 <label htmlFor="pegado">O pega aquí el texto copiado del navegador</label>
+                {/*
+                  Se pide la pagina entera a proposito. Acotar la seleccion a un
+                  tramo concreto obligaba a nombrar rotulos que no estan en todas
+                  las fichas —hay maquetaciones sin "Votar por ingredientes", y en
+                  otras la piramide va al final, detras de las fotos—, asi que la
+                  instruccion fallaba justo cuando mas falta hacia. El parser acota
+                  por su cuenta el bloque de votos, de modo que el ruido de
+                  resenias y noticias ya no le afecta.
+                */}
+                <p className="mt-1 text-sm text-texto-tenue">
+                  Abre la ficha en el navegador, selecciona{' '}
+                  <strong className="text-texto">toda la página</strong> con Ctrl+A (⌘+A en Mac),
+                  cópiala y pégala aquí. No hace falta que recortes nada: de todo eso se sacan
+                  los acordes, la pirámide de notas y los votos de estación y momento.
+                </p>
                 <textarea
                   id="pegado"
                   rows={5}
                   value={textoPegado}
                   onChange={(e) => setTextoPegado(e.target.value)}
-                  className="mt-1"
+                  className="mt-2"
                 />
               </div>
               <button
                 type="button"
                 disabled={consultando || !textoPegado.trim()}
                 onClick={() => consultarFragrantica({ texto: textoPegado })}
-                className="boton-secundario w-full disabled:opacity-60"
+                className="boton-secundario w-full"
               >
                 Leer el texto pegado
               </button>
@@ -330,7 +329,7 @@ export function FormularioPerfume({
                       key={`${n.nombre}-${n.i}`}
                       type="button"
                       onClick={() => cambiar({ notas: v.notas.filter((_, i) => i !== n.i) })}
-                      className="etiqueta border-ambar/50 text-ambar"
+                      className="etiqueta border-acento/50 text-acento"
                     >
                       {n.nombre} <span aria-hidden="true">×</span>
                       <span className="sr-only">quitar</span>
@@ -369,7 +368,7 @@ export function FormularioPerfume({
                 aria-pressed={v.familiaIds.includes(f.id)}
                 onClick={() => cambiar({ familiaIds: alternar(v.familiaIds, f.id) })}
                 className={`etiqueta ${
-                  v.familiaIds.includes(f.id) ? 'border-ambar bg-ambar/15 text-ambar' : ''
+                  v.familiaIds.includes(f.id) ? 'border-acento bg-acento/15 text-acento' : ''
                 }`}
               >
                 {f.nombre}
@@ -397,7 +396,7 @@ export function FormularioPerfume({
                   aria-pressed={v.estaciones.includes(clave)}
                   onClick={() => cambiar({ estaciones: alternar(v.estaciones, clave) })}
                   className={`fila-toque justify-between border ${
-                    v.estaciones.includes(clave) ? 'border-ambar bg-ambar/10' : 'border-borde'
+                    v.estaciones.includes(clave) ? 'border-acento bg-acento/10' : 'border-borde'
                   }`}
                 >
                   <span className="font-medium">{nombre}</span>
@@ -420,7 +419,7 @@ export function FormularioPerfume({
                   aria-pressed={v.momentos.includes(m)}
                   onClick={() => cambiar({ momentos: alternar(v.momentos, m) })}
                   className={`fila-toque justify-between border ${
-                    v.momentos.includes(m) ? 'border-ambar bg-ambar/10' : 'border-borde'
+                    v.momentos.includes(m) ? 'border-acento bg-acento/10' : 'border-borde'
                   }`}
                 >
                   <span className="font-medium">{m === 'DIA' ? 'Día' : 'Noche'}</span>
@@ -443,7 +442,7 @@ export function FormularioPerfume({
                 aria-pressed={v.contextoIds.includes(c.id)}
                 onClick={() => cambiar({ contextoIds: alternar(v.contextoIds, c.id) })}
                 className={`etiqueta ${
-                  v.contextoIds.includes(c.id) ? 'border-ambar bg-ambar/15 text-ambar' : ''
+                  v.contextoIds.includes(c.id) ? 'border-acento bg-acento/15 text-acento' : ''
                 }`}
               >
                 {c.nombre}
@@ -464,7 +463,7 @@ export function FormularioPerfume({
                   type="button"
                   aria-pressed={v.estado === e}
                   onClick={() => cambiar({ estado: e })}
-                  className={`boton ${v.estado === e ? 'bg-ambar text-fondo' : 'border border-borde'}`}
+                  className={`boton ${v.estado === e ? 'bg-acento text-fondo' : 'border border-borde'}`}
                 >
                   {e === 'LO_TENGO' ? 'Lo tengo' : 'Lo tuve'}
                 </button>
@@ -531,7 +530,7 @@ export function FormularioPerfume({
                   type="button"
                   onClick={() => cambiar({ valoracion: v.valoracion === String(n) ? '' : String(n) })}
                   className={`boton flex-1 px-0 ${
-                    Number(v.valoracion) >= n ? 'bg-ambar text-fondo' : 'border border-borde'
+                    Number(v.valoracion) >= n ? 'bg-acento text-fondo' : 'border border-borde'
                   }`}
                 >
                   {n}
@@ -552,7 +551,7 @@ export function FormularioPerfume({
         </section>
       ) : null}
 
-      {error ? <p className="text-sm text-id-nula">{error}</p> : null}
+      {error ? <p className="aviso-error">{error}</p> : null}
 
       <div className="flex gap-2">
         {paso > 0 ? (
@@ -565,7 +564,7 @@ export function FormularioPerfume({
             type="button"
             disabled={!puedeAvanzar}
             onClick={() => setPaso(paso + 1)}
-            className="boton-primario flex-1 disabled:opacity-50"
+            className="boton-primario flex-1"
           >
             Siguiente
           </button>
@@ -574,7 +573,7 @@ export function FormularioPerfume({
             type="button"
             disabled={guardando}
             onClick={guardar}
-            className="boton-primario flex-1 disabled:opacity-60"
+            className="boton-primario flex-1"
           >
             {guardando ? 'Guardando…' : perfumeId ? 'Guardar cambios' : 'Añadir a la colección'}
           </button>

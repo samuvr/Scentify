@@ -41,13 +41,13 @@ export default async function PaginaWishlist({
         <div className="flex gap-2 text-sm">
           <Link
             href="/mas/wishlist"
-            className={`etiqueta ${orden !== 'antiguedad' ? 'border-ambar text-ambar' : ''}`}
+            className={`etiqueta ${orden !== 'antiguedad' ? 'border-acento text-acento' : ''}`}
           >
             Prioridad
           </Link>
           <Link
             href="/mas/wishlist?orden=antiguedad"
-            className={`etiqueta ${orden === 'antiguedad' ? 'border-ambar text-ambar' : ''}`}
+            className={`etiqueta ${orden === 'antiguedad' ? 'border-acento text-acento' : ''}`}
           >
             Antigüedad
           </Link>

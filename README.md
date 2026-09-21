@@ -22,7 +22,7 @@ restricciones de la sección 11.
 | Offline | **Service Worker propio + IndexedDB** | Cola de usos offline con Background Sync; sin depender de plugins que envuelven el build. |
 | Tiempo | **Open-Meteo** (`forecast` con `past_days`) | Gratuita, sin API key ni registro; una llamada al día, cacheada en servidor. |
 | Tests | **Vitest** | Arranque inmediato, misma resolución de módulos y alias que la app. |
-| Despliegue | **Vercel** (hobby) + **Neon** (free) | Coste cero real; `git push` despliega y las migraciones corren en el build. |
+| Despliegue | **Vercel** (hobby) + **Neon** (free) | Coste cero real; `git push` despliega y las migraciones corren en el `buildCommand`. |
 
 ### Justificación
 
@@ -107,6 +107,29 @@ idoneidad descendente y luego por nombre, para que la lista sea estable entre re
 
 ---
 
+## Lenguaje visual
+
+Monocromo y de canto vivo. La paleta es negro, blanco y grises; no hay ni un tono de
+color en toda la interfaz, y ningún elemento tiene las esquinas redondeadas. El radio
+se anula en el tema de Tailwind, no por convenio, así que un `rounded-*` escrito más
+adelante seguirá dando canto vivo y no hay nada que vigilar en cada revisión.
+
+Quitar el color obliga a resolver dos cosas que antes se apoyaban en él:
+
+- **Los estados.** El rojo marcaba el error y el verde el acierto. Ahora la jerarquía
+  la dan el filete lateral, el peso y la claridad: `aviso-error` es lo único que llega
+  a blanco puro con filete grueso, `aviso-atencion` usa filete gris, y `aviso-hecho`
+  se queda en texto tenue. Un error sigue siendo lo primero que se ve en la pantalla.
+- **La idoneidad de la sección 6.2.** Es un orden, no cuatro categorías sueltas, así
+  que se codifica como rampa de claridad: cuanto más idóneo, más claro. Va siempre con
+  su etiqueta en texto —Total, Alta, Parcial, Nula—, que es lo que de verdad comunica
+  el valor; el tono solo acompaña.
+
+El contraste de cada tono de texto está comprobado contra el fondo y contra las
+tarjetas. El escalón más bajo de la rampa es 4.9:1 sobre superficie, por encima del
+mínimo AA de 4.5 para texto normal. El botón deshabilitado se vacía en lugar de bajar
+de opacidad: un blanco al 60 % sobre negro queda gris sólido y parece pulsable.
+
 ## Estado del proyecto
 
 MVP y fase 2 completos.
@@ -132,12 +155,24 @@ MVP y fase 2 completos.
 
 ```bash
 npm install
-cp .env.example .env            # y rellena DATABASE_URL con tu cadena de Neon
+cp .env.example .env            # y rellena DATABASE_URL, AUTH_SECRET y SCENTIFY_USER_PASSWORD
 npm run db:migrate              # aplica drizzle/*.sql en orden
-npm run db:seed                 # contextos, notas, familias y umbrales por defecto
+npm run db:seed                 # usuario, contextos y umbrales por defecto
 npm run dev                     # http://localhost:3000
 npm test                        # tests de dominio
 ```
+
+Todos los scripts leen `.env`, no solo `next dev`: `src/db/entorno.ts` carga el fichero
+con el mismo cargador que usa Next, y lo importan `db:migrate`, `db:seed`,
+`drizzle.config.ts` y los tests. Así no hay que exportar nada en el terminal, que además
+es lo único que funciona igual en Windows, macOS y Linux.
+
+En `.env` hacen falta tres cosas para arrancar. `DATABASE_URL` es la cadena de Neon —la
+directa, sin `-pooler`, que sirve igual para migrar, sembrar y servir la app—.
+`AUTH_SECRET` es cualquier cadena larga y aleatoria. `SCENTIFY_USER_PASSWORD` fija la
+contraseña del único usuario: **sin ella el usuario se crea sin acceso posible**. El
+correo de `SCENTIFY_USER_EMAIL` se guarda siempre en minúsculas, porque así es como lo
+busca el login.
 
 Para incluir los tests de integración hace falta una base de datos de usar y tirar; sin
 `DATABASE_URL` se saltan solos y `npm test` sigue siendo instantáneo:
@@ -149,8 +184,38 @@ DATABASE_URL=postgresql://…/scentify_test SCENTIFY_DB_DRIVER=tcp npm run db:se
 DATABASE_URL=postgresql://…/scentify_test SCENTIFY_DB_DRIVER=tcp npm test
 ```
 
-`SCENTIFY_USER_PASSWORD` en el entorno de `db:seed` fija la contraseña del único usuario;
-sin ella el usuario se crea sin acceso.
+No hay `npm run lint`: `next lint` está retirado desde Next 15.5 y no se ha sustituido
+todavía por una configuración de ESLint propia. La comprobación estática es
+`npm run typecheck`.
+
+## Despliegue en Vercel
+
+```
+Neon (base) → variables en Vercel → importar el repo → sembrar el usuario
+```
+
+1. **Base de datos.** En [neon.com](https://neon.com), proyecto nuevo y copiar la cadena
+   de conexión **directa** (la que no lleva `-pooler`). Sirve igual para migrar, sembrar
+   y servir.
+2. **Importar el repositorio** en [vercel.com](https://vercel.com). Detecta Next.js solo;
+   no hay que tocar el framework ni el directorio de salida.
+3. **Variables de entorno**, antes del primer despliegue. `DATABASE_URL` y `AUTH_SECRET`
+   son las únicas imprescindibles. Si se añaden después, hay que volver a desplegar.
+4. **Desplegar.** El `buildCommand` de `vercel.json` aplica las migraciones antes de
+   compilar, así que cada despliegue deja la base al día. Un fallo de conexión rompe el
+   build en vez de publicar una app sin tablas, que es lo que se quiere.
+5. **Sembrar el usuario**, una sola vez, desde local apuntando a Neon:
+
+   ```bash
+   DATABASE_URL="<la cadena de Neon>"    SCENTIFY_USER_EMAIL="tu@correo.com"    SCENTIFY_USER_PASSWORD="tu contraseña"    npm run db:seed
+   ```
+
+   No va en el build a propósito: metería la contraseña en las variables del proyecto
+   sin necesidad, y solo hace falta una vez. Es idempotente.
+
+Para el recordatorio diario hacen falta además `VAPID_PUBLIC_KEY`,
+`VAPID_PRIVATE_KEY`, `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_SUBJECT` y `CRON_SECRET`
+(ver «El recordatorio diario»). Sin ellas el resto de la app funciona igual.
 
 ## Estructura
 
@@ -204,6 +269,37 @@ Lo que la ficha real hace y no era evidente:
 - Entre el rótulo de una nota y la siguiente hay miles de caracteres de SVG e
   imágenes, así que cualquier tope por longitud tiene que ser holgado.
 - La ficha en español dice «se lanzó en 2022», no «launched in».
+- La maquetación no es una sola: hay fichas donde la pirámide va al final, detrás de
+  las fotos y las reseñas, y donde no aparece «Votar por ingredientes» por ningún
+  lado. Cualquier instrucción al usuario que nombre rótulos concretos se rompe en
+  alguna ficha, así que la pantalla pide la página entera y es el parser quien acota.
+- Buscar las etiquetas de voto por toda la fuente es una trampa. En una ficha real, el
+  titular «9 PM NIGHT OUT Afnan» de las noticias del pie daba «night» con un 9 al
+  lado, que ganaba a los 3.300 votos reales de noche: el eje quedaba en 100 % día y
+  0 % noche, un número rotundo y falso. Por eso los votos se buscan solo dentro del
+  bloque «Cuándo usarlo», igual que la pirámide se ancla a su contenedor. El fixture
+  `fragrantica-pegado-ruidoso.txt` es esa página entera y lo fija.
+- La misma página repite cada nota dos veces y el bloque de votos entero otra vez más;
+  el parser deduplica y se queda con el primer bloque.
+
+**En el móvil: Compartir → Scentify.** Seleccionar y copiar texto en un teléfono es
+incómodo, así que la app se registra como destino de compartir (`share_target` del
+manifest). Desde la ficha abierta en Chrome: Compartir → Scentify, y se abre el alta
+directamente en el paso de Fragrantica, con la URL puesta e intentando la lectura sola.
+
+De la propia URL salen además la marca y el nombre, porque las fichas siguen siempre
+el patrón `/perfume/<Marca>/<Nombre>-<id>.html`. Eso vale aunque Cloudflare bloquee la
+lectura: la dirección la tenemos siempre. Si no hay sesión, se pide la contraseña y se
+vuelve a lo compartido en vez de perderlo; el destino de vuelta se filtra en
+`destinoSeguro()` para que el login no acabe siendo un redirector abierto.
+
+Es de Android: Safari en iOS no implementa Web Share Target para webapps.
+
+**Descartado: la captura de pantalla.** Medida a 390 px, una ficha real ocupa 58.022 px
+de alto, unas 69 pantallas de móvil, y los tres datos que hacen falta están en las
+pantallas 4 (acordes), 9 (votos) y 20 (pirámide). Harían falta tres capturas apuntadas
+a mano y luego leer por OCR recuentos como `1.8k`, donde confundirlo con `18k` cambia
+el porcentaje por completo. Más trabajo que copiar el texto, y menos fiable.
 
 **Expectativa realista:** Cloudflare bloquea las IP de centro de datos, así que la
 petición automática desde Vercel fallará a menudo. Los dos fallbacks de la 5.2 están

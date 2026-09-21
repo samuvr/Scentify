@@ -13,6 +13,9 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
+    // Carga `.env` antes de los tests: los de integracion deciden si se
+    // saltan segun haya o no DATABASE_URL, y sin esto nunca la verian.
+    setupFiles: ['./tests/entorno.ts'],
     include: ['tests/**/*.test.ts'],
   },
 });

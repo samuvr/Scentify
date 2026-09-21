@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: '#12100e',
+  themeColor: '#000000',
   width: 'device-width',
   initialScale: 1,
   // Sin maximumScale: bloquear el zoom rompe la accesibilidad.
@@ -20,7 +20,14 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es">
-      <body className="min-h-dvh">
+      {/*
+        Las extensiones del navegador (gestores de color, traductores, lectores
+        de contrasenas) anaden atributos al <body> antes de que React hidrate, y
+        eso dispara un aviso de discrepancia que no viene de la app y que no se
+        puede evitar desde aqui. Se silencia solo en este elemento: el aviso
+        sigue activo para sus hijos, que es donde si importaria.
+      */}
+      <body className="min-h-dvh" suppressHydrationWarning>
         {/* El hueco inferior deja sitio a la barra fija. */}
         <main className="contenedor pb-28 pt-4">{children}</main>
         <NavegacionInferior />

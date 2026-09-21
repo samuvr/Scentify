@@ -52,7 +52,7 @@ export function SincronizadorOffline() {
   return (
     <p
       role="status"
-      className="mb-3 rounded-xl border border-borde bg-superficie-alta px-4 py-2 text-sm text-texto-tenue"
+      className="mb-3 border border-borde bg-superficie-alta px-4 py-2 text-sm text-texto-tenue"
     >
       {pendientes > 0
         ? `${pendientes} ${pendientes === 1 ? 'registro pendiente' : 'registros pendientes'} de enviar. Se sincronizan solos al volver la cobertura.`

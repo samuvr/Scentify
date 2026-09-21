@@ -109,7 +109,7 @@ export function FormularioDeseo({ notasConocidas }: { notasConocidas: string[] }
                 key={n}
                 type="button"
                 onClick={() => quitarNota(n)}
-                className="etiqueta border-ambar/50 text-ambar"
+                className="etiqueta border-acento/50 text-acento"
               >
                 {n} <span aria-hidden="true">×</span>
                 <span className="sr-only">quitar</span>
@@ -133,8 +133,8 @@ export function FormularioDeseo({ notasConocidas }: { notasConocidas: string[] }
       </div>
 
       {solapamientos.length > 0 ? (
-        <div className="rounded-xl border border-id-parcial/40 bg-id-parcial/10 p-3 text-sm">
-          <p className="font-medium text-id-parcial">
+        <div className="aviso-atencion">
+          <p className="font-medium">
             Se parece a {solapamientos.map((s) => s.nombre).join(' y ')}, que ya tienes.
           </p>
           <ul className="mt-1 space-y-0.5 text-texto-tenue">
@@ -153,13 +153,13 @@ export function FormularioDeseo({ notasConocidas }: { notasConocidas: string[] }
         <textarea id="d-notas" name="notas" rows={2} className="mt-1" />
       </div>
 
-      {error ? <p className="text-sm text-id-nula">{error}</p> : null}
+      {error ? <p className="aviso-error">{error}</p> : null}
 
       <div className="flex gap-2">
         <button type="button" onClick={() => setAbierto(false)} className="boton-secundario flex-1">
           Cancelar
         </button>
-        <button type="submit" disabled={guardando} className="boton-primario flex-1 disabled:opacity-60">
+        <button type="submit" disabled={guardando} className="boton-primario flex-1">
           {guardando ? 'Guardando…' : 'Guardar'}
         </button>
       </div>

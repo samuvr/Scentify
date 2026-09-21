@@ -6,8 +6,8 @@
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#12100e",
-  "theme_color": "#12100e",
+  "background_color": "#000000",
+  "theme_color": "#000000",
   "lang": "es",
   "dir": "ltr",
   "categories": ["lifestyle", "productivity"],
@@ -20,5 +20,11 @@
   "shortcuts": [
     { "name": "Registrar uso", "short_name": "Registrar", "url": "/" },
     { "name": "Recomiéndame", "short_name": "Sugerir", "url": "/recomendacion" }
-  ]
+  ],
+  "share_target": {
+    "action": "/compartir",
+    "method": "GET",
+    "enctype": "application/x-www-form-urlencoded",
+    "params": { "title": "title", "text": "text", "url": "url" }
+  }
 }

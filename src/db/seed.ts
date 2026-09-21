@@ -9,12 +9,17 @@
  * Idempotente: se puede ejecutar tantas veces como se quiera y nunca pisa un
  * umbral que ya se haya cambiado desde la pantalla de configuracion.
  */
+import './entorno';
 import { randomUUID, scryptSync, randomBytes } from 'node:crypto';
 import postgres from 'postgres';
 
 const DATABASE_URL = process.env.DATABASE_URL;
 if (!DATABASE_URL) {
-  console.error('Falta DATABASE_URL.');
+  console.error(
+    'Falta DATABASE_URL.\n' +
+      'Copia .env.example a .env y pon ahi la cadena de conexion de Neon,\n' +
+      'o pasala en la misma linea: DATABASE_URL=... npm run db:seed',
+  );
   process.exit(1);
 }
 

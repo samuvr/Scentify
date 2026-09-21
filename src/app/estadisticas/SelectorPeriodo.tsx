@@ -43,7 +43,7 @@ export function SelectorPeriodo({
               aria-pressed={periodo === clave}
               onClick={() => poner({ periodo: clave })}
               className={`etiqueta whitespace-nowrap ${
-                periodo === clave ? 'border-ambar bg-ambar/15 text-ambar' : ''
+                periodo === clave ? 'border-acento bg-acento/15 text-acento' : ''
               }`}
             >
               {ETIQUETAS[clave]}

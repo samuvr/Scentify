@@ -10,7 +10,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { esUrlDeFichaValida, leerFichaFragrantica } from '@/dominio/fragrantica';
+import { datosDeUrlFragrantica, esUrlDeFichaValida, leerFichaFragrantica } from '@/dominio/fragrantica';
 import { FICHA_EN_INGLES, PAGINA_SIN_DATOS, TEXTO_PEGADO } from './fixtures/fragrantica';
 
 const fixture = (nombre: string) =>
@@ -201,6 +201,104 @@ describe('cuando no hay datos, no se inventa ninguno', () => {
   });
 });
 
+/* ------------------------------------------- la seleccion que dice la app */
+
+/**
+ * Seleccion parcial: solo el tramo de los acordes a la piramide, sacado del
+ * innerText real de la ficha renderizada en un navegador, no escrito a mano.
+ * La pantalla pide la pagina entera porque es mas simple de explicar y no
+ * depende de la maquetacion, pero quien recorte a mano tiene que obtener lo
+ * mismo, y con los mismos porcentajes que la lectura automatica del HTML.
+ */
+describe('una seleccion parcial da lo mismo que la pagina entera', () => {
+  const pegado = readFileSync(
+    new URL('./fixtures/fragrantica-seleccion-recomendada.txt', import.meta.url),
+    'utf8',
+  );
+
+  it('saca los diez acordes', () => {
+    const ficha = leerFichaFragrantica(pegado);
+    expect(ficha.acordes).toHaveLength(10);
+    expect(ficha.acordes[0]).toBe('ámbar');
+    expect(ficha.acordes.at(-1)).toBe('herbal');
+  });
+
+  it('saca los tres niveles de la pirámide', () => {
+    const ficha = leerFichaFragrantica(pegado);
+    expect(ficha.notas.salida).toEqual([
+      'bergamota',
+      'pimienta rosa',
+      'jazmín',
+      'flor de azahar del naranjo',
+    ]);
+    expect(ficha.notas.corazon).toContain('elemí');
+    expect(ficha.notas.fondo).toEqual(['ambroxan', 'ámbar', 'cedro', 'pachulí', 'ládano']);
+  });
+
+  it('saca los votos de estación y momento', () => {
+    const ficha = leerFichaFragrantica(pegado);
+    expect(ficha.estaciones).not.toBeNull();
+    expect(ficha.momentos).not.toBeNull();
+    // Los mismos porcentajes que da la lectura automatica del HTML completo:
+    // acotar la seleccion no cambia el resultado.
+    expect(ficha.estaciones?.PRIMAVERA.pct).toBe(27);
+    expect(ficha.momentos?.DIA.pct).toBe(51);
+  });
+});
+
+/* ------------------------------ pegar la pagina entera, con todo su ruido */
+
+/**
+ * Ficha de Fakhar Black tal como la copia el usuario al seleccionar la pagina
+ * entera: menus, botones, la lista de fotos, las resenias y los titulares de
+ * noticias del pie. Es el innerText real de la pagina renderizada.
+ *
+ * Aqui vive la trampa que motivo el anclaje del bloque de votos: entre las
+ * noticias hay un titular, "9 PM NIGHT OUT Afnan: Cuando la fruta se convierte
+ * en gamuza al anochecer". Buscando "night" por toda la fuente se encontraba
+ * ese 9 antes que los 3.300 votos reales de noche, y el eje quedaba en 100 %
+ * dia y 0 % noche: un numero rotundo y falso. Con esta misma entrada el parser
+ * anterior devolvia exactamente eso.
+ */
+describe('pegar la ficha entera no se deja enganiar por el resto de la pagina', () => {
+  const pegado = readFileSync(
+    new URL('./fixtures/fragrantica-pegado-ruidoso.txt', import.meta.url),
+    'utf8',
+  );
+
+  it('el titular "9 PM NIGHT OUT" sigue ahi, o el test no probaria nada', () => {
+    expect(pegado).toContain('9 PM NIGHT OUT');
+  });
+
+  it('los votos de momento salen del bloque de votos, no del titular', () => {
+    const ficha = leerFichaFragrantica(pegado);
+    // 5.5k de dia frente a 3.3k de noche.
+    expect(ficha.momentos?.DIA.pct).toBe(63);
+    expect(ficha.momentos?.NOCHE.pct).toBe(38);
+  });
+
+  it('las estaciones tambien', () => {
+    const ficha = leerFichaFragrantica(pegado);
+    expect(ficha.estaciones?.INVIERNO.pct).toBe(11);
+    expect(ficha.estaciones?.PRIMAVERA.pct).toBe(33);
+    expect(ficha.estaciones?.VERANO.pct).toBe(33);
+    expect(ficha.estaciones?.OTONO.pct).toBe(23);
+  });
+
+  it('la piramide no se duplica aunque la pagina repita cada nota', () => {
+    const ficha = leerFichaFragrantica(pegado);
+    expect(ficha.notas.salida).toEqual(['manzana', 'bergamota', 'jengibre']);
+    expect(ficha.notas.corazon).toEqual(['lavanda', 'salvia', 'bayas de enebro', 'geranio']);
+    expect(ficha.notas.fondo).toEqual(['haba tonka', 'cedro', 'Amberwood', 'vetiver']);
+  });
+
+  it('los acordes se cortan en "Buscar por acordes"', () => {
+    const ficha = leerFichaFragrantica(pegado);
+    expect(ficha.acordes).toHaveLength(10);
+    expect(ficha.acordes).not.toContain('La tengo');
+  });
+});
+
 /* ---------------------------------------------------- validacion de URL */
 
 describe('solo se aceptan URLs de ficha', () => {
@@ -214,5 +312,48 @@ describe('solo se aceptan URLs de ficha', () => {
     ['no es una url', false],
   ])('%s -> %s', (url, valida) => {
     expect(esUrlDeFichaValida(url)).toBe(valida);
+  });
+});
+
+/* ------------------------------------------ datos sacados de la propia URL */
+
+/**
+ * Las URLs de ficha llevan la marca y el nombre en la ruta:
+ *   /perfume/Lattafa-Perfumes/Fakhar-Black-70465.html
+ * Sirve para que "Compartir → Scentify" desde el movil deje el paso 1 relleno
+ * sin escribir nada. Los tres ejemplos son URLs reales.
+ */
+describe('marca y nombre salen de la URL de la ficha', () => {
+  it.each([
+    [
+      'https://www.fragrantica.es/perfume/Lattafa-Perfumes/Fakhar-Black-70465.html',
+      { marca: 'Lattafa Perfumes', nombre: 'Fakhar Black' },
+    ],
+    [
+      'https://www.fragrantica.es/perfume/Armaf/Club-De-Nuit-Urban-Elixir-77860.html',
+      { marca: 'Armaf', nombre: 'Club De Nuit Urban Elixir' },
+    ],
+    [
+      'https://www.fragrantica.es/perfume/Rayhaan/Nava-Sol-138578.html',
+      { marca: 'Rayhaan', nombre: 'Nava Sol' },
+    ],
+    [
+      'https://www.fragrantica.com/perfume/Christian-Dior/Sauvage-31861.html',
+      { marca: 'Christian Dior', nombre: 'Sauvage' },
+    ],
+  ])('%s', (url, esperado) => {
+    expect(datosDeUrlFragrantica(url)).toEqual(esperado);
+  });
+
+  it('devuelve null si la URL no es de una ficha', () => {
+    expect(datosDeUrlFragrantica('https://www.fragrantica.es/news/algo.html')).toBeNull();
+    expect(datosDeUrlFragrantica('https://ejemplo.com/perfume/A/B-1.html')).toBeNull();
+    expect(datosDeUrlFragrantica('cualquier cosa')).toBeNull();
+  });
+
+  it('un nombre sin id no cuenta: la ruta tiene que ser la de una ficha', () => {
+    expect(
+      datosDeUrlFragrantica('https://www.fragrantica.es/perfume/Armaf/Club-De-Nuit.html'),
+    ).toBeNull();
   });
 });

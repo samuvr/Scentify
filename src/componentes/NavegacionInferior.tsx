@@ -33,7 +33,7 @@ export function NavegacionInferior() {
                 href={href}
                 aria-current={activo ? 'page' : undefined}
                 className={`flex min-h-[3.5rem] flex-col items-center justify-center gap-1 text-xs
-                  ${activo ? 'text-ambar' : 'text-texto-tenue'}`}
+                  ${activo ? 'text-acento' : 'text-texto-tenue'}`}
               >
                 <svg
                   viewBox="0 0 24 24"

@@ -5,15 +5,20 @@ import { FormularioLogin } from './FormularioLogin';
 
 export const dynamic = 'force-dynamic';
 
-export default async function PaginaLogin() {
+export default async function PaginaLogin({
+  searchParams,
+}: {
+  searchParams: Promise<{ siguiente?: string }>;
+}) {
   if (await usuarioActual()) redirect('/');
+  const { siguiente } = await searchParams;
   return (
     <div className="space-y-6 pt-10">
       <header className="space-y-1 text-center">
-        <h1 className="text-3xl font-bold text-ambar">Scentify</h1>
+        <h1 className="text-3xl font-bold text-acento">Scentify</h1>
         <p className="text-sm text-texto-tenue">Mi colección de perfumes</p>
       </header>
-      <FormularioLogin />
+      <FormularioLogin siguiente={siguiente} />
     </div>
   );
 }

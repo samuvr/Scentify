@@ -1,3 +1,4 @@
+import './src/db/entorno';
 import type { Config } from 'drizzle-kit';
 
 export default {

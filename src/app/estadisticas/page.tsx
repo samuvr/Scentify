@@ -126,11 +126,11 @@ export default async function PaginaEstadisticas({
       <section className="space-y-3">
         <h2 className="text-lg font-semibold">Promedios de aplicación</h2>
         <dl className="grid grid-cols-3 gap-2 text-sm">
-          <div className="rounded-xl bg-superficie-alta px-3 py-2">
+          <div className="bg-superficie-alta px-3 py-2">
             <dt className="text-xs uppercase text-texto-tenue">Sprays</dt>
             <dd className="font-semibold">{datos.promedios.spraysMedios ?? '—'}</dd>
           </div>
-          <div className="rounded-xl bg-superficie-alta px-3 py-2">
+          <div className="bg-superficie-alta px-3 py-2">
             <dt className="text-xs uppercase text-texto-tenue">Duración</dt>
             <dd className="font-semibold">
               {datos.promedios.duracionMasFrecuente
@@ -138,7 +138,7 @@ export default async function PaginaEstadisticas({
                 : '—'}
             </dd>
           </div>
-          <div className="rounded-xl bg-superficie-alta px-3 py-2">
+          <div className="bg-superficie-alta px-3 py-2">
             <dt className="text-xs uppercase text-texto-tenue">Valoración</dt>
             <dd className="font-semibold">{datos.promedios.valoracionMedia ?? '—'}</dd>
           </div>

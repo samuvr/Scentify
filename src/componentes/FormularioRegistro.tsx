@@ -242,7 +242,7 @@ export function FormularioRegistro({
               <p className="text-sm text-texto-tenue">Accesos rápidos</p>
               <div className="flex flex-wrap gap-2">
                 {ayer ? (
-                  <button type="button" onClick={repetirAyer} className="etiqueta border-ambar/50 text-ambar">
+                  <button type="button" onClick={repetirAyer} className="etiqueta border-acento/50 text-acento">
                     ↺ Repetir el de ayer
                   </button>
                 ) : null}
@@ -299,7 +299,7 @@ export function FormularioRegistro({
                     aria-pressed={momento === m}
                     onClick={() => setMomento(m)}
                     className={`boton px-2 text-sm ${
-                      momento === m ? 'bg-ambar text-fondo' : 'border border-borde bg-superficie'
+                      momento === m ? 'bg-acento text-fondo' : 'border border-borde bg-superficie'
                     }`}
                   >
                     {m === 'DIA' ? 'Día' : 'Noche'}
@@ -319,7 +319,7 @@ export function FormularioRegistro({
                   aria-pressed={contextoId === c.id}
                   onClick={() => setContextoId(c.id)}
                   className={`etiqueta ${
-                    contextoId === c.id ? 'border-ambar bg-ambar/15 text-ambar' : ''
+                    contextoId === c.id ? 'border-acento bg-acento/15 text-acento' : ''
                   }`}
                 >
                   {c.nombre}
@@ -358,7 +358,7 @@ export function FormularioRegistro({
           ) : null}
 
           {duplicado ? (
-            <p className="rounded-xl border border-id-parcial/40 bg-id-parcial/10 px-4 py-3 text-sm text-id-parcial">
+            <p className="aviso-atencion">
               Ya tienes este perfume registrado en esta fecha. Puedes guardarlo igual.
             </p>
           ) : null}
@@ -401,7 +401,7 @@ export function FormularioRegistro({
                       aria-pressed={valoracion === String(n)}
                       onClick={() => setValoracion(valoracion === String(n) ? '' : String(n))}
                       className={`boton flex-1 px-0 ${
-                        Number(valoracion) >= n ? 'bg-ambar text-fondo' : 'border border-borde'
+                        Number(valoracion) >= n ? 'bg-acento text-fondo' : 'border border-borde'
                       }`}
                     >
                       {n}
@@ -423,7 +423,7 @@ export function FormularioRegistro({
           ) : null}
 
           {aviso ? (
-            <p className="rounded-xl border border-borde bg-superficie-alta px-4 py-3 text-sm">
+            <p className="border border-borde bg-superficie-alta px-4 py-3 text-sm">
               {aviso}
             </p>
           ) : null}
@@ -432,7 +432,7 @@ export function FormularioRegistro({
             type="button"
             onClick={guardar}
             disabled={guardando || !contextoId}
-            className="boton-primario w-full disabled:opacity-60"
+            className="boton-primario w-full"
           >
             {guardando ? 'Guardando…' : 'Registrar uso'}
           </button>

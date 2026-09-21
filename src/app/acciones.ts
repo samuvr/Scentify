@@ -7,6 +7,7 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
+import { destinoSeguro } from '@/dominio/navegacion';
 import { cerrarSesion, exigirUsuario, iniciarSesion } from '@/servicios/auth';
 import {
   actualizarPerfume,
@@ -77,7 +78,7 @@ export async function accionIniciarSesion(_previo: string | null, datos: FormDat
   const email = String(datos.get('email') ?? '');
   const clave = String(datos.get('password') ?? '');
   if (!(await iniciarSesion(email, clave))) return 'Correo o contraseña incorrectos.';
-  redirect('/');
+  redirect(destinoSeguro(datos.get('siguiente')));
 }
 
 export async function accionCerrarSesion() {
