@@ -16,7 +16,13 @@ import {
   ErrorValidacion,
   type DatosPerfume,
 } from '@/servicios/perfumes';
-import { crearDeseo, actualizarDeseo, borrarDeseo } from '@/servicios/wishlist';
+import {
+  crearDeseo,
+  actualizarDeseo,
+  borrarDeseo,
+  solapamientoConLaColeccion,
+} from '@/servicios/wishlist';
+import { guardarSuscripcion, borrarSuscripcion } from '@/servicios/recordatorio';
 import {
   importarColeccion,
   previsualizarImportacion,
@@ -274,17 +280,44 @@ const esquemaDeseo = z.object({
   precioObjetivo: z.coerce.number().min(0).nullable().optional(),
   notas: z.string().max(2000).nullable().optional(),
   fragranticaUrl: z.string().url().max(500).nullable().optional(),
+  notasFondo: z.array(z.string().min(1).max(80)).max(30).optional(),
 });
 
-export async function accionGuardarDeseo(datos: FormData) {
+export interface RespuestaDeseo {
+  ok: boolean;
+  error?: string;
+  /** Aviso de la seccion 10.2. No bloquea: el deseo ya esta guardado. */
+  aviso?: string;
+}
+
+export async function accionGuardarDeseo(
+  id: string | null,
+  entrada: unknown,
+): Promise<RespuestaDeseo> {
   const userId = await exigirUsuario();
-  const id = String(datos.get('id') ?? '');
-  const analisis = esquemaDeseo.safeParse(desdeFormulario(datos));
-  if (!analisis.success) return;
+  const analisis = esquemaDeseo.safeParse(entrada);
+  if (!analisis.success) {
+    return { ok: false, error: analisis.error.issues[0]?.message ?? 'Datos no válidos.' };
+  }
 
   if (id) await actualizarDeseo(userId, id, analisis.data);
   else await crearDeseo(userId, analisis.data);
   revalidatePath('/mas/wishlist');
+
+  const solapamientos = await solapamientoConLaColeccion(userId, analisis.data.notasFondo ?? []);
+  if (solapamientos.length === 0) return { ok: true };
+
+  const { explicarSolapamiento } = await import('@/dominio/solapamiento');
+  const detalle = solapamientos
+    .map((s) => `${s.nombre} (${s.comunes.join(', ')})`)
+    .join(' · ');
+  return { ok: true, aviso: `${explicarSolapamiento(solapamientos)} ${detalle}` };
+}
+
+/** Comprueba el solapamiento antes de guardar, mientras se escribe el deseo. */
+export async function accionComprobarSolapamiento(notasFondo: string[]) {
+  const userId = await exigirUsuario();
+  return solapamientoConLaColeccion(userId, notasFondo);
 }
 
 export async function accionBorrarDeseo(datos: FormData) {
@@ -327,4 +360,33 @@ export async function accionRestaurarCopia(json: string): Promise<{ ok: boolean;
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : 'Copia no válida.' };
   }
+}
+
+/* ------------------------------------------------------- recordatorio */
+
+export async function accionGuardarRecordatorio(datos: FormData) {
+  const userId = await exigirUsuario();
+  const analisis = z
+    .object({ activo: z.coerce.boolean(), hora: z.coerce.number().int().min(0).max(23) })
+    .safeParse({
+      activo: datos.get('activo') === 'on' || datos.get('activo') === 'true',
+      hora: datos.get('hora') ?? 21,
+    });
+  if (!analisis.success) return;
+
+  await guardarAjuste(userId, 'recordatorio', analisis.data);
+  revalidatePath('/mas/configuracion');
+}
+
+export async function accionSuscribirAvisos(suscripcion: {
+  endpoint: string;
+  keys: { p256dh: string; auth: string };
+}) {
+  const userId = await exigirUsuario();
+  await guardarSuscripcion(userId, suscripcion);
+}
+
+export async function accionCancelarAvisos(endpoint: string) {
+  await exigirUsuario();
+  await borrarSuscripcion(endpoint);
 }

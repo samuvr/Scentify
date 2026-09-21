@@ -109,7 +109,7 @@ idoneidad descendente y luego por nombre, para que la lista sea estable entre re
 
 ## Estado del proyecto
 
-MVP completo. Fase 2 (sección 10) pendiente.
+MVP y fase 2 completos.
 
 | Bloque | Estado |
 |---|---|
@@ -121,7 +121,10 @@ MVP completo. Fase 2 (sección 10) pendiente.
 | Estadísticas (secc. 8) | Hecho, con tests |
 | Importar, exportar y copia de seguridad (secc. 9) | Hecho, con tests |
 | PWA: manifest, service worker, cola offline (secc. 11) | Hecho |
-| Fase 2: huecos, solapamiento, viaje, recordatorio (secc. 10) | Pendiente |
+| Detección de huecos (secc. 10.1) | Hecho, con tests |
+| Solapamiento en wishlist (secc. 10.2) | Hecho, con tests |
+| Modo viaje (secc. 10.3) | Hecho, con tests |
+| Recordatorio diario (secc. 10.4) | Hecho, con tests |
 
 ---
 
@@ -159,10 +162,37 @@ src/cliente/        Cola offline en IndexedDB
 src/componentes/    Componentes compartidos
 src/db/             Esquema Drizzle, migración y semillas
 src/dominio/        Lógica pura: idoneidad, estación, recomendación, CSV,
-                    parser de Fragrantica y aritmética de estadísticas
+                    parser de Fragrantica, estadísticas, huecos,
+                    solapamiento y cobertura del modo viaje
 src/servicios/      Acceso a datos, auth, clima, Fragrantica, importación
 tests/              Tests de dominio; tests/integracion/ contra PostgreSQL
 ```
+
+### El recordatorio diario
+
+La sección 10.4 necesita tres cosas en producción, todas gratuitas:
+
+1. Un par de claves VAPID (`npx web-push generate-vapid-keys`) en
+   `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` y `NEXT_PUBLIC_VAPID_PUBLIC_KEY`.
+2. Un `CRON_SECRET` cualquiera, que es lo que protege `/api/cron/recordatorio`.
+3. El cron de `vercel.json`, configurado cada hora para poder respetar la hora que
+   elijas. **En el plan Hobby de Vercel los crons se ejecutan una vez al día**, así que
+   ahí el aviso llegará a la hora que Vercel decida, no a la tuya. Si eso molesta, la
+   alternativa gratuita es un ping horario desde un servicio externo (cron-job.org o
+   similar) a esa misma URL con la cabecera `Authorization: Bearer <CRON_SECRET>`.
+
+El envío es idempotente: la tarea puede dispararse varias veces el mismo día y solo
+manda un aviso, porque queda anotado en `recordatorio_enviado`.
+
+### Sobre el modo viaje
+
+Resolver «el set mínimo de frascos» es un problema de cobertura de conjuntos, NP-duro
+en general. Aquí se resuelve de forma **exacta**, no con un voraz: seis contextos por
+dos momentos son doce requisitos, o sea 4096 subconjuntos, y eso se recorre con
+programación dinámica sobre máscaras de bits ramificando solo por el primer requisito
+sin cubrir. Importa que sea exacto porque «llévate tres» cuando bastaban dos es justo
+lo que no quieres al hacer la maleta. Por encima de veinte requisitos cae a voraz y lo
+dice (`esOptimo: false`).
 
 ### Sobre la lógica de dominio
 

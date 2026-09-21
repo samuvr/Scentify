@@ -112,6 +112,20 @@ cuando('importación y exportación de la colección (sección 9)', () => {
     expect(copia.version).toBe(1);
     expect(copia.perfumes.filter((p) => p.marca === marcaDeLaCorrida)).toHaveLength(40);
     expect(copia.contextos).toHaveLength(6);
-    expect(copia.ajustes).toHaveLength(8);
+    // Los ocho ajustes de las semillas tienen que estar; puede haber más
+    // (el recordatorio de la 10.4 añade el suyo cuando se configura).
+    const claves = copia.ajustes.map((a) => a.clave);
+    expect(claves).toEqual(
+      expect.arrayContaining([
+        'ubicacion',
+        'umbral_verano',
+        'umbral_verano_entretiempo',
+        'umbral_entretiempo',
+        'umbral_entretiempo_invierno',
+        'bochorno_humedad_pct',
+        'bochorno_temperatura_min',
+        'bochorno_incremento',
+      ]),
+    );
   });
 });

@@ -7,6 +7,7 @@
  *     estaticos se sirven de cache.
  *  2. Cachear las lecturas de la coleccion para poder abrirla en el metro.
  *  3. Reenviar la cola de registros de usos cuando vuelve la cobertura.
+ *  4. Enseñar el recordatorio diario que manda el servidor (seccion 10.4).
  *
  * Lo que NO hace: cachear la consulta a Fragrantica ni la de idoneidad. La
  * primera no tiene sentido sin red y la segunda debe fallar limpiamente para
@@ -169,4 +170,43 @@ self.addEventListener('sync', (evento) => {
 // Sin Background Sync (Safari, por ejemplo) la pagina pide el vaciado a mano.
 self.addEventListener('message', (evento) => {
   if (evento.data?.tipo === 'vaciar-cola') evento.waitUntil(vaciarCola());
+});
+
+/* ------------------------------------------- recordatorio diario (10.4) */
+
+self.addEventListener('push', (evento) => {
+  let datos = { titulo: 'Scentify', cuerpo: '¿Qué te has puesto hoy?', url: '/' };
+  try {
+    if (evento.data) datos = { ...datos, ...evento.data.json() };
+  } catch {
+    // Carga ilegible: se enseña el aviso por defecto en vez de perderlo.
+  }
+
+  evento.waitUntil(
+    self.registration.showNotification(datos.titulo, {
+      body: datos.cuerpo,
+      icon: '/icono-192.png',
+      badge: '/icono-192.png',
+      lang: 'es',
+      // Una sola notificacion al dia: una nueva reemplaza a la anterior.
+      tag: 'recordatorio-diario',
+      renotify: false,
+      data: { url: datos.url },
+    }),
+  );
+});
+
+self.addEventListener('notificationclick', (evento) => {
+  evento.notification.close();
+  const destino = evento.notification.data?.url ?? '/';
+
+  evento.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientes) => {
+      // Si la app ya esta abierta, se reutiliza esa ventana.
+      for (const cliente of clientes) {
+        if (cliente.url.includes(destino) && 'focus' in cliente) return cliente.focus();
+      }
+      return self.clients.openWindow(destino);
+    }),
+  );
 });

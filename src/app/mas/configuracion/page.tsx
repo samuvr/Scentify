@@ -2,7 +2,9 @@
 import { redirect } from 'next/navigation';
 import { usuarioActual } from '@/servicios/auth';
 import { leerConfiguracion } from '@/servicios/ajustes';
-import { accionGuardarConfiguracion } from '@/app/acciones';
+import { accionGuardarConfiguracion, accionGuardarRecordatorio } from '@/app/acciones';
+import { AvisosDiarios } from '@/componentes/AvisosDiarios';
+import { RECORDATORIO_POR_DEFECTO, type AjusteRecordatorio } from '@/servicios/recordatorio';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,6 +23,18 @@ export default async function PaginaConfiguracion() {
   if (!userId) redirect('/login');
 
   const { ubicacion, umbrales } = await leerConfiguracion(userId);
+
+  const { crearDb, schema } = await import('@/db');
+  const { and, eq } = await import('drizzle-orm');
+  const [fila] = await crearDb()
+    .select({ valor: schema.ajuste.valor })
+    .from(schema.ajuste)
+    .where(and(eq(schema.ajuste.userId, userId), eq(schema.ajuste.clave, 'recordatorio')))
+    .limit(1);
+  const recordatorio: AjusteRecordatorio = {
+    ...RECORDATORIO_POR_DEFECTO,
+    ...((fila?.valor as Partial<AjusteRecordatorio>) ?? {}),
+  };
 
   return (
     <div className="space-y-5">
@@ -76,6 +90,40 @@ export default async function PaginaConfiguracion() {
           Guardar configuración
         </button>
       </form>
+
+      <section className="tarjeta space-y-3">
+        <h2 className="font-semibold">Recordatorio diario</h2>
+        <p className="text-sm text-texto-tenue">
+          Si a esta hora no has registrado nada, te llega un aviso.
+        </p>
+
+        <form action={accionGuardarRecordatorio} className="space-y-3">
+          <label className="flex items-center gap-3 text-sm">
+            <input
+              type="checkbox"
+              name="activo"
+              defaultChecked={recordatorio.activo}
+              className="h-5 w-5"
+            />
+            Avisarme si no he registrado nada
+          </label>
+          <div>
+            <label htmlFor="hora">Hora del aviso</label>
+            <select id="hora" name="hora" defaultValue={String(recordatorio.hora)} className="mt-1">
+              {Array.from({ length: 24 }, (_, h) => (
+                <option key={h} value={h}>
+                  {String(h).padStart(2, '0')}:00
+                </option>
+              ))}
+            </select>
+          </div>
+          <button type="submit" className="boton-secundario w-full">
+            Guardar recordatorio
+          </button>
+        </form>
+
+        <AvisosDiarios clavePublica={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? ''} />
+      </section>
     </div>
   );
 }

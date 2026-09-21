@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { usuarioActual } from '@/servicios/auth';
-import { listarWishlist } from '@/servicios/consultas';
+import { listarNotas, listarWishlist } from '@/servicios/consultas';
 import { formatearFecha } from '@/componentes/BloquePromedios';
 import { accionBorrarDeseo } from '@/app/acciones';
 import { FormularioDeseo } from './FormularioDeseo';
@@ -29,7 +29,10 @@ export default async function PaginaWishlist({
   if (!userId) redirect('/login');
 
   const { orden } = await searchParams;
-  const deseos = await listarWishlist(userId, orden === 'antiguedad' ? 'antiguedad' : 'prioridad');
+  const [deseos, notas] = await Promise.all([
+    listarWishlist(userId, orden === 'antiguedad' ? 'antiguedad' : 'prioridad'),
+    listarNotas(),
+  ]);
 
   return (
     <div className="space-y-5">
@@ -51,7 +54,7 @@ export default async function PaginaWishlist({
         </div>
       </header>
 
-      <FormularioDeseo />
+      <FormularioDeseo notasConocidas={notas.map((n) => n.nombre)} />
 
       <ul className="space-y-2">
         {deseos.map((d) => {

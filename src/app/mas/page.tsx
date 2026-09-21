@@ -7,6 +7,8 @@ export const dynamic = 'force-dynamic';
 
 const SECCIONES = [
   { href: '/mas/wishlist', titulo: 'Wishlist', descripcion: 'Lo que quiero y a qué precio' },
+  { href: '/mas/huecos', titulo: 'Huecos', descripcion: 'Qué combinaciones no cubre tu colección' },
+  { href: '/mas/viaje', titulo: 'Modo viaje', descripcion: 'El set mínimo de frascos para lo que viene' },
   { href: '/mas/configuracion', titulo: 'Configuración', descripcion: 'Ubicación y umbrales de temperatura' },
   { href: '/mas/datos', titulo: 'Datos', descripcion: 'Importar, exportar y copia de seguridad' },
 ];
