@@ -42,11 +42,28 @@ const passwordHash = password ? hashear(password) : '!';
 const sql = postgres(DATABASE_URL, { max: 1 });
 
 try {
+  /**
+   * Al repetir la siembra, la contrasenia se actualiza si se ha dado una, y se
+   * conserva si no.
+   *
+   * Antes el conflicto no tocaba el hash, y eso dejaba una trampa sin salida:
+   * quien sembrara una primera vez sin SCENTIFY_USER_PASSWORD se quedaba con
+   * el centinela '!' y volver a sembrar con contrasenia no lo arreglaba. El
+   * usuario existia, la clave parecia correcta y el login la rechazaba sin
+   * decir por que.
+   *
+   * La otra mitad importa igual: sin la condicion, sembrar sin contrasenia
+   * sobre un usuario que ya la tenia le borraria el acceso.
+   */
   const [usuario] = await sql`
     insert into usuario (id, email, password_hash)
     values (${userId}, ${email}, ${passwordHash})
-    on conflict (email) do update set email = excluded.email
-    returning id, email
+    on conflict (email) do update set
+      password_hash = case
+        when ${Boolean(password)} then excluded.password_hash
+        else usuario.password_hash
+      end
+    returning id, email, password_hash <> '!' as tiene_clave
   `;
   if (!usuario) throw new Error('No se pudo crear ni recuperar el usuario.');
 
@@ -66,8 +83,17 @@ try {
   console.log(`Usuario ${usuario.email} (${usuario.id})`);
   console.log(`  contextos: ${conteos.contextos}   ajustes: ${conteos.ajustes}`);
   console.log(`  notas: ${conteos.notas}   familias: ${conteos.familias}`);
-  if (!password) {
-    console.log('\nSin SCENTIFY_USER_PASSWORD: el usuario queda sin clave utilizable.');
+  // El estado del acceso se dice siempre, y se lee de la base, no de lo que
+  // se creia haber hecho: es lo unico que decide si vas a poder entrar.
+  if (password) {
+    console.log('  contraseña: fijada');
+  } else if (usuario.tiene_clave) {
+    console.log('  contraseña: se conserva la que ya tenía');
+  } else {
+    console.log(
+      '\nEste usuario NO tiene contraseña utilizable y no podrás entrar.\n' +
+        'Añade SCENTIFY_USER_PASSWORD a tu .env y vuelve a ejecutar `npm run db:seed`.',
+    );
   }
 } finally {
   await sql.end();

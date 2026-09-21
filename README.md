@@ -210,8 +210,14 @@ Neon (base) → variables en Vercel → importar el repo → sembrar el usuario
    DATABASE_URL="<la cadena de Neon>"    SCENTIFY_USER_EMAIL="tu@correo.com"    SCENTIFY_USER_PASSWORD="tu contraseña"    npm run db:seed
    ```
 
+   En Windows esa sintaxis no funciona: pon las tres variables en tu `.env` local,
+   con `DATABASE_URL` apuntando a Neon, y ejecuta `npm run db:seed` a secas.
+
    No va en el build a propósito: metería la contraseña en las variables del proyecto
-   sin necesidad, y solo hace falta una vez. Es idempotente.
+   sin necesidad, y solo hace falta una vez. Es idempotente, y repetirla es además la
+   forma de **cambiar la contraseña**: si se da `SCENTIFY_USER_PASSWORD` se actualiza,
+   y si no se da se conserva la que hubiera. La salida dice siempre en qué estado
+   queda el acceso, leyéndolo de la base.
 
 Para el recordatorio diario hacen falta además `VAPID_PUBLIC_KEY`,
 `VAPID_PRIVATE_KEY`, `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_SUBJECT` y `CRON_SECRET`
