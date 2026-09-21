@@ -42,6 +42,19 @@ cuando('autenticación', () => {
     expect(auth.passwordCorrecta('lo que sea', 'md5$abc$def')).toBe(false);
   });
 
+  /**
+   * El centinela '!' marca al usuario creado sin contrasenia. Si la semilla
+   * lo dejara ahi, el usuario existe, la clave parece correcta y el login la
+   * rechaza sin decir por que. Hubo una version en la que volver a sembrar
+   * con contrasenia no lo arreglaba, porque el ON CONFLICT no tocaba el hash.
+   */
+  it('el usuario sembrado tiene una contraseña utilizable, no el centinela', async () => {
+    const [usuario] = await db.select().from(esquema.usuario).limit(1);
+    expect(usuario).toBeDefined();
+    expect(usuario?.passwordHash).not.toBe('!');
+    expect(usuario?.passwordHash.startsWith('scrypt$')).toBe(true);
+  });
+
   it('el correo del usuario sembrado está en minúsculas', async () => {
     const usuarios = await db.select({ email: esquema.usuario.email }).from(esquema.usuario);
     expect(usuarios.length).toBeGreaterThan(0);
