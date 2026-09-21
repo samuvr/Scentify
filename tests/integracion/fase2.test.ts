@@ -4,8 +4,10 @@
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 
+import { usuarioDePruebas } from './usuario';
+
 const cuando = process.env.DATABASE_URL ? describe : describe.skip;
-const USUARIO = '00000000-0000-0000-0000-000000000001';
+let USUARIO: string;
 
 cuando('solapamiento de la wishlist (10.2)', () => {
   let wishlist: typeof import('@/servicios/wishlist');
@@ -14,6 +16,7 @@ cuando('solapamiento de la wishlist (10.2)', () => {
   const sufijo = Date.now();
 
   beforeAll(async () => {
+    USUARIO = await usuarioDePruebas();
     wishlist = await import('@/servicios/wishlist');
     perfumes = await import('@/servicios/perfumes');
     consultas = await import('@/servicios/consultas');
@@ -73,6 +76,7 @@ cuando('recordatorio diario (10.4)', () => {
   let ajustes: typeof import('@/servicios/ajustes');
 
   beforeAll(async () => {
+    USUARIO = await usuarioDePruebas();
     recordatorio = await import('@/servicios/recordatorio');
     ajustes = await import('@/servicios/ajustes');
 

@@ -7,8 +7,10 @@
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 
+import { usuarioDePruebas } from './usuario';
+
 const cuando = process.env.DATABASE_URL ? describe : describe.skip;
-const USUARIO = '00000000-0000-0000-0000-000000000001';
+let USUARIO: string;
 
 cuando('reglas duras', () => {
   let db: import('@/db').Db;
@@ -21,6 +23,7 @@ cuando('reglas duras', () => {
   let perfumeId: string;
 
   beforeAll(async () => {
+    USUARIO = await usuarioDePruebas();
     const modulo = await import('@/db');
     esquema = await import('@/db/schema');
     perfumes = await import('@/servicios/perfumes');

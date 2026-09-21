@@ -12,10 +12,12 @@
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 
+import { usuarioDePruebas } from './usuario';
+
 const hayBaseDeDatos = Boolean(process.env.DATABASE_URL);
 const cuando = hayBaseDeDatos ? describe : describe.skip;
 
-const USUARIO = '00000000-0000-0000-0000-000000000001';
+let USUARIO: string;
 
 cuando('importación y exportación de la colección (sección 9)', () => {
   let servicios: typeof import('@/servicios/datos');
@@ -28,6 +30,7 @@ cuando('importación y exportación de la colección (sección 9)', () => {
   const marcaDeLaCorrida = `Prueba-${Date.now()}`;
 
   beforeAll(async () => {
+    USUARIO = await usuarioDePruebas();
     servicios = await import('@/servicios/datos');
     consultas = await import('@/servicios/consultas');
   });
