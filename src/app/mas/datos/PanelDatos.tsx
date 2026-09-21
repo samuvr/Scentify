@@ -68,8 +68,9 @@ export function PanelDatos() {
       <section className="tarjeta space-y-3">
         <h2 className="font-semibold">Importar colección desde CSV</h2>
         <p className="text-sm text-texto-tenue">
-          Columnas mínimas: <code>nombre</code> y <code>marca</code>. Las listas (notas, contextos,
-          estaciones) se separan con punto y coma. Se ve todo antes de confirmar.
+          Columnas obligatorias: <code>nombre</code>, <code>marca</code>, <code>contextos</code>,{' '}
+          <code>estaciones</code> y <code>momentos</code>. Las listas se separan con punto y coma.
+          Se ve todo antes de confirmar.
         </p>
 
         <input
@@ -114,7 +115,8 @@ export function PanelDatos() {
 
             {previa.contextosDesconocidos.length > 0 ? (
               <p className="text-sm text-id-parcial">
-                Contextos que no existen y se ignorarán: {previa.contextosDesconocidos.join(', ')}.
+                Contextos que no existen: {previa.contextosDesconocidos.join(', ')}. Créalos antes
+                de importar, o corrige esas filas.
               </p>
             ) : null}
             {previa.cabecerasDesconocidas.length > 0 ? (

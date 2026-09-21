@@ -97,11 +97,10 @@ Y dos más, menores, que aparecieron al implementar:
    que la cuenta salga como salga, no falta ninguno. Dime si por «cinco umbrales»
    entendías otra cosa.
 
-7. **La importación CSV no exige contexto, estación ni momento.** El alta manual sí los
-   exige, porque la sección 4.1 los marca como mínimo uno. Pero el CSV del primer día
-   trae la colección entera y bloquear cuarenta filas por eso lo haría inservible, así
-   que la importación los deja pasar y lo que entre sin categorizar se completa después
-   desde la ficha. Dímelo si prefieres que la importación también los exija.
+7. **La importación CSV exige lo mismo que el alta manual**: nombre, marca y al menos un
+   contexto, una estación y un momento. Un perfume a medio categorizar no sirve para el
+   motor de recomendación, así que la fila se rechaza en la previsualización, con su
+   número de línea y el motivo, en vez de entrar coja.
 
 **Orden del bloque «Nunca los has usado»:** la especificación no lo fija. Se ordena por
 idoneidad descendente y luego por nombre, para que la lista sea estable entre recargas.

@@ -1,6 +1,11 @@
 /**
  * Seccion 9 — CSV de colección e histórico.
  *
+ * La importacion exige lo mismo que el alta manual: nombre, marca y al menos un
+ * contexto, una estacion y un momento. Un perfume a medio categorizar no sirve
+ * para el motor de recomendacion, asi que es mejor rechazar la fila y decir por
+ * que en la previsualizacion que meterla coja.
+ *
  * Se escribe el parser a mano en vez de tirar de libreria porque el formato que
  * hay que soportar es el que exporta esta misma app mas lo que salga de un
  * Excel o un Google Sheets: comillas, comas dentro del campo, saltos de linea
@@ -110,6 +115,8 @@ export type CabeceraColeccion = (typeof CABECERAS_COLECCION)[number];
 export const SEPARADOR_LISTA = ';';
 
 export interface FilaColeccion {
+  /** Linea del fichero de la que sale, para poder señalarla en los errores. */
+  linea: number;
   nombre: string;
   marca: string;
   concentracion: string | null;
@@ -179,10 +186,23 @@ export function analizarCsvColeccion(texto: string): ResultadoImportacion {
     (c) => c !== '' && !(CABECERAS_COLECCION as readonly string[]).includes(c),
   );
 
-  if (indice('nombre') < 0 || indice('marca') < 0) {
+  const obligatorias: CabeceraColeccion[] = [
+    'nombre',
+    'marca',
+    'contextos',
+    'estaciones',
+    'momentos',
+  ];
+  const ausentes = obligatorias.filter((c) => indice(c) < 0);
+  if (ausentes.length > 0) {
     return {
       filas: [],
-      errores: [{ linea: 1, motivo: 'Faltan las columnas obligatorias «nombre» y «marca».' }],
+      errores: [
+        {
+          linea: 1,
+          motivo: `Faltan columnas obligatorias: ${ausentes.map((c) => `«${c}»`).join(', ')}.`,
+        },
+      ],
       cabecerasDesconocidas,
     };
   }
@@ -234,14 +254,28 @@ export function analizarCsvColeccion(texto: string): ResultadoImportacion {
       return;
     }
 
+    if (estaciones.length === 0) {
+      errores.push({ linea, motivo: 'Falta la columna «estaciones»: marca al menos una.' });
+      return;
+    }
+
     const momentos = lista(campo('momentos')).map((m) => m.toUpperCase());
     const momentoMalo = momentos.find((m) => !MOMENTOS_VALIDOS.includes(m));
     if (momentoMalo) {
       errores.push({ linea, motivo: `Momento desconocido: «${momentoMalo}».` });
       return;
     }
+    if (momentos.length === 0) {
+      errores.push({ linea, motivo: 'Falta la columna «momentos»: marca DIA, NOCHE o ambos.' });
+      return;
+    }
+    if (lista(campo('contextos')).length === 0) {
+      errores.push({ linea, motivo: 'Falta la columna «contextos»: marca al menos uno.' });
+      return;
+    }
 
     validas.push({
+      linea,
       nombre,
       marca,
       concentracion: concentracion || null,

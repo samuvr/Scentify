@@ -41,19 +41,29 @@ cuando('importación y exportación de la colección (sección 9)', () => {
       (_, i) =>
         `Importado ${i + 1},${marcaDeLaCorrida},EDP,LO_TENGO,${(i % 5) + 1},Oud;Ámbar,Oficina;Casa,OTONO;INVIERNO,NOCHE`,
     );
-    // Una fila sin nombre y otra con un contexto que no existe.
+    // Una fila sin nombre, otra con un contexto que no existe y otra sin momento.
     filas.push(',Sin nombre,EDP,LO_TENGO,3,,Oficina,OTONO,DIA');
     filas.push(`Contexto raro,${marcaDeLaCorrida},EDP,LO_TENGO,3,,Discoteca,OTONO,DIA`);
+    filas.push(`Sin momento,${marcaDeLaCorrida},EDP,LO_TENGO,3,,Oficina,OTONO,`);
     return [cabecera, ...filas].join('\n');
   }
 
-  it('previsualiza antes de tocar nada, señalando errores y contextos desconocidos', async () => {
+  it('previsualiza antes de tocar nada, señalando cada fila que no entra', async () => {
     const previa = await servicios.previsualizarImportacion(USUARIO, csvDePrueba(40));
 
-    expect(previa.filas).toHaveLength(41); // 40 buenas + la del contexto raro
-    expect(previa.errores).toHaveLength(1);
-    expect(previa.errores[0]?.motivo).toContain('obligatorios');
+    expect(previa.filas).toHaveLength(40);
+    expect(previa.errores.map((e) => e.motivo)).toEqual([
+      expect.stringContaining('obligatorios'),
+      expect.stringContaining('Ningún contexto reconocido'),
+      expect.stringContaining('«momentos»'),
+    ]);
     expect(previa.contextosDesconocidos).toEqual(['Discoteca']);
+  });
+
+  it('las filas rechazadas se señalan por su línea del fichero', async () => {
+    const previa = await servicios.previsualizarImportacion(USUARIO, csvDePrueba(40));
+    // 40 filas buenas + cabecera = la primera mala es la 42.
+    expect(previa.errores.map((e) => e.linea)).toEqual([42, 43, 44]);
   });
 
   it('importa 40 perfumes y el CSV exportado los devuelve todos (criterio 11)', async () => {
@@ -63,14 +73,14 @@ cuando('importación y exportación de la colección (sección 9)', () => {
       omitirDuplicados: true,
     });
 
-    expect(resultado.creados).toBe(41);
+    expect(resultado.creados).toBe(40);
     expect(resultado.errores).toEqual([]);
 
     const exportado = await servicios.exportarColeccionCsv(USUARIO);
     const lineasDeLaCorrida = exportado
       .split('\r\n')
       .filter((l) => l.includes(marcaDeLaCorrida));
-    expect(lineasDeLaCorrida).toHaveLength(41);
+    expect(lineasDeLaCorrida).toHaveLength(40);
     expect(exportado).toContain('Importado 40');
     // Las listas se exportan con punto y coma, tal y como se importaron.
     expect(exportado).toContain('OTONO;INVIERNO');
@@ -78,13 +88,13 @@ cuando('importación y exportación de la colección (sección 9)', () => {
 
   it('reimportar el mismo fichero no duplica nada', async () => {
     const previa = await servicios.previsualizarImportacion(USUARIO, csvDePrueba(40));
-    expect(previa.duplicados).toHaveLength(41);
+    expect(previa.duplicados).toHaveLength(40);
 
     const resultado = await servicios.importarColeccion(USUARIO, previa.filas, {
       omitirDuplicados: true,
     });
     expect(resultado.creados).toBe(0);
-    expect(resultado.omitidos).toBe(41);
+    expect(resultado.omitidos).toBe(40);
   });
 
   it('la importación deduplica las notas por nombre normalizado', async () => {
@@ -100,7 +110,7 @@ cuando('importación y exportación de la colección (sección 9)', () => {
   it('la copia JSON incluye todo y declara su versión', async () => {
     const copia = await servicios.copiaCompleta(USUARIO);
     expect(copia.version).toBe(1);
-    expect(copia.perfumes.filter((p) => p.marca === marcaDeLaCorrida)).toHaveLength(41);
+    expect(copia.perfumes.filter((p) => p.marca === marcaDeLaCorrida)).toHaveLength(40);
     expect(copia.contextos).toHaveLength(6);
     expect(copia.ajustes).toHaveLength(8);
   });

@@ -37,20 +37,14 @@ export interface DatosPerfume {
 
 export class ErrorValidacion extends Error {}
 
-export interface OpcionesAlta {
-  /**
-   * Salta las cardinalidades minimas. Solo lo usa la importacion CSV: el
-   * fichero del primer dia trae la coleccion entera y bloquear cuarenta filas
-   * por falta de contexto la haria inservible (seccion 9).
-   */
-  permitirIncompleto?: boolean;
-}
-
-function validar(datos: DatosPerfume, opciones: OpcionesAlta = {}): void {
+/**
+ * Las cardinalidades minimas valen para todas las vias de alta, incluida la
+ * importacion CSV: un perfume a medio categorizar no sirve para el motor de
+ * recomendacion.
+ */
+function validar(datos: DatosPerfume): void {
   if (!datos.nombre.trim()) throw new ErrorValidacion('El nombre es obligatorio.');
   if (!datos.marca.trim()) throw new ErrorValidacion('La marca es obligatoria.');
-  if (opciones.permitirIncompleto) return;
-
   if (datos.contextoIds.length === 0) {
     throw new ErrorValidacion('Marca al menos un contexto.');
   }
@@ -116,30 +110,18 @@ async function sincronizarRelaciones(perfumeId: string, datos: DatosPerfume): Pr
           .insert(schema.perfumeFamilia)
           .values(datos.familiaIds.map((familiaId, orden) => ({ perfumeId, familiaId, orden })))
       : null,
-    datos.contextoIds.length
-      ? db
-          .insert(schema.perfumeContexto)
-          .values(datos.contextoIds.map((contextoId) => ({ perfumeId, contextoId })))
-      : null,
-    datos.estaciones.length
-      ? db
-          .insert(schema.perfumeEstacion)
-          .values(datos.estaciones.map((estacion) => ({ perfumeId, estacion })))
-      : null,
-    datos.momentos.length
-      ? db
-          .insert(schema.perfumeMomento)
-          .values(datos.momentos.map((momento) => ({ perfumeId, momento })))
-      : null,
+    db
+      .insert(schema.perfumeContexto)
+      .values(datos.contextoIds.map((contextoId) => ({ perfumeId, contextoId }))),
+    db
+      .insert(schema.perfumeEstacion)
+      .values(datos.estaciones.map((estacion) => ({ perfumeId, estacion }))),
+    db.insert(schema.perfumeMomento).values(datos.momentos.map((momento) => ({ perfumeId, momento }))),
   ]);
 }
 
-export async function crearPerfume(
-  userId: string,
-  datos: DatosPerfume,
-  opciones: OpcionesAlta = {},
-): Promise<string> {
-  validar(datos, opciones);
+export async function crearPerfume(userId: string, datos: DatosPerfume): Promise<string> {
+  validar(datos);
   const db = crearDb();
 
   const [creado] = await db

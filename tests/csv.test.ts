@@ -98,14 +98,22 @@ describe('importación de colección', () => {
     });
   });
 
-  it('solo exige nombre y marca', () => {
-    const resultado = analizarCsvColeccion('nombre,marca\nAsad,Lattafa');
+  /** Cabecera minima con las cinco columnas obligatorias. */
+  const minima = 'nombre,marca,contextos,estaciones,momentos';
+
+  it('con las cinco columnas obligatorias basta', () => {
+    const resultado = analizarCsvColeccion(`${minima}\nAsad,Lattafa,Oficina,OTONO,DIA`);
     expect(resultado.errores).toEqual([]);
     expect(resultado.filas[0]).toMatchObject({ nombre: 'Asad', estado: 'LO_TENGO' });
   });
 
   it('avisa fila a fila sin descartar el resto del fichero', () => {
-    const csv = `nombre,marca,valoracion\nBueno,Marca,4\n,Sin nombre,3\nOtro,Marca,9`;
+    const csv = [
+      `${minima},valoracion`,
+      'Bueno,Marca,Oficina,OTONO,DIA,4',
+      ',Sin nombre,Oficina,OTONO,DIA,3',
+      'Otro,Marca,Oficina,OTONO,DIA,9',
+    ].join('\n');
     const resultado = analizarCsvColeccion(csv);
 
     expect(resultado.filas.map((f) => f.nombre)).toEqual(['Bueno']);
@@ -115,34 +123,66 @@ describe('importación de colección', () => {
     ]);
   });
 
+  it('cada fila guarda su línea, para poder señalarla', () => {
+    const csv = [
+      minima,
+      'Primero,Marca,Oficina,OTONO,DIA',
+      'Segundo,Marca,Oficina,OTONO,DIA',
+    ].join('\n');
+    expect(analizarCsvColeccion(csv).filas.map((f) => f.linea)).toEqual([2, 3]);
+  });
+
   it('rechaza valores de enum que no existen, diciendo cuál', () => {
     const resultado = analizarCsvColeccion(
-      'nombre,marca,estaciones\nX,Y,VERANO;PRIMEVERA',
+      `${minima}\nX,Y,Oficina,VERANO;PRIMEVERA,DIA`,
     );
     expect(resultado.errores[0]?.motivo).toContain('PRIMEVERA');
   });
 
   it('exige la fecha en AAAA-MM-DD', () => {
-    const resultado = analizarCsvColeccion('nombre,marca,fecha_compra\nX,Y,15/03/2024');
+    const resultado = analizarCsvColeccion(
+      `${minima},fecha_compra\nX,Y,Oficina,OTONO,DIA,15/03/2024`,
+    );
     expect(resultado.errores[0]?.motivo).toContain('AAAA-MM-DD');
   });
 
   it('no distingue mayúsculas en los enums ni en las cabeceras', () => {
-    const resultado = analizarCsvColeccion('Nombre,Marca,Estado\nX,Y,lo_tuve');
+    const resultado = analizarCsvColeccion(
+      'Nombre,Marca,Contextos,Estaciones,Momentos,Estado\nX,Y,Oficina,otono,dia,lo_tuve',
+    );
     expect(resultado.errores).toEqual([]);
     expect(resultado.filas[0]?.estado).toBe('LO_TUVE');
+    expect(resultado.filas[0]?.estaciones).toEqual(['OTONO']);
   });
 
   it('ignora columnas que no conoce, pero las nombra', () => {
-    const resultado = analizarCsvColeccion('nombre,marca,precio_pagado\nX,Y,42');
+    const resultado = analizarCsvColeccion(
+      `${minima},precio_pagado\nX,Y,Oficina,OTONO,DIA,42`,
+    );
     expect(resultado.errores).toEqual([]);
     expect(resultado.cabecerasDesconocidas).toEqual(['precio_pagado']);
   });
 
-  it('un fichero sin nombre ni marca no se importa a medias', () => {
+  it('un fichero al que le faltan columnas obligatorias no se importa a medias', () => {
     const resultado = analizarCsvColeccion('titulo,fabricante\nX,Y');
     expect(resultado.filas).toEqual([]);
     expect(resultado.errores[0]?.motivo).toContain('obligatorias');
+  });
+
+  it('nombra exactamente qué columnas obligatorias faltan', () => {
+    const resultado = analizarCsvColeccion('nombre,marca,estaciones\nX,Y,OTONO');
+    expect(resultado.errores[0]?.motivo).toContain('«contextos»');
+    expect(resultado.errores[0]?.motivo).toContain('«momentos»');
+    expect(resultado.errores[0]?.motivo).not.toContain('«estaciones»');
+  });
+
+  it('una fila con la columna presente pero vacía también se rechaza, y dice cuál', () => {
+    const resultado = analizarCsvColeccion(
+      [minima, 'Sin contexto,Marca,,OTONO,DIA', 'Sin estación,Marca,Oficina,,DIA'].join('\n'),
+    );
+    expect(resultado.filas).toEqual([]);
+    expect(resultado.errores[0]?.motivo).toContain('«contextos»');
+    expect(resultado.errores[1]?.motivo).toContain('«estaciones»');
   });
 
   it('un fichero vacío no revienta', () => {

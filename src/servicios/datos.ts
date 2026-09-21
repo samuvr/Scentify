@@ -213,21 +213,38 @@ export async function previsualizarImportacion(
   const contextosDesconocidos = new Set<string>();
   const familiasDesconocidas = new Set<string>();
   const duplicados: string[] = [];
+  const errores = [...analisis.errores];
+  const importables: typeof analisis.filas = [];
 
   for (const fila of analisis.filas) {
+    const resueltos = fila.contextos.filter((c) => nombresContexto.has(normalizar(c)));
     for (const c of fila.contextos) {
       if (!nombresContexto.has(normalizar(c))) contextosDesconocidos.add(c);
     }
     for (const f of fila.familias) {
       if (!nombresFamilia.has(normalizar(f))) familiasDesconocidas.add(f);
     }
+
+    // El CSV traia contextos, pero ninguno existe en la coleccion: la fila no
+    // se puede importar sin saltarse la regla de "minimo un contexto".
+    if (resueltos.length === 0) {
+      errores.push({
+        linea: fila.linea,
+        motivo: `Ningún contexto reconocido (${fila.contextos.join(', ')}). Créalo antes de importar.`,
+      });
+      continue;
+    }
+
     if (clavesExistentes.has(normalizar(`${fila.nombre} ${fila.marca}`))) {
       duplicados.push(`${fila.nombre} · ${fila.marca}`);
     }
+    importables.push(fila);
   }
 
   return {
     ...analisis,
+    filas: importables,
+    errores: errores.sort((a, b) => a.linea - b.linea),
     contextosDesconocidos: [...contextosDesconocidos],
     familiasDesconocidas: [...familiasDesconocidas],
     duplicados,
@@ -243,10 +260,9 @@ export interface ResultadoImportacionFinal {
 /**
  * Importa las filas validas.
  *
- * Al contrario que el alta manual, aqui NO se exige contexto, estacion ni
- * momento: el CSV del primer dia es para meter la coleccion entera de golpe y
- * bloquear cuarenta filas por eso la haria inservible. Lo que entre sin
- * categorizar queda visible en la ficha para completarlo despues.
+ * Exige lo mismo que el alta manual: al menos un contexto, una estacion y un
+ * momento. Las filas que no llegan se rechazan en la previsualizacion, con su
+ * numero de linea y el motivo, antes de tocar la base de datos.
  */
 export async function importarColeccion(
   userId: string,
@@ -285,35 +301,31 @@ export async function importarColeccion(
     }
 
     try {
-      await crearPerfume(
-        userId,
-        {
-          nombre: fila.nombre,
-          marca: fila.marca,
-          concentracion: fila.concentracion as never,
-          anioLanzamiento: fila.anioLanzamiento,
-          volumenMl: fila.volumenMl,
-          fechaCompra: fila.fechaCompra,
-          estado: fila.estado,
-          valoracion: fila.valoracion,
-          notasPersonales: fila.notasPersonales,
-          fragranticaUrl: fila.fragranticaUrl,
-          notas: [
-            ...fila.notasSalida.map((nombre) => ({ nombre, nivel: 'SALIDA' as const })),
-            ...fila.notasCorazon.map((nombre) => ({ nombre, nivel: 'CORAZON' as const })),
-            ...fila.notasFondo.map((nombre) => ({ nombre, nivel: 'FONDO' as const })),
-          ],
-          familiaIds: fila.familias
-            .map((f) => idFamilia.get(normalizar(f)))
-            .filter((id): id is string => Boolean(id)),
-          contextoIds: fila.contextos
-            .map((c) => idContexto.get(normalizar(c)))
-            .filter((id): id is string => Boolean(id)),
-          estaciones: fila.estaciones as Estacion[],
-          momentos: fila.momentos as Momento[],
-        },
-        { permitirIncompleto: true },
-      );
+      await crearPerfume(userId, {
+        nombre: fila.nombre,
+        marca: fila.marca,
+        concentracion: fila.concentracion as never,
+        anioLanzamiento: fila.anioLanzamiento,
+        volumenMl: fila.volumenMl,
+        fechaCompra: fila.fechaCompra,
+        estado: fila.estado,
+        valoracion: fila.valoracion,
+        notasPersonales: fila.notasPersonales,
+        fragranticaUrl: fila.fragranticaUrl,
+        notas: [
+          ...fila.notasSalida.map((nombre) => ({ nombre, nivel: 'SALIDA' as const })),
+          ...fila.notasCorazon.map((nombre) => ({ nombre, nivel: 'CORAZON' as const })),
+          ...fila.notasFondo.map((nombre) => ({ nombre, nivel: 'FONDO' as const })),
+        ],
+        familiaIds: fila.familias
+          .map((f) => idFamilia.get(normalizar(f)))
+          .filter((id): id is string => Boolean(id)),
+        contextoIds: fila.contextos
+          .map((c) => idContexto.get(normalizar(c)))
+          .filter((id): id is string => Boolean(id)),
+        estaciones: fila.estaciones as Estacion[],
+        momentos: fila.momentos as Momento[],
+      });
       clavesExistentes.add(clave);
       resultado.creados += 1;
     } catch (error) {
