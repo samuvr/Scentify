@@ -258,12 +258,26 @@ export function FormularioPerfume({
               </p>
               <div>
                 <label htmlFor="pegado">O pega aquí el texto copiado del navegador</label>
+                {/*
+                  Decir exactamente que seleccionar no es un adorno: pegar la
+                  pagina entera funciona, pero el texto de las resenias habla de
+                  inviernos y veranos y desplaza el recuento de votos. Acotar la
+                  seleccion a este tramo da los mismos numeros que la lectura
+                  automatica.
+                */}
+                <p className="mt-1 text-sm text-texto-tenue">
+                  Abre la ficha en el navegador y selecciona desde{' '}
+                  <strong className="text-texto">«acordes principales»</strong> hasta justo antes
+                  de <strong className="text-texto">«Votar por ingredientes»</strong>. Ese tramo
+                  lleva los acordes, la pirámide de notas y los votos de estación y momento.
+                  Copia y pega aquí.
+                </p>
                 <textarea
                   id="pegado"
                   rows={5}
                   value={textoPegado}
                   onChange={(e) => setTextoPegado(e.target.value)}
-                  className="mt-1"
+                  className="mt-2"
                 />
               </div>
               <button

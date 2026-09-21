@@ -201,6 +201,51 @@ describe('cuando no hay datos, no se inventa ninguno', () => {
   });
 });
 
+/* ------------------------------------------- la seleccion que dice la app */
+
+/**
+ * La pantalla le pide al usuario que seleccione desde «acordes principales»
+ * hasta justo antes de «Votar por ingredientes». Este fixture es exactamente
+ * ese tramo, sacado del innerText real de la ficha renderizada en un navegador,
+ * no escrito a mano. Si el parser deja de entenderlo, la instruccion que da la
+ * interfaz pasa a ser mentira, y este test es lo que lo impide.
+ */
+describe('el tramo que la interfaz manda seleccionar se lee entero', () => {
+  const pegado = readFileSync(
+    new URL('./fixtures/fragrantica-seleccion-recomendada.txt', import.meta.url),
+    'utf8',
+  );
+
+  it('saca los diez acordes', () => {
+    const ficha = leerFichaFragrantica(pegado);
+    expect(ficha.acordes).toHaveLength(10);
+    expect(ficha.acordes[0]).toBe('ámbar');
+    expect(ficha.acordes.at(-1)).toBe('herbal');
+  });
+
+  it('saca los tres niveles de la pirámide', () => {
+    const ficha = leerFichaFragrantica(pegado);
+    expect(ficha.notas.salida).toEqual([
+      'bergamota',
+      'pimienta rosa',
+      'jazmín',
+      'flor de azahar del naranjo',
+    ]);
+    expect(ficha.notas.corazon).toContain('elemí');
+    expect(ficha.notas.fondo).toEqual(['ambroxan', 'ámbar', 'cedro', 'pachulí', 'ládano']);
+  });
+
+  it('saca los votos de estación y momento', () => {
+    const ficha = leerFichaFragrantica(pegado);
+    expect(ficha.estaciones).not.toBeNull();
+    expect(ficha.momentos).not.toBeNull();
+    // Los mismos porcentajes que da la lectura automatica del HTML completo:
+    // acotar la seleccion no cambia el resultado.
+    expect(ficha.estaciones?.PRIMAVERA.pct).toBe(27);
+    expect(ficha.momentos?.DIA.pct).toBe(51);
+  });
+});
+
 /* ---------------------------------------------------- validacion de URL */
 
 describe('solo se aceptan URLs de ficha', () => {
