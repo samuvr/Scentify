@@ -1,6 +1,9 @@
 /**
  * Aplica las migraciones de `drizzle/` en orden, segun `meta/_journal.json`.
- * Se ejecuta en local y en el build de Vercel: `npm run db:migrate`.
+ * Se ejecuta en local con `npm run db:migrate`, y en Vercel dentro del
+ * `buildCommand` de vercel.json, de modo que cada despliegue deja la base al
+ * dia antes de servir nada. No esta en el script `build` de package.json a
+ * proposito: asi compilar en local no exige tener una base de datos.
  */
 import './entorno';
 import { drizzle } from 'drizzle-orm/postgres-js';

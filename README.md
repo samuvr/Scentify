@@ -22,7 +22,7 @@ restricciones de la sección 11.
 | Offline | **Service Worker propio + IndexedDB** | Cola de usos offline con Background Sync; sin depender de plugins que envuelven el build. |
 | Tiempo | **Open-Meteo** (`forecast` con `past_days`) | Gratuita, sin API key ni registro; una llamada al día, cacheada en servidor. |
 | Tests | **Vitest** | Arranque inmediato, misma resolución de módulos y alias que la app. |
-| Despliegue | **Vercel** (hobby) + **Neon** (free) | Coste cero real; `git push` despliega y las migraciones corren en el build. |
+| Despliegue | **Vercel** (hobby) + **Neon** (free) | Coste cero real; `git push` despliega y las migraciones corren en el `buildCommand`. |
 
 ### Justificación
 
@@ -187,6 +187,35 @@ DATABASE_URL=postgresql://…/scentify_test SCENTIFY_DB_DRIVER=tcp npm test
 No hay `npm run lint`: `next lint` está retirado desde Next 15.5 y no se ha sustituido
 todavía por una configuración de ESLint propia. La comprobación estática es
 `npm run typecheck`.
+
+## Despliegue en Vercel
+
+```
+Neon (base) → variables en Vercel → importar el repo → sembrar el usuario
+```
+
+1. **Base de datos.** En [neon.com](https://neon.com), proyecto nuevo y copiar la cadena
+   de conexión **directa** (la que no lleva `-pooler`). Sirve igual para migrar, sembrar
+   y servir.
+2. **Importar el repositorio** en [vercel.com](https://vercel.com). Detecta Next.js solo;
+   no hay que tocar el framework ni el directorio de salida.
+3. **Variables de entorno**, antes del primer despliegue. `DATABASE_URL` y `AUTH_SECRET`
+   son las únicas imprescindibles. Si se añaden después, hay que volver a desplegar.
+4. **Desplegar.** El `buildCommand` de `vercel.json` aplica las migraciones antes de
+   compilar, así que cada despliegue deja la base al día. Un fallo de conexión rompe el
+   build en vez de publicar una app sin tablas, que es lo que se quiere.
+5. **Sembrar el usuario**, una sola vez, desde local apuntando a Neon:
+
+   ```bash
+   DATABASE_URL="<la cadena de Neon>"    SCENTIFY_USER_EMAIL="tu@correo.com"    SCENTIFY_USER_PASSWORD="tu contraseña"    npm run db:seed
+   ```
+
+   No va en el build a propósito: metería la contraseña en las variables del proyecto
+   sin necesidad, y solo hace falta una vez. Es idempotente.
+
+Para el recordatorio diario hacen falta además `VAPID_PUBLIC_KEY`,
+`VAPID_PRIVATE_KEY`, `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_SUBJECT` y `CRON_SECRET`
+(ver «El recordatorio diario»). Sin ellas el resto de la app funciona igual.
 
 ## Estructura
 
