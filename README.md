@@ -240,14 +240,22 @@ La sección 10.4 necesita tres cosas en producción, todas gratuitas:
 1. Un par de claves VAPID (`npx web-push generate-vapid-keys`) en
    `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` y `NEXT_PUBLIC_VAPID_PUBLIC_KEY`.
 2. Un `CRON_SECRET` cualquiera, que es lo que protege `/api/cron/recordatorio`.
-3. El cron de `vercel.json`, configurado cada hora para poder respetar la hora que
-   elijas. **En el plan Hobby de Vercel los crons se ejecutan una vez al día**, así que
-   ahí el aviso llegará a la hora que Vercel decida, no a la tuya. Si eso molesta, la
-   alternativa gratuita es un ping horario desde un servicio externo (cron-job.org o
-   similar) a esa misma URL con la cabecera `Authorization: Bearer <CRON_SECRET>`.
+3. El cron de `vercel.json`, **diario** (`0 20 * * *`). No es una preferencia: el plan
+   Hobby de Vercel **rechaza el despliegue entero** si un cron correría más de una vez
+   al día, con «Hobby accounts are limited to daily cron jobs». Un cron horario no es
+   un aviso, es un despliegue que no sale.
 
-El envío es idempotente: la tarea puede dispararse varias veces el mismo día y solo
-manda un aviso, porque queda anotado en `recordatorio_enviado`.
+Que sea diario basta porque el envío no exige que el cron caiga en la hora exacta: se
+manda si la hora local ya ha pasado la configurada, y queda anotado en
+`recordatorio_enviado` para no repetir. Las 20:00 UTC son las 21:00 en invierno y las
+22:00 en verano, o sea nunca antes de las 21:00, que es la hora por defecto. Cambiar
+`schedule` es cuestión de editar `vercel.json`, recordando que va en UTC.
+
+El límite real está en configurar una hora **más tardía** que el cron: ese día no
+saldrá, porque no habrá otra pasada. Para que la hora se respete de verdad hace falta
+una pasada por hora, y la alternativa gratuita es un ping horario desde un servicio
+externo (cron-job.org o similar) a esa misma URL con la cabecera
+`Authorization: Bearer <CRON_SECRET>`; en ese caso se quita `crons` de `vercel.json`.
 
 ### Sobre el parser de Fragrantica
 

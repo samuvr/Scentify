@@ -4,6 +4,12 @@
  * La dispara el cron de Vercel (ver vercel.json). Se protege con CRON_SECRET
  * porque es una ruta publica: sin cabecera valida, 401.
  *
+ * El cron es diario, no horario, porque el plan Hobby rechaza el despliegue
+ * entero si correria mas de una vez al dia. Basta: `enviarRecordatoriosPendientes`
+ * envia cuando la hora local ya ha pasado la configurada, no cuando coincide
+ * con ella, asi que una sola pasada al final del dia cubre cualquier hora
+ * anterior.
+ *
  * Es idempotente: si el cron se ejecuta dos veces el mismo dia, el segundo
  * intento no envia nada.
  */
