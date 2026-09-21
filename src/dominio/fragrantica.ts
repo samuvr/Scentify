@@ -602,6 +602,53 @@ export function leerFichaFragrantica(fuente: string): FichaFragrantica {
   };
 }
 
+/**
+ * Marca y nombre sacados de la propia URL.
+ *
+ * Las fichas siguen siempre el patron /perfume/<Marca>/<Nombre>-<id>.html, con
+ * guiones por espacios:
+ *
+ *   /perfume/Lattafa-Perfumes/Fakhar-Black-70465.html
+ *   -> { marca: 'Lattafa Perfumes', nombre: 'Fakhar Black' }
+ *
+ * Con esto, compartir la ficha desde el movil deja el paso 1 del alta relleno
+ * sin escribir nada, y sin depender de que la lectura de la pagina funcione:
+ * la URL la tenemos siempre, aunque Cloudflare bloquee la peticion.
+ *
+ * Es una conveniencia, no una fuente de verdad: el usuario ve los dos campos
+ * y los corrige si la URL trae el nombre abreviado o de otra forma.
+ */
+export function datosDeUrlFragrantica(url: string): { marca: string; nombre: string } | null {
+  if (!esUrlDeFichaValida(url)) return null;
+
+  let ruta: string;
+  try {
+    ruta = new URL(url).pathname;
+  } catch {
+    return null;
+  }
+
+  // ['', 'perfume', '<Marca>', '<Nombre>-<id>.html']
+  const partes = ruta.split('/').filter(Boolean);
+  if (partes.length < 3) return null;
+
+  const marca = aTexto(partes[1]);
+  // El id numerico del final es lo que distingue una ficha de cualquier otra
+  // pagina bajo /perfume/, asi que si no esta, no es una ficha.
+  const conId = partes[2]?.match(/^(.+)-\d+\.html$/i);
+  if (!conId?.[1]) return null;
+  const nombre = aTexto(conId[1]);
+
+  return marca && nombre ? { marca, nombre } : null;
+}
+
+function aTexto(segmento: string | undefined): string {
+  return decodeURIComponent(segmento ?? '')
+    .replace(/-/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 /** Solo se aceptan URLs de ficha de Fragrantica; nada de recorrer el sitio. */
 export function esUrlDeFichaValida(url: string): boolean {
   try {

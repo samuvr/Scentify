@@ -253,6 +253,25 @@ Lo que la ficha real hace y no era evidente:
 - La misma página repite cada nota dos veces y el bloque de votos entero otra vez más;
   el parser deduplica y se queda con el primer bloque.
 
+**En el móvil: Compartir → Scentify.** Seleccionar y copiar texto en un teléfono es
+incómodo, así que la app se registra como destino de compartir (`share_target` del
+manifest). Desde la ficha abierta en Chrome: Compartir → Scentify, y se abre el alta
+directamente en el paso de Fragrantica, con la URL puesta e intentando la lectura sola.
+
+De la propia URL salen además la marca y el nombre, porque las fichas siguen siempre
+el patrón `/perfume/<Marca>/<Nombre>-<id>.html`. Eso vale aunque Cloudflare bloquee la
+lectura: la dirección la tenemos siempre. Si no hay sesión, se pide la contraseña y se
+vuelve a lo compartido en vez de perderlo; el destino de vuelta se filtra en
+`destinoSeguro()` para que el login no acabe siendo un redirector abierto.
+
+Es de Android: Safari en iOS no implementa Web Share Target para webapps.
+
+**Descartado: la captura de pantalla.** Medida a 390 px, una ficha real ocupa 58.022 px
+de alto, unas 69 pantallas de móvil, y los tres datos que hacen falta están en las
+pantallas 4 (acordes), 9 (votos) y 20 (pirámide). Harían falta tres capturas apuntadas
+a mano y luego leer por OCR recuentos como `1.8k`, donde confundirlo con `18k` cambia
+el porcentaje por completo. Más trabajo que copiar el texto, y menos fiable.
+
 **Expectativa realista:** Cloudflare bloquea las IP de centro de datos, así que la
 petición automática desde Vercel fallará a menudo. Los dos fallbacks de la 5.2 están
 implementados y probados, y el de pegar el texto es el que más se va a usar.

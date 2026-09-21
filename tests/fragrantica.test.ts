@@ -10,7 +10,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { esUrlDeFichaValida, leerFichaFragrantica } from '@/dominio/fragrantica';
+import { datosDeUrlFragrantica, esUrlDeFichaValida, leerFichaFragrantica } from '@/dominio/fragrantica';
 import { FICHA_EN_INGLES, PAGINA_SIN_DATOS, TEXTO_PEGADO } from './fixtures/fragrantica';
 
 const fixture = (nombre: string) =>
@@ -312,5 +312,48 @@ describe('solo se aceptan URLs de ficha', () => {
     ['no es una url', false],
   ])('%s -> %s', (url, valida) => {
     expect(esUrlDeFichaValida(url)).toBe(valida);
+  });
+});
+
+/* ------------------------------------------ datos sacados de la propia URL */
+
+/**
+ * Las URLs de ficha llevan la marca y el nombre en la ruta:
+ *   /perfume/Lattafa-Perfumes/Fakhar-Black-70465.html
+ * Sirve para que "Compartir → Scentify" desde el movil deje el paso 1 relleno
+ * sin escribir nada. Los tres ejemplos son URLs reales.
+ */
+describe('marca y nombre salen de la URL de la ficha', () => {
+  it.each([
+    [
+      'https://www.fragrantica.es/perfume/Lattafa-Perfumes/Fakhar-Black-70465.html',
+      { marca: 'Lattafa Perfumes', nombre: 'Fakhar Black' },
+    ],
+    [
+      'https://www.fragrantica.es/perfume/Armaf/Club-De-Nuit-Urban-Elixir-77860.html',
+      { marca: 'Armaf', nombre: 'Club De Nuit Urban Elixir' },
+    ],
+    [
+      'https://www.fragrantica.es/perfume/Rayhaan/Nava-Sol-138578.html',
+      { marca: 'Rayhaan', nombre: 'Nava Sol' },
+    ],
+    [
+      'https://www.fragrantica.com/perfume/Christian-Dior/Sauvage-31861.html',
+      { marca: 'Christian Dior', nombre: 'Sauvage' },
+    ],
+  ])('%s', (url, esperado) => {
+    expect(datosDeUrlFragrantica(url)).toEqual(esperado);
+  });
+
+  it('devuelve null si la URL no es de una ficha', () => {
+    expect(datosDeUrlFragrantica('https://www.fragrantica.es/news/algo.html')).toBeNull();
+    expect(datosDeUrlFragrantica('https://ejemplo.com/perfume/A/B-1.html')).toBeNull();
+    expect(datosDeUrlFragrantica('cualquier cosa')).toBeNull();
+  });
+
+  it('un nombre sin id no cuenta: la ruta tiene que ser la de una ficha', () => {
+    expect(
+      datosDeUrlFragrantica('https://www.fragrantica.es/perfume/Armaf/Club-De-Nuit.html'),
+    ).toBeNull();
   });
 });

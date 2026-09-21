@@ -11,7 +11,7 @@
  * Los votos que llegan de Fragrantica se pintan junto a cada casilla y mueren
  * aqui: lo que se envia al servidor son unicamente mis selecciones (5.3).
  */
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { accionGuardarPerfume, type RespuestaPerfume } from '@/app/acciones';
 import type { Estacion, Momento } from '@/dominio/tipos';
@@ -73,7 +73,13 @@ export function FormularioPerfume({
   notasConocidas: string[];
 }) {
   const router = useRouter();
-  const [paso, setPaso] = useState(0);
+  /**
+   * Llegando por «Compartir → Scentify» la URL ya viene puesta, y con ella el
+   * nombre y la marca sacados de la propia direccion. Empezar en el paso 1
+   * seria pedir lo que ya se tiene, asi que se salta al de Fragrantica.
+   */
+  const compartida = !perfumeId && Boolean(iniciales?.fragranticaUrl);
+  const [paso, setPaso] = useState(compartida ? 1 : 0);
   const [v, setV] = useState<ValoresPerfume>(iniciales ?? VALORES_VACIOS);
   const [duplicados, setDuplicados] = useState<{ id: string; nombre: string; marca: string }[]>([]);
   const [ficha, setFicha] = useState<FichaFragrantica | null>(null);
@@ -84,6 +90,21 @@ export function FormularioPerfume({
   const [guardando, setGuardando] = useState(false);
 
   const cambiar = (parcial: Partial<ValoresPerfume>) => setV((previo) => ({ ...previo, ...parcial }));
+
+  /**
+   * Y se intenta leer la ficha sola, que es lo que se espera al compartir. El
+   * ref evita repetirlo: sin el, cada render volveria a lanzar la peticion.
+   * Si falla, el aviso y el cuadro de pegar el texto aparecen igual que
+   * cuando se pulsa el boton a mano.
+   */
+  const yaConsultada = useRef(false);
+  useEffect(() => {
+    if (!compartida || yaConsultada.current) return;
+    yaConsultada.current = true;
+    void consultarFragrantica({ url: iniciales?.fragranticaUrl ?? '' });
+    // Solo al montar: `compartida` se calcula de los valores iniciales.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function comprobarDuplicados() {
     if (perfumeId || v.nombre.trim().length < 3) return;

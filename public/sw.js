@@ -23,8 +23,9 @@
  * `activate` borra las caches cuya clave no acabe en este valor.
  *
  * v2: interfaz monocroma. Cambian icono.svg, los PNG y los colores del manifest.
+ * v3: el manifest incorpora share_target para «Compartir → Scentify».
  */
-const VERSION = 'v2';
+const VERSION = 'v3';
 const CACHE_ARMAZON = `scentify-armazon-${VERSION}`;
 const CACHE_DATOS = `scentify-datos-${VERSION}`;
 const ETIQUETA_SYNC = 'sincronizar-usos';
