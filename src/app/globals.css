@@ -1,0 +1,89 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Mobile-first: el diseño base es el de 390 px. Nada de aquí asume ratón ni
+ * pantalla ancha.
+ */
+@layer base {
+  html {
+    /* Evita el zoom de iOS al enfocar un input: 16px es el mínimo seguro. */
+    font-size: 16px;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-fondo text-texto antialiased;
+    /* Respeta el notch y la barra de gestos al arrancar a pantalla completa. */
+    padding-top: env(safe-area-inset-top);
+    overscroll-behavior-y: none;
+  }
+
+  /* Áreas táctiles grandes: nada por debajo de 44 px de alto real. */
+  button,
+  [role='button'],
+  a.boton,
+  select,
+  input,
+  textarea {
+    @apply min-h-[2.75rem];
+  }
+
+  input,
+  select,
+  textarea {
+    @apply w-full rounded-xl border border-borde bg-superficie px-4 py-3 text-texto
+           placeholder:text-texto-tenue focus:border-ambar focus:outline-none
+           focus:ring-2 focus:ring-ambar/30;
+  }
+
+  /* El formulario es de una columna siempre. */
+  label {
+    @apply block text-sm font-medium text-texto-tenue;
+  }
+}
+
+@layer components {
+  .contenedor {
+    /* 16 px de aire a los lados a 390 px; centrado y limitado al ensanchar. */
+    @apply mx-auto w-full max-w-screen-sm px-4;
+  }
+
+  .tarjeta {
+    @apply rounded-2xl border border-borde bg-superficie p-4;
+  }
+
+  .boton {
+    @apply inline-flex min-h-tactil items-center justify-center gap-2 rounded-xl px-5
+           text-base font-semibold transition active:scale-[0.98];
+  }
+
+  .boton-primario {
+    @apply boton bg-ambar text-fondo hover:bg-ambar/90;
+  }
+
+  .boton-secundario {
+    @apply boton border border-borde bg-superficie-alta text-texto hover:bg-borde;
+  }
+
+  .boton-fantasma {
+    @apply boton text-texto-tenue hover:text-texto;
+  }
+
+  .etiqueta {
+    @apply inline-flex items-center rounded-full border border-borde bg-superficie-alta
+           px-3 py-1 text-sm;
+  }
+
+  /* Tablas anchas: scroll horizontal controlado, nunca desbordando la página. */
+  .tabla-scroll {
+    @apply -mx-4 overflow-x-auto px-4;
+    scrollbar-width: thin;
+  }
+
+  .fila-toque {
+    @apply flex min-h-tactil w-full items-center gap-3 rounded-xl px-3 py-2 text-left
+           transition active:bg-superficie-alta;
+  }
+}
