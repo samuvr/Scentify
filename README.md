@@ -298,8 +298,19 @@ Lo que la ficha real hace y no era evidente:
 
 **En el móvil: Compartir → Scentify.** Seleccionar y copiar texto en un teléfono es
 incómodo, así que la app se registra como destino de compartir (`share_target` del
-manifest). Desde la ficha abierta en Chrome: Compartir → Scentify, y se abre el alta
-directamente en el paso de Fragrantica, con la URL puesta e intentando la lectura sola.
+manifest), y admite las dos formas de compartir que ofrece Android:
+
+- **La página.** Llega la dirección y se intenta la lectura automática.
+- **La selección de texto.** Seleccionar todo y compartir *la selección* manda la
+  página entera como texto; se parsea en el servidor y el formulario se abre con las
+  notas, los acordes y los votos ya puestos. Con Cloudflare bloqueando, este es el
+  camino que de verdad funciona, y evita el baile de copiar, cambiar de aplicación y
+  pegar.
+
+Por eso el `share_target` es POST con `multipart/form-data`: el texto de una ficha
+ronda los 17 kB y no cabe en una query. Lo que viaja del destino de compartir al
+formulario no es ese texto sino la ficha ya leída, unos 700 caracteres, validada al
+llegar en `desempaquetarFicha()` porque va por la URL.
 
 De la propia URL salen además la marca y el nombre, porque las fichas siguen siempre
 el patrón `/perfume/<Marca>/<Nombre>-<id>.html`. Eso vale aunque Cloudflare bloquee la

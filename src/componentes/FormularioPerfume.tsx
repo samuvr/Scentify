@@ -65,9 +65,16 @@ export function FormularioPerfume({
   contextos,
   familias,
   notasConocidas,
+  fichaInicial,
 }: {
   perfumeId?: string;
   iniciales?: ValoresPerfume;
+  /**
+   * Ficha ya leida en el servidor, cuando se comparte el texto de la pagina
+   * desde el movil. Llega parseada para no tener que mandar los 17 kB de
+   * texto hasta el navegador solo para volver a analizarlos aqui.
+   */
+  fichaInicial?: FichaFragrantica | null;
   contextos: { id: string; nombre: string }[];
   familias: { id: string; nombre: string }[];
   notasConocidas: string[];
@@ -78,7 +85,7 @@ export function FormularioPerfume({
    * nombre y la marca sacados de la propia direccion. Empezar en el paso 1
    * seria pedir lo que ya se tiene, asi que se salta al de Fragrantica.
    */
-  const compartida = !perfumeId && Boolean(iniciales?.fragranticaUrl);
+  const compartida = !perfumeId && Boolean(iniciales?.fragranticaUrl || fichaInicial);
   const [paso, setPaso] = useState(compartida ? 1 : 0);
   const [v, setV] = useState<ValoresPerfume>(iniciales ?? VALORES_VACIOS);
   const [duplicados, setDuplicados] = useState<{ id: string; nombre: string; marca: string }[]>([]);
@@ -101,6 +108,12 @@ export function FormularioPerfume({
   useEffect(() => {
     if (!compartida || yaConsultada.current) return;
     yaConsultada.current = true;
+    // Si el texto compartido ya venia leido, no hay nada que pedir: se aplica
+    // y se acabo. Solo se consulta cuando lo unico que hay es la direccion.
+    if (fichaInicial) {
+      aplicarFicha(fichaInicial);
+      return;
+    }
     void consultarFragrantica({ url: iniciales?.fragranticaUrl ?? '' });
     // Solo al montar: `compartida` se calcula de los valores iniciales.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -293,6 +306,11 @@ export function FormularioPerfume({
                   <strong className="text-texto">toda la página</strong> con Ctrl+A (⌘+A en Mac),
                   cópiala y pégala aquí. No hace falta que recortes nada: de todo eso se sacan
                   los acordes, la pirámide de notas y los votos de estación y momento.
+                </p>
+                <p className="mt-2 text-sm text-texto-tenue">
+                  En el móvil sale más a cuenta no pasar por aquí: selecciona todo y dale a{' '}
+                  <strong className="text-texto">Compartir → Scentify</strong>. Llega ya leído y
+                  te ahorras copiar y cambiar de aplicación.
                 </p>
                 <textarea
                   id="pegado"

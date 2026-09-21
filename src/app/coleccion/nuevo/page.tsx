@@ -2,6 +2,7 @@
 import { redirect } from 'next/navigation';
 import { FormularioPerfume } from '@/componentes/FormularioPerfume';
 import { VALORES_VACIOS } from '@/componentes/valores-perfume';
+import { desempaquetarFicha } from '@/dominio/ficha-compartida';
 import { usuarioActual } from '@/servicios/auth';
 import { listarContextos, listarFamilias, listarNotas } from '@/servicios/consultas';
 
@@ -10,7 +11,13 @@ export const dynamic = 'force-dynamic';
 export default async function PaginaNuevoPerfume({
   searchParams,
 }: {
-  searchParams: Promise<{ nombre?: string; marca?: string; url?: string; compartido?: string }>;
+  searchParams: Promise<{
+    nombre?: string;
+    marca?: string;
+    url?: string;
+    compartido?: string;
+    ficha?: string;
+  }>;
 }) {
   const userId = await usuarioActual();
   if (!userId) redirect('/login');
@@ -42,6 +49,7 @@ export default async function PaginaNuevoPerfume({
         contextos={contextos.map((c) => ({ id: c.id, nombre: c.nombre }))}
         familias={familias.map((f) => ({ id: f.id, nombre: f.nombre }))}
         notasConocidas={notas.map((n) => n.nombre)}
+        fichaInicial={desempaquetarFicha(previos.ficha)}
       />
     </div>
   );
