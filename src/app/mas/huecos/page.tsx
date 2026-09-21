@@ -56,13 +56,13 @@ export default async function PaginaHuecos() {
             {resultado.cubiertas} de {resultado.totalCombinaciones} cubiertas
           </span>
         </div>
-        <div className="h-2 overflow-hidden rounded-full bg-superficie-alta">
-          <div className="h-full rounded-full bg-ambar" style={{ width: `${porcentaje}%` }} />
+        <div className="h-2 overflow-hidden bg-superficie-alta">
+          <div className="h-full bg-acento" style={{ width: `${porcentaje}%` }} />
         </div>
       </section>
 
       {resultado.huecos.length === 0 ? (
-        <p className="tarjeta text-sm text-id-total">
+        <p className="tarjeta text-sm text-texto">
           No te falta ninguna combinación. Enhorabuena, y lo siento por tu cartera.
         </p>
       ) : (

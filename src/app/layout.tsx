@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: '#12100e',
+  themeColor: '#000000',
   width: 'device-width',
   initialScale: 1,
   // Sin maximumScale: bloquear el zoom rompe la accesibilidad.

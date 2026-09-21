@@ -20,7 +20,7 @@ const NOMBRE_EJE: Record<keyof EjesIdoneidad, string> = {
 export function InsigniaIdoneidad({ pct }: { pct: number }) {
   const { etiqueta, clase } = ESTILO[(pct as PorcentajeIdoneidad) ?? 0] ?? ESTILO[0];
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-semibold ${clase}`}>
+    <span className={`inline-flex items-center gap-1.5 border px-3 py-1 text-sm font-semibold ${clase}`}>
       {pct}% · {etiqueta}
     </span>
   );

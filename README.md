@@ -107,6 +107,29 @@ idoneidad descendente y luego por nombre, para que la lista sea estable entre re
 
 ---
 
+## Lenguaje visual
+
+Monocromo y de canto vivo. La paleta es negro, blanco y grises; no hay ni un tono de
+color en toda la interfaz, y ningún elemento tiene las esquinas redondeadas. El radio
+se anula en el tema de Tailwind, no por convenio, así que un `rounded-*` escrito más
+adelante seguirá dando canto vivo y no hay nada que vigilar en cada revisión.
+
+Quitar el color obliga a resolver dos cosas que antes se apoyaban en él:
+
+- **Los estados.** El rojo marcaba el error y el verde el acierto. Ahora la jerarquía
+  la dan el filete lateral, el peso y la claridad: `aviso-error` es lo único que llega
+  a blanco puro con filete grueso, `aviso-atencion` usa filete gris, y `aviso-hecho`
+  se queda en texto tenue. Un error sigue siendo lo primero que se ve en la pantalla.
+- **La idoneidad de la sección 6.2.** Es un orden, no cuatro categorías sueltas, así
+  que se codifica como rampa de claridad: cuanto más idóneo, más claro. Va siempre con
+  su etiqueta en texto —Total, Alta, Parcial, Nula—, que es lo que de verdad comunica
+  el valor; el tono solo acompaña.
+
+El contraste de cada tono de texto está comprobado contra el fondo y contra las
+tarjetas. El escalón más bajo de la rampa es 4.9:1 sobre superficie, por encima del
+mínimo AA de 4.5 para texto normal. El botón deshabilitado se vacía en lugar de bajar
+de opacidad: un blanco al 60 % sobre negro queda gris sólido y parece pulsable.
+
 ## Estado del proyecto
 
 MVP y fase 2 completos.

@@ -53,7 +53,7 @@ export default async function PaginaFicha({ params }: { params: Promise<{ id: st
           <span className="etiqueta">{perfume.estado === 'LO_TENGO' ? 'Lo tengo' : 'Lo tuve'}</span>
           {perfume.volumenMl ? <span className="etiqueta">{perfume.volumenMl} ml</span> : null}
           {perfume.valoracion ? <span className="etiqueta">{perfume.valoracion}/5</span> : null}
-          {perfume.archivado ? <span className="etiqueta text-id-parcial">Archivado</span> : null}
+          {perfume.archivado ? <span className="etiqueta text-texto-tenue">Archivado</span> : null}
         </div>
       </header>
 

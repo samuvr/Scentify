@@ -23,8 +23,8 @@ export function FormularioLogin() {
           className="mt-1"
         />
       </div>
-      {error ? <p className="text-sm text-id-nula">{error}</p> : null}
-      <button type="submit" disabled={pendiente} className="boton-primario w-full disabled:opacity-60">
+      {error ? <p className="aviso-error">{error}</p> : null}
+      <button type="submit" disabled={pendiente} className="boton-primario w-full">
         {pendiente ? 'Entrando…' : 'Entrar'}
       </button>
     </form>

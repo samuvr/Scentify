@@ -70,7 +70,7 @@ export function TarjetaRecomendacion({
   return (
     <li
       className={`tarjeta space-y-3 ${
-        parcial ? 'border-dashed border-id-alta/50' : 'border-ambar/30'
+        parcial ? 'border-dashed border-id-alta/50' : 'border-acento/30'
       }`}
     >
       <div className="flex items-start justify-between gap-3">
@@ -82,7 +82,7 @@ export function TarjetaRecomendacion({
       </div>
 
       {parcial ? (
-        <p className="rounded-lg bg-id-alta/10 px-3 py-2 text-sm text-id-alta">
+        <p className="bg-id-alta/10 px-3 py-2 text-sm text-id-alta">
           Coincidencia parcial: no encaja{' '}
           {ejesQueFallan.map((eje) => NOMBRE_EJE[eje]).join(' ni ')}.
         </p>

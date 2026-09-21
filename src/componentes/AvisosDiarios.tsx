@@ -109,7 +109,7 @@ export function AvisosDiarios({ clavePublica }: { clavePublica: string }) {
 
   if (estado === 'bloqueado') {
     return (
-      <p className="text-sm text-id-parcial">
+      <p className="aviso-atencion">
         Has bloqueado las notificaciones para este sitio. Hay que volver a permitirlas desde los
         ajustes del navegador.
       </p>
@@ -128,7 +128,7 @@ export function AvisosDiarios({ clavePublica }: { clavePublica: string }) {
       <p className="text-xs text-texto-tenue">
         Los avisos se activan por dispositivo. Actívalos en el móvil, que es donde los vas a ver.
       </p>
-      {error ? <p className="text-sm text-id-nula">{error}</p> : null}
+      {error ? <p className="aviso-error">{error}</p> : null}
     </div>
   );
 }

@@ -47,7 +47,7 @@ export function FormularioViaje({
               aria-pressed={elegidos.includes(c.id)}
               onClick={() => poner({ contextos: alternar(elegidos, c.id).join(',') })}
               className={`etiqueta ${
-                elegidos.includes(c.id) ? 'border-ambar bg-ambar/15 text-ambar' : ''
+                elegidos.includes(c.id) ? 'border-acento bg-acento/15 text-acento' : ''
               }`}
             >
               {c.nombre}
@@ -68,7 +68,7 @@ export function FormularioViaje({
                 const nuevos = alternar(momentos, m);
                 if (nuevos.length > 0) poner({ momentos: nuevos.join(',') });
               }}
-              className={`boton ${momentos.includes(m) ? 'bg-ambar text-fondo' : 'border border-borde'}`}
+              className={`boton ${momentos.includes(m) ? 'bg-acento text-fondo' : 'border border-borde'}`}
             >
               {m === 'DIA' ? 'Día' : 'Noche'}
             </button>

@@ -51,8 +51,8 @@ function BarraVoto({ voto }: { voto: VotoEje | undefined }) {
   if (!voto) return null;
   return (
     <span className="ml-2 inline-flex items-center gap-1.5 text-xs text-texto-tenue">
-      <span className="inline-block h-1.5 w-12 overflow-hidden rounded-full bg-borde">
-        <span className="block h-full bg-ambar/70" style={{ width: `${voto.pct}%` }} />
+      <span className="inline-block h-1.5 w-12 overflow-hidden bg-borde">
+        <span className="block h-full bg-acento/70" style={{ width: `${voto.pct}%` }} />
       </span>
       {voto.pct}%{voto.votos !== null ? ` · ${voto.votos}` : ''}
     </span>
@@ -173,9 +173,9 @@ export function FormularioPerfume({
         <p className="text-sm text-texto-tenue">
           Paso {paso + 1} de {PASOS.length} · {PASOS[paso]}
         </p>
-        <div className="h-1.5 overflow-hidden rounded-full bg-borde">
+        <div className="h-1.5 overflow-hidden bg-borde">
           <div
-            className="h-full bg-ambar transition-all"
+            className="h-full bg-acento transition-all"
             style={{ width: `${((paso + 1) / PASOS.length) * 100}%` }}
           />
         </div>
@@ -204,8 +204,8 @@ export function FormularioPerfume({
             />
           </div>
           {duplicados.length > 0 ? (
-            <div className="rounded-xl border border-id-parcial/40 bg-id-parcial/10 p-3 text-sm">
-              <p className="text-id-parcial">Puede que ya lo tengas:</p>
+            <div className="aviso-atencion">
+              <p className="font-medium">Puede que ya lo tengas:</p>
               <ul className="mt-1 space-y-0.5 text-texto-tenue">
                 {duplicados.map((d) => (
                   <li key={d.id}>
@@ -240,20 +240,20 @@ export function FormularioPerfume({
             type="button"
             disabled={consultando || !v.fragranticaUrl}
             onClick={() => consultarFragrantica({ url: v.fragranticaUrl })}
-            className="boton-secundario w-full disabled:opacity-60"
+            className="boton-secundario w-full"
           >
             {consultando ? 'Consultando…' : 'Consultar ficha'}
           </button>
 
           {ficha ? (
-            <p className="rounded-xl border border-id-total/40 bg-id-total/10 px-4 py-3 text-sm text-id-total">
+            <p className="aviso-hecho">
               Ficha leída. Los votos aparecen en los pasos de estaciones y momento.
             </p>
           ) : null}
 
           {avisoFragrantica ? (
             <div className="space-y-3">
-              <p className="rounded-xl border border-id-parcial/40 bg-id-parcial/10 px-4 py-3 text-sm text-id-parcial">
+              <p className="aviso-atencion">
                 {avisoFragrantica}
               </p>
               <div>
@@ -270,7 +270,7 @@ export function FormularioPerfume({
                 type="button"
                 disabled={consultando || !textoPegado.trim()}
                 onClick={() => consultarFragrantica({ texto: textoPegado })}
-                className="boton-secundario w-full disabled:opacity-60"
+                className="boton-secundario w-full"
               >
                 Leer el texto pegado
               </button>
@@ -293,7 +293,7 @@ export function FormularioPerfume({
                       key={`${n.nombre}-${n.i}`}
                       type="button"
                       onClick={() => cambiar({ notas: v.notas.filter((_, i) => i !== n.i) })}
-                      className="etiqueta border-ambar/50 text-ambar"
+                      className="etiqueta border-acento/50 text-acento"
                     >
                       {n.nombre} <span aria-hidden="true">×</span>
                       <span className="sr-only">quitar</span>
@@ -332,7 +332,7 @@ export function FormularioPerfume({
                 aria-pressed={v.familiaIds.includes(f.id)}
                 onClick={() => cambiar({ familiaIds: alternar(v.familiaIds, f.id) })}
                 className={`etiqueta ${
-                  v.familiaIds.includes(f.id) ? 'border-ambar bg-ambar/15 text-ambar' : ''
+                  v.familiaIds.includes(f.id) ? 'border-acento bg-acento/15 text-acento' : ''
                 }`}
               >
                 {f.nombre}
@@ -360,7 +360,7 @@ export function FormularioPerfume({
                   aria-pressed={v.estaciones.includes(clave)}
                   onClick={() => cambiar({ estaciones: alternar(v.estaciones, clave) })}
                   className={`fila-toque justify-between border ${
-                    v.estaciones.includes(clave) ? 'border-ambar bg-ambar/10' : 'border-borde'
+                    v.estaciones.includes(clave) ? 'border-acento bg-acento/10' : 'border-borde'
                   }`}
                 >
                   <span className="font-medium">{nombre}</span>
@@ -383,7 +383,7 @@ export function FormularioPerfume({
                   aria-pressed={v.momentos.includes(m)}
                   onClick={() => cambiar({ momentos: alternar(v.momentos, m) })}
                   className={`fila-toque justify-between border ${
-                    v.momentos.includes(m) ? 'border-ambar bg-ambar/10' : 'border-borde'
+                    v.momentos.includes(m) ? 'border-acento bg-acento/10' : 'border-borde'
                   }`}
                 >
                   <span className="font-medium">{m === 'DIA' ? 'Día' : 'Noche'}</span>
@@ -406,7 +406,7 @@ export function FormularioPerfume({
                 aria-pressed={v.contextoIds.includes(c.id)}
                 onClick={() => cambiar({ contextoIds: alternar(v.contextoIds, c.id) })}
                 className={`etiqueta ${
-                  v.contextoIds.includes(c.id) ? 'border-ambar bg-ambar/15 text-ambar' : ''
+                  v.contextoIds.includes(c.id) ? 'border-acento bg-acento/15 text-acento' : ''
                 }`}
               >
                 {c.nombre}
@@ -427,7 +427,7 @@ export function FormularioPerfume({
                   type="button"
                   aria-pressed={v.estado === e}
                   onClick={() => cambiar({ estado: e })}
-                  className={`boton ${v.estado === e ? 'bg-ambar text-fondo' : 'border border-borde'}`}
+                  className={`boton ${v.estado === e ? 'bg-acento text-fondo' : 'border border-borde'}`}
                 >
                   {e === 'LO_TENGO' ? 'Lo tengo' : 'Lo tuve'}
                 </button>
@@ -494,7 +494,7 @@ export function FormularioPerfume({
                   type="button"
                   onClick={() => cambiar({ valoracion: v.valoracion === String(n) ? '' : String(n) })}
                   className={`boton flex-1 px-0 ${
-                    Number(v.valoracion) >= n ? 'bg-ambar text-fondo' : 'border border-borde'
+                    Number(v.valoracion) >= n ? 'bg-acento text-fondo' : 'border border-borde'
                   }`}
                 >
                   {n}
@@ -515,7 +515,7 @@ export function FormularioPerfume({
         </section>
       ) : null}
 
-      {error ? <p className="text-sm text-id-nula">{error}</p> : null}
+      {error ? <p className="aviso-error">{error}</p> : null}
 
       <div className="flex gap-2">
         {paso > 0 ? (
@@ -528,7 +528,7 @@ export function FormularioPerfume({
             type="button"
             disabled={!puedeAvanzar}
             onClick={() => setPaso(paso + 1)}
-            className="boton-primario flex-1 disabled:opacity-50"
+            className="boton-primario flex-1"
           >
             Siguiente
           </button>
@@ -537,7 +537,7 @@ export function FormularioPerfume({
             type="button"
             disabled={guardando}
             onClick={guardar}
-            className="boton-primario flex-1 disabled:opacity-60"
+            className="boton-primario flex-1"
           >
             {guardando ? 'Guardando…' : perfumeId ? 'Guardar cambios' : 'Añadir a la colección'}
           </button>

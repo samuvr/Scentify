@@ -56,9 +56,9 @@ export function Barras({
               <span className="min-w-0 truncate">{d.nombre}</span>
               <span className="text-texto-tenue">{d.usos}</span>
             </div>
-            <div className="h-2 overflow-hidden rounded-full bg-superficie-alta">
+            <div className="h-2 overflow-hidden bg-superficie-alta">
               <div
-                className="h-full rounded-full bg-ambar/70"
+                className="h-full bg-acento/70"
                 style={{ width: `${Math.round((100 * d.usos) / maximo)}%` }}
               />
             </div>
@@ -75,9 +75,9 @@ export function Heatmap({ semanas, hasta }: { semanas: CeldaHeatmap[][]; hasta: 
   const tono = (registros: number) => {
     if (registros === 0) return 'bg-superficie-alta';
     const intensidad = registros / maximo;
-    if (intensidad > 0.66) return 'bg-ambar';
-    if (intensidad > 0.33) return 'bg-ambar/70';
-    return 'bg-ambar/40';
+    if (intensidad > 0.66) return 'bg-acento';
+    if (intensidad > 0.33) return 'bg-acento/70';
+    return 'bg-acento/40';
   };
 
   return (
@@ -91,7 +91,7 @@ export function Heatmap({ semanas, hasta }: { semanas: CeldaHeatmap[][]; hasta: 
                 title={`${formatearFecha(celda.fecha)}: ${celda.registros} ${
                   celda.registros === 1 ? 'registro' : 'registros'
                 }`}
-                className={`h-3 w-3 rounded-sm ${
+                className={`h-3 w-3 ${
                   celda.fecha > hasta ? 'bg-transparent' : tono(celda.registros)
                 }`}
               />

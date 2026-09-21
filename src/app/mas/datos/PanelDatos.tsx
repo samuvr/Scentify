@@ -90,7 +90,7 @@ export function PanelDatos() {
           type="button"
           disabled={!csv.trim() || trabajando}
           onClick={previsualizar}
-          className="boton-secundario w-full disabled:opacity-60"
+          className="boton-secundario w-full"
         >
           Previsualizar
         </button>
@@ -104,7 +104,7 @@ export function PanelDatos() {
             </p>
 
             {previa.errores.length > 0 ? (
-              <ul className="space-y-1 text-sm text-id-nula">
+              <ul className="aviso-error space-y-1">
                 {previa.errores.slice(0, 10).map((e) => (
                   <li key={`${e.linea}-${e.motivo}`}>
                     Línea {e.linea}: {e.motivo}
@@ -114,7 +114,7 @@ export function PanelDatos() {
             ) : null}
 
             {previa.contextosDesconocidos.length > 0 ? (
-              <p className="text-sm text-id-parcial">
+              <p className="aviso-atencion">
                 Contextos que no existen: {previa.contextosDesconocidos.join(', ')}. Créalos antes
                 de importar, o corrige esas filas.
               </p>
@@ -169,19 +169,19 @@ export function PanelDatos() {
               type="button"
               disabled={previa.filas.length === 0 || trabajando}
               onClick={confirmarImportacion}
-              className="boton-primario w-full disabled:opacity-60"
+              className="boton-primario w-full"
             >
               Importar {previa.filas.length} perfumes
             </button>
           </div>
         ) : null}
 
-        {resumen ? <p className="text-sm text-id-total">{resumen}</p> : null}
+        {resumen ? <p className="aviso-hecho">{resumen}</p> : null}
       </section>
 
       <section className="tarjeta space-y-3">
         <h2 className="font-semibold">Restaurar copia JSON</h2>
-        <p className="text-sm text-id-nula">
+        <p className="aviso-error">
           Reemplaza toda tu colección y tu histórico por los de la copia. No se puede deshacer.
         </p>
         <input
@@ -209,7 +209,7 @@ export function PanelDatos() {
             className="mt-1"
           />
         </div>
-        {errorCopia ? <p className="text-sm text-id-nula">{errorCopia}</p> : null}
+        {errorCopia ? <p className="aviso-error">{errorCopia}</p> : null}
       </section>
     </>
   );
