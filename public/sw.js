@@ -14,7 +14,17 @@
  * que el formulario diga que no ha podido calcularla.
  */
 
-const VERSION = 'v1';
+/**
+ * Subir esta version es obligatorio al cambiar cualquier fichero del ARMAZON
+ * que no lleve hash en el nombre: los iconos y el manifest se sirven cache
+ * primero, asi que sin esto un navegador que ya tenga la app instalada seguiria
+ * enseniando los de la version anterior para siempre. Cambiarla hace dos cosas
+ * a la vez: el navegador detecta un sw.js distinto y vuelve a instalar, y
+ * `activate` borra las caches cuya clave no acabe en este valor.
+ *
+ * v2: interfaz monocroma. Cambian icono.svg, los PNG y los colores del manifest.
+ */
+const VERSION = 'v2';
 const CACHE_ARMAZON = `scentify-armazon-${VERSION}`;
 const CACHE_DATOS = `scentify-datos-${VERSION}`;
 const ETIQUETA_SYNC = 'sincronizar-usos';
