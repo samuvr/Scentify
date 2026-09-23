@@ -6,6 +6,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { usuarioActual } from '@/servicios/auth';
+import { ErrorValidacion } from '@/servicios/perfumes';
 import { previsualizarIdoneidad } from '@/servicios/usos';
 
 const esquema = z.object({
@@ -23,5 +24,12 @@ export async function GET(peticion: Request) {
   const analisis = esquema.safeParse(parametros);
   if (!analisis.success) return NextResponse.json({ error: 'Parámetros' }, { status: 400 });
 
-  return NextResponse.json(await previsualizarIdoneidad(userId, analisis.data));
+  try {
+    return NextResponse.json(await previsualizarIdoneidad(userId, analisis.data));
+  } catch (error) {
+    if (error instanceof ErrorValidacion) {
+      return NextResponse.json({ error: error.message }, { status: 404 });
+    }
+    throw error;
+  }
 }

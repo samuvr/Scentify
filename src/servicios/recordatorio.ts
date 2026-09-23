@@ -65,9 +65,14 @@ export async function guardarSuscripcion(
     });
 }
 
-export async function borrarSuscripcion(endpoint: string): Promise<void> {
+/** Solo la del propio usuario: el endpoint lo manda el cliente. */
+export async function borrarSuscripcion(userId: string, endpoint: string): Promise<void> {
   const db = crearDb();
-  await db.delete(schema.pushSuscripcion).where(eq(schema.pushSuscripcion.endpoint, endpoint));
+  await db
+    .delete(schema.pushSuscripcion)
+    .where(
+      and(eq(schema.pushSuscripcion.userId, userId), eq(schema.pushSuscripcion.endpoint, endpoint)),
+    );
 }
 
 export interface ResultadoRecordatorios {
@@ -140,7 +145,7 @@ export async function enviarRecordatoriosPendientes(
       } catch (error) {
         // 404 y 410 significan que la suscripcion ya no vale: se limpia.
         const estado = (error as { statusCode?: number }).statusCode;
-        if (estado === 404 || estado === 410) await borrarSuscripcion(s.endpoint);
+        if (estado === 404 || estado === 410) await borrarSuscripcion(userId, s.endpoint);
         else resultado.omitidos.push(`${s.endpoint.slice(0, 40)}…: ${String(error)}`);
       }
     }

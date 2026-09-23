@@ -76,8 +76,10 @@ export const origenEstacionEnum = pgEnum('origen_estacion', [
 /* --------------------------------------------------------------- usuarios */
 
 /**
- * La app es de un solo usuario, pero las tablas principales llevan `user_id`
- * desde el primer dia para poder crecer sin una migracion dolorosa (seccion 2).
+ * Las tablas principales llevan `user_id` desde el primer dia (seccion 2), y
+ * eso es lo que ha permitido abrir cuentas a mas personas sin migracion. Las
+ * tablas hijas (`perfume_nota`, `perfume_contexto`...) no lo llevan: cuelgan
+ * de un perfume, y es el servicio quien comprueba que ese perfume es propio.
  */
 export const usuario = pgTable('usuario', {
   id: uuid('id').primaryKey().defaultRandom(),

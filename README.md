@@ -1,6 +1,7 @@
 # Scentify
 
-Webapp personal de gestión de colección de perfumes. Un solo usuario, uso principal
+Webapp personal de gestión de colección de perfumes. Una cuenta por persona, cada
+una con su colección, abierta a invitados con código (ver «Cuentas para amigos»); uso principal
 desde el móvil, de pie, por la mañana, en menos de diez segundos.
 
 La especificación funcional completa vive en [`spec-webapp-perfumes.md`](./spec-webapp-perfumes.md).
@@ -148,6 +149,7 @@ MVP y fase 2 completos.
 | Solapamiento en wishlist (secc. 10.2) | Hecho, con tests |
 | Modo viaje (secc. 10.3) | Hecho, con tests |
 | Recordatorio diario (secc. 10.4) | Hecho, con tests |
+| Cuentas para amigos con código de invitación | Hecho, con tests |
 
 ---
 
@@ -170,7 +172,7 @@ es lo único que funciona igual en Windows, macOS y Linux.
 En `.env` hacen falta tres cosas para arrancar. `DATABASE_URL` es la cadena de Neon —la
 directa, sin `-pooler`, que sirve igual para migrar, sembrar y servir la app—.
 `AUTH_SECRET` es cualquier cadena larga y aleatoria. `SCENTIFY_USER_PASSWORD` fija la
-contraseña del único usuario: **sin ella el usuario se crea sin acceso posible**. El
+contraseña del primer usuario, el tuyo: **sin ella el usuario se crea sin acceso posible**. El
 correo de `SCENTIFY_USER_EMAIL` se guarda siempre en minúsculas, porque así es como lo
 busca el login.
 
@@ -219,6 +221,10 @@ Neon (base) → variables en Vercel → importar el repo → sembrar el usuario
    y si no se da se conserva la que hubiera. La salida dice siempre en qué estado
    queda el acceso, leyéndolo de la base.
 
+Para que tus amigos puedan crearse cuenta hace falta además
+`SCENTIFY_CODIGO_INVITACION` (ver «Cuentas para amigos»). Sin ella el registro está
+cerrado y la app sigue siendo solo tuya.
+
 Para el recordatorio diario hacen falta además `VAPID_PUBLIC_KEY`,
 `VAPID_PRIVATE_KEY`, `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_SUBJECT` y `CRON_SECRET`
 (ver «El recordatorio diario»). Sin ellas el resto de la app funciona igual.
@@ -238,6 +244,35 @@ src/dominio/        Lógica pura: idoneidad, estación, recomendación, CSV,
 src/servicios/      Acceso a datos, auth, clima, Fragrantica, importación
 tests/              Tests de dominio; tests/integracion/ contra PostgreSQL
 ```
+
+### Cuentas para amigos
+
+Cada cuenta tiene su propia colección, sus usos, su wishlist, sus contextos y sus
+umbrales; nadie ve lo de nadie. Lo único compartido es el vocabulario de notas y
+familias, que ya era global para que «Ámbar» y «ambar» sean la misma nota.
+
+El registro está en `/registro` y **solo funciona con código de invitación**:
+
+1. En Vercel, añade la variable `SCENTIFY_CODIGO_INVITACION` con el código que
+   quieras (algo largo: es lo único que separa tu base de Neon de cualquiera que
+   encuentre la URL) y vuelve a desplegar.
+2. Pásale a tu amigo el enlace con el código ya puesto:
+   `https://<tu-app>.vercel.app/registro?codigo=<el código>`. También puede ir al
+   login y pulsar «Crea tu cuenta».
+3. Al crear la cuenta se le siembran los seis contextos y los umbrales por defecto
+   —lo mismo que hace `db:seed` contigo— y entra directamente.
+
+Para cerrar el registro, borra la variable y vuelve a desplegar; las cuentas que ya
+existan siguen funcionando. Cambiar el código invalida los enlaces que hayas pasado.
+No hay recuperación de contraseña: si alguien la olvida, hay que cambiársela a mano
+en la base.
+
+Con la app de un solo usuario no importaba que una consulta se fiara del id que
+mandaba el cliente. Con varias cuentas sí, y se ha cerrado: registrar un uso, dar de
+alta o editar un perfume, editar un deseo, restaurar una copia y borrar una
+suscripción de avisos comprueban que los perfumes, contextos y deseos que llegan son
+de la cuenta de la sesión. `tests/integracion/registro.test.ts` lo fija con dos
+cuentas reales.
 
 ### El recordatorio diario
 

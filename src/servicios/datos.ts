@@ -348,8 +348,11 @@ export async function copiaCompleta(userId: string) {
     .from(schema.perfume)
     .where(eq(schema.perfume.userId, userId));
   const ids = perfumes.map((p) => p.id);
-  const dePerfumes = <T extends { perfumeId: string }>(filas: T[]) =>
-    filas.filter((f) => ids.includes(f.perfumeId));
+  // Las tablas hijas no llevan `user_id`: se filtran por los perfumes propios
+  // en la consulta, no despues, para no leer las filas de las demas cuentas.
+  // Con `inArray` vacio no hay consulta valida; sin perfumes no hay hijas.
+  const conIds = <T>(consulta: () => Promise<T[]>) =>
+    ids.length === 0 ? Promise.resolve([] as T[]) : consulta();
 
   const [contextos, usos, deseos, ajustes, notas, familias, pn, pf, pc, pe, pm] =
     await Promise.all([
@@ -359,11 +362,27 @@ export async function copiaCompleta(userId: string) {
       db.select().from(schema.ajuste).where(eq(schema.ajuste.userId, userId)),
       db.select().from(schema.nota),
       db.select().from(schema.familia),
-      db.select().from(schema.perfumeNota),
-      db.select().from(schema.perfumeFamilia),
-      db.select().from(schema.perfumeContexto),
-      db.select().from(schema.perfumeEstacion),
-      db.select().from(schema.perfumeMomento),
+      conIds(() =>
+        db.select().from(schema.perfumeNota).where(inArray(schema.perfumeNota.perfumeId, ids)),
+      ),
+      conIds(() =>
+        db.select().from(schema.perfumeFamilia).where(inArray(schema.perfumeFamilia.perfumeId, ids)),
+      ),
+      conIds(() =>
+        db
+          .select()
+          .from(schema.perfumeContexto)
+          .where(inArray(schema.perfumeContexto.perfumeId, ids)),
+      ),
+      conIds(() =>
+        db
+          .select()
+          .from(schema.perfumeEstacion)
+          .where(inArray(schema.perfumeEstacion.perfumeId, ids)),
+      ),
+      conIds(() =>
+        db.select().from(schema.perfumeMomento).where(inArray(schema.perfumeMomento.perfumeId, ids)),
+      ),
     ]);
 
   return {
@@ -376,11 +395,11 @@ export async function copiaCompleta(userId: string) {
     ajustes,
     notas,
     familias,
-    perfumeNota: dePerfumes(pn),
-    perfumeFamilia: dePerfumes(pf),
-    perfumeContexto: dePerfumes(pc),
-    perfumeEstacion: dePerfumes(pe),
-    perfumeMomento: dePerfumes(pm),
+    perfumeNota: pn,
+    perfumeFamilia: pf,
+    perfumeContexto: pc,
+    perfumeEstacion: pe,
+    perfumeMomento: pm,
   };
 }
 
@@ -428,6 +447,31 @@ export async function restaurarCopia(userId: string, copia: Copia): Promise<void
 
   const conUsuario = <T extends object>(filas: T[]) => filas.map((f) => ({ ...f, userId }));
 
+  /*
+   * Las filas que cuelgan de un perfume o de un contexto solo entran si ese
+   * perfume o contexto viene en la misma copia. El `user_id` de perfumes,
+   * contextos y usos se fuerza al de la sesion, pero las tablas hijas no lo
+   * tienen: una copia manipulada podria meter notas, contextos o usos en los
+   * perfumes de otra cuenta con solo poner sus ids.
+   */
+  const perfumesCopia = new Set(copia.perfumes.map((p) => p.id));
+  const contextosCopia = new Set(copia.contextos.map((c) => c.id));
+  const deMisPerfumes = <T extends { perfumeId: string }>(filas: T[]) =>
+    filas.filter((f) => perfumesCopia.has(f.perfumeId));
+  const perfumeNota = deMisPerfumes(copia.perfumeNota);
+  const perfumeFamilia = deMisPerfumes(copia.perfumeFamilia);
+  const perfumeEstacion = deMisPerfumes(copia.perfumeEstacion);
+  const perfumeMomento = deMisPerfumes(copia.perfumeMomento);
+  const perfumeContexto = deMisPerfumes(copia.perfumeContexto).filter((f) =>
+    contextosCopia.has(f.contextoId),
+  );
+  const usos = deMisPerfumes(copia.usos).filter((u) => contextosCopia.has(u.contextoId));
+  const deseos = copia.wishlist.map((d) =>
+    d.convertidoAPerfumeId && !perfumesCopia.has(d.convertidoAPerfumeId)
+      ? { ...d, convertidoAPerfumeId: null }
+      : d,
+  );
+
   if (copia.contextos.length > 0) {
     await db.insert(schema.contexto).values(conUsuario(copia.contextos));
   }
@@ -435,22 +479,14 @@ export async function restaurarCopia(userId: string, copia: Copia): Promise<void
     await db.insert(schema.perfume).values(conUsuario(copia.perfumes));
   }
   await Promise.all([
-    copia.perfumeNota.length ? db.insert(schema.perfumeNota).values(copia.perfumeNota) : null,
-    copia.perfumeFamilia.length
-      ? db.insert(schema.perfumeFamilia).values(copia.perfumeFamilia)
-      : null,
-    copia.perfumeContexto.length
-      ? db.insert(schema.perfumeContexto).values(copia.perfumeContexto)
-      : null,
-    copia.perfumeEstacion.length
-      ? db.insert(schema.perfumeEstacion).values(copia.perfumeEstacion)
-      : null,
-    copia.perfumeMomento.length
-      ? db.insert(schema.perfumeMomento).values(copia.perfumeMomento)
-      : null,
+    perfumeNota.length ? db.insert(schema.perfumeNota).values(perfumeNota) : null,
+    perfumeFamilia.length ? db.insert(schema.perfumeFamilia).values(perfumeFamilia) : null,
+    perfumeContexto.length ? db.insert(schema.perfumeContexto).values(perfumeContexto) : null,
+    perfumeEstacion.length ? db.insert(schema.perfumeEstacion).values(perfumeEstacion) : null,
+    perfumeMomento.length ? db.insert(schema.perfumeMomento).values(perfumeMomento) : null,
   ]);
-  if (copia.usos.length > 0) await db.insert(schema.uso).values(conUsuario(copia.usos));
-  if (copia.wishlist.length > 0) await db.insert(schema.wishlist).values(conUsuario(copia.wishlist));
+  if (usos.length > 0) await db.insert(schema.uso).values(conUsuario(usos));
+  if (deseos.length > 0) await db.insert(schema.wishlist).values(conUsuario(deseos));
   if (copia.ajustes.length > 0) {
     await db.insert(schema.ajuste).values(conUsuario(copia.ajustes)).onConflictDoNothing();
   }

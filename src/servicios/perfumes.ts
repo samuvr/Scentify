@@ -53,6 +53,21 @@ function validar(datos: DatosPerfume): void {
 }
 
 /**
+ * Los contextos son de cada usuario. La clave ajena de `perfume_contexto` solo
+ * exige que existan, asi que sin esto se podria colgar un perfume de un
+ * contexto de otra cuenta.
+ */
+async function comprobarContextos(userId: string, contextoIds: string[]): Promise<void> {
+  const unicos = [...new Set(contextoIds)];
+  const db = crearDb();
+  const mios = await db
+    .select({ id: schema.contexto.id })
+    .from(schema.contexto)
+    .where(and(eq(schema.contexto.userId, userId), inArray(schema.contexto.id, unicos)));
+  if (mios.length !== unicos.length) throw new ErrorValidacion('Contexto no encontrado.');
+}
+
+/**
  * Devuelve los ids de las notas, creando las que no existan.
  * La deduplicacion es por `nombre_normalizado`, asi que "Ámbar" y "ambar" son
  * la misma nota y la estadistica por nota no se parte en dos.
@@ -122,6 +137,7 @@ async function sincronizarRelaciones(perfumeId: string, datos: DatosPerfume): Pr
 
 export async function crearPerfume(userId: string, datos: DatosPerfume): Promise<string> {
   validar(datos);
+  await comprobarContextos(userId, datos.contextoIds);
   const db = crearDb();
 
   const [creado] = await db
@@ -153,6 +169,7 @@ export async function actualizarPerfume(
   datos: DatosPerfume,
 ): Promise<void> {
   validar(datos);
+  await comprobarContextos(userId, datos.contextoIds);
   const db = crearDb();
 
   const actualizadas = await db

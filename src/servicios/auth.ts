@@ -1,14 +1,16 @@
 /**
- * Autenticacion simple (seccion 2): un solo usuario, cookie de sesion firmada.
+ * Autenticacion simple (seccion 2): cookie de sesion firmada.
  *
- * No hay registro ni recuperacion de clave: el usuario se crea con `db:seed`.
+ * El primer usuario se crea con `db:seed`. Los demas se registran desde
+ * /registro con el codigo de invitacion de `SCENTIFY_CODIGO_INVITACION`; sin
+ * esa variable el registro esta cerrado. No hay recuperacion de clave.
  * La cookie lleva el id del usuario y una firma HMAC, asi que no hace falta
  * tabla de sesiones ni una consulta extra en cada peticion.
  */
 import 'server-only';
-import { createHmac, scryptSync, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, scryptSync, randomBytes, timingSafeEqual } from 'node:crypto';
 import { cookies } from 'next/headers';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { crearDb, schema } from '@/db';
 
 const COOKIE = 'scentify_sesion';
@@ -55,8 +57,13 @@ export async function iniciarSesion(email: string, clave: string): Promise<boole
 
   if (!usuario || !passwordCorrecta(clave, usuario.passwordHash)) return false;
 
+  await abrirSesion(usuario.id);
+  return true;
+}
+
+async function abrirSesion(userId: string): Promise<void> {
   const expira = Date.now() + DURACION_DIAS * 86_400_000;
-  const carga = `${usuario.id}.${expira}`;
+  const carga = `${userId}.${expira}`;
   const almacen = await cookies();
   almacen.set(COOKIE, `${carga}.${firmar(carga)}`, {
     httpOnly: true,
@@ -65,7 +72,64 @@ export async function iniciarSesion(email: string, clave: string): Promise<boole
     path: '/',
     maxAge: DURACION_DIAS * 86_400,
   });
-  return true;
+}
+
+/* ----------------------------------------------------------------- registro */
+
+/** El registro solo existe si hay codigo de invitacion configurado. */
+export function registroAbierto(): boolean {
+  return Boolean(process.env.SCENTIFY_CODIGO_INVITACION?.trim());
+}
+
+/**
+ * Comparacion en tiempo constante. Se comparan los resumenes y no los textos
+ * para que tampoco se filtre la longitud del codigo.
+ */
+function codigoInvitacionValido(codigo: string): boolean {
+  const esperado = process.env.SCENTIFY_CODIGO_INVITACION?.trim();
+  if (!esperado) return false;
+  const resumen = (texto: string) => createHash('sha256').update(texto).digest();
+  return timingSafeEqual(resumen(codigo.trim()), resumen(esperado));
+}
+
+export type ResultadoRegistro =
+  | { ok: true; userId: string }
+  | { ok: false; motivo: 'CERRADO' | 'CODIGO' | 'EXISTE' };
+
+/**
+ * Crea el usuario con sus contextos y umbrales por defecto —lo mismo que hace
+ * `db:seed` con el primero— y lo deja con la sesion abierta.
+ *
+ * El codigo se comprueba antes de mirar el correo: sin codigo no se puede
+ * averiguar que correos tienen cuenta.
+ */
+export async function registrarUsuario(
+  email: string,
+  clave: string,
+  codigo: string,
+): Promise<ResultadoRegistro> {
+  if (!registroAbierto()) return { ok: false, motivo: 'CERRADO' };
+  if (!codigoInvitacionValido(codigo)) return { ok: false, motivo: 'CODIGO' };
+
+  const db = crearDb();
+  const [creado] = await db
+    .insert(schema.usuario)
+    .values({ email: email.trim().toLowerCase(), passwordHash: hashearPassword(clave) })
+    .onConflictDoNothing({ target: schema.usuario.email })
+    .returning({ id: schema.usuario.id });
+  if (!creado) return { ok: false, motivo: 'EXISTE' };
+
+  try {
+    await db.execute(sql`select sembrar_usuario(${creado.id}::uuid)`);
+  } catch (error) {
+    // Sin contextos no se puede dar de alta ningun perfume. El driver HTTP de
+    // Neon no tiene transacciones, asi que se deshace a mano: si no, el correo
+    // quedaria ocupado por una cuenta coja y no se podria volver a intentar.
+    await db.delete(schema.usuario).where(eq(schema.usuario.id, creado.id));
+    throw error;
+  }
+  await abrirSesion(creado.id);
+  return { ok: true, userId: creado.id };
 }
 
 export async function cerrarSesion(): Promise<void> {

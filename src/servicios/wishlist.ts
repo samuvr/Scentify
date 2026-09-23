@@ -44,11 +44,14 @@ export async function actualizarDeseo(
   datos: DatosDeseo,
 ): Promise<void> {
   const db = crearDb();
-  await db
+  const actualizados = await db
     .update(schema.wishlist)
     .set(aFila(datos))
-    .where(and(eq(schema.wishlist.userId, userId), eq(schema.wishlist.id, id)));
+    .where(and(eq(schema.wishlist.userId, userId), eq(schema.wishlist.id, id)))
+    .returning({ id: schema.wishlist.id });
 
+  // Las notas de fondo no llevan `user_id`: solo se tocan si el deseo es suyo.
+  if (actualizados.length === 0) return;
   await guardarNotasFondo(id, datos.notasFondo ?? []);
 }
 
