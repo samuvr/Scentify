@@ -23,7 +23,7 @@ restricciones de la sección 11.
 | Offline | **Service Worker propio + IndexedDB** | Cola de usos offline con Background Sync; sin depender de plugins que envuelven el build. |
 | Tiempo | **Open-Meteo** (`forecast` con `past_days`) | Gratuita, sin API key ni registro; una llamada al día, cacheada en servidor. |
 | Tests | **Vitest** | Arranque inmediato, misma resolución de módulos y alias que la app. |
-| Despliegue | **Vercel** (hobby) + **Neon** (free) | Coste cero real; `git push` despliega y las migraciones corren en el `buildCommand`. |
+| Despliegue | **Vercel** (hobby) + **Neon** (free) | Coste cero real; `git push` despliega y las migraciones corren en el `buildCommand` de producción. |
 
 ### Justificación
 
@@ -205,8 +205,15 @@ Neon (base) → variables en Vercel → importar el repo → sembrar el usuario
 3. **Variables de entorno**, antes del primer despliegue. `DATABASE_URL` y `AUTH_SECRET`
    son las únicas imprescindibles. Si se añaden después, hay que volver a desplegar.
 4. **Desplegar.** El `buildCommand` de `vercel.json` aplica las migraciones antes de
-   compilar, así que cada despliegue deja la base al día. Un fallo de conexión rompe el
-   build en vez de publicar una app sin tablas, que es lo que se quiere.
+   compilar, así que cada despliegue de producción deja la base al día. Un fallo de
+   conexión rompe el build en vez de publicar una app sin tablas, que es lo que se quiere.
+
+   **Las previews no migran.** Cada PR tiene su despliegue de preview, y si comparte
+   `DATABASE_URL` con producción migraría la base real antes de fusionar, con la versión
+   publicada todavía en el código viejo. `src/db/migrate.ts` solo migra cuando
+   `VERCEL_ENV` es `production`. Si las previews tienen base propia (una rama de Neon,
+   por ejemplo con la integración de Neon para Vercel), pon
+   `SCENTIFY_MIGRAR_EN_PREVIEW=1` en el entorno Preview y migrarán también.
 5. **Sembrar el usuario**, una sola vez, desde local apuntando a Neon:
 
    ```bash

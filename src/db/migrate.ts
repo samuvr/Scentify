@@ -10,6 +10,29 @@ import { drizzle } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import postgres from 'postgres';
 
+/*
+ * En Vercel solo migra el despliegue de produccion.
+ *
+ * Las previews de cada PR tambien pasan por este `buildCommand`, y si comparten
+ * `DATABASE_URL` con produccion, migrarian la base real antes de fusionar: una
+ * migracion que quita columnas deja rota la version publicada, que sigue con el
+ * codigo viejo. Quien tenga una base propia para las previews (una rama de Neon,
+ * p. ej. con su integracion con Vercel) lo activa con SCENTIFY_MIGRAR_EN_PREVIEW=1.
+ * Fuera de Vercel (en local, en los tests) VERCEL_ENV no existe y se migra siempre.
+ */
+const entornoVercel = process.env.VERCEL_ENV;
+if (
+  entornoVercel &&
+  entornoVercel !== 'production' &&
+  process.env.SCENTIFY_MIGRAR_EN_PREVIEW !== '1'
+) {
+  console.log(
+    `Despliegue de Vercel "${entornoVercel}": no se migra la base.\n` +
+      'Si esta preview tiene base propia, define SCENTIFY_MIGRAR_EN_PREVIEW=1 en ese entorno.',
+  );
+  process.exit(0);
+}
+
 const DATABASE_URL = process.env.DATABASE_URL;
 if (!DATABASE_URL) {
   console.error(
