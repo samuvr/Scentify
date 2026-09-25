@@ -505,7 +505,11 @@ export async function listarNotas() {
 
 export async function listarFamilias() {
   const db = crearDb();
-  return db.select().from(schema.familia).orderBy(asc(schema.familia.nombre));
+  const familias = await db.select().from(schema.familia);
+  // En español y en JS: con la ordenacion por defecto de Postgres, «Ámbar»
+  // acaba detras de «Verde», y una intercalacion ICU no esta en todas partes.
+  const orden = new Intl.Collator('es', { sensitivity: 'base' });
+  return familias.sort((a, b) => orden.compare(a.nombre, b.nombre));
 }
 
 export async function listarWishlist(userId: string, orden: 'prioridad' | 'antiguedad' = 'prioridad') {

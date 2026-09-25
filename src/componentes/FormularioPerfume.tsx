@@ -19,6 +19,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { accionGuardarPerfume, type RespuestaPerfume } from '@/app/acciones';
 import type { Estacion, Momento } from '@/dominio/tipos';
+import { familiasDeAcordes } from '@/dominio/familias';
 import type { FichaFragrantica, VotoEje } from '@/dominio/fragrantica';
 import type { FichaParaAlta } from '@/servicios/consultas';
 import { VALORES_VACIOS, type Nivel, type ValoresPerfume } from '@/componentes/valores-perfume';
@@ -64,6 +65,29 @@ function alternar<T>(lista: T[], valor: T): T[] {
   return lista.includes(valor) ? lista.filter((v) => v !== valor) : [...lista, valor];
 }
 
+/**
+ * Los acordes de Fragrantica bajo las familias: cuales se han marcado y cuales
+ * no tienen familia en Scentify, para que se vea por que falta algo.
+ */
+function AcordesDeFragrantica({
+  acordes,
+  familias,
+}: {
+  acordes: string[];
+  familias: { id: string; slug: string; nombre: string }[];
+}) {
+  const sinFamilia = acordes.filter((a) => familiasDeAcordes([a], familias).length === 0);
+  return (
+    <div className="space-y-1 text-xs text-texto-tenue">
+      <p>Acordes en Fragrantica: {acordes.join(', ')}.</p>
+      <p>
+        Se marcan solas las familias que coinciden.
+        {sinFamilia.length > 0 ? ` Sin familia en Scentify: ${sinFamilia.join(', ')}.` : ''}
+      </p>
+    </div>
+  );
+}
+
 /** Barra de apoyo con el voto de Fragrantica. Solo visual: no decide nada. */
 function BarraVoto({ voto }: { voto: VotoEje | undefined }) {
   if (!voto) return null;
@@ -103,7 +127,7 @@ export function FormularioPerfume({
    */
   fichaInicial?: FichaFragrantica | null;
   contextos: { id: string; nombre: string }[];
-  familias: { id: string; nombre: string }[];
+  familias: { id: string; slug: string; nombre: string }[];
   notasConocidas: string[];
 }) {
   const router = useRouter();
@@ -216,6 +240,8 @@ export function FormularioPerfume({
       marca: v.marca || nueva.marca || '',
       anioLanzamiento: v.anioLanzamiento || (nueva.anio ? String(nueva.anio) : ''),
       notas: v.notas.length > 0 ? v.notas : notasNuevas,
+      // Las familias que coinciden con los acordes, en su orden de fuerza.
+      familiaIds: v.familiaIds.length > 0 ? v.familiaIds : familiasDeAcordes(nueva.acordes, familias),
     });
   }
 
@@ -514,9 +540,7 @@ export function FormularioPerfume({
             ))}
           </div>
           {ficha && ficha.acordes.length > 0 ? (
-            <p className="text-xs text-texto-tenue">
-              Acordes en Fragrantica: {ficha.acordes.join(', ')}
-            </p>
+            <AcordesDeFragrantica acordes={ficha.acordes} familias={familias} />
           ) : null}
         </section>
       ) : null}

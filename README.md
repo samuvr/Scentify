@@ -371,6 +371,12 @@ Lo que la ficha real hace y no era evidente:
   `fragrantica-pegado-ruidoso.txt` es esa página entera y lo fija.
 - La misma página repite cada nota dos veces y el bloque de votos entero otra vez más;
   el parser deduplica y se queda con el primer bloque.
+- Los acordes principales marcan solas las familias que coinciden
+  (`src/dominio/familias.ts`). Fragrantica los escribe en plural a veces
+  («florales», «afrutados») y en inglés en la ficha inglesa, así que se comparan en
+  singular y con una tabla de alias, pero siempre enteros: «cálido especiado» tiene
+  familia propia y no marca además «Especiado». Lo que no tiene familia en Scentify
+  (lavanda, herbal…) se dice debajo en vez de inventar una.
 
 **En el móvil: Compartir → Scentify.** Seleccionar y copiar texto en un teléfono es
 incómodo, así que la app se registra como destino de compartir (`share_target` del

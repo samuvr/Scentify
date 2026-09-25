@@ -69,7 +69,7 @@ export default async function PaginaNuevoPerfume({
           fragranticaUrl: previos.url ?? '',
         }}
         contextos={contextos.map((c) => ({ id: c.id, nombre: c.nombre }))}
-        familias={familias.map((f) => ({ id: f.id, nombre: f.nombre }))}
+        familias={familias.map((f) => ({ id: f.id, slug: f.slug, nombre: f.nombre }))}
         notasConocidas={notas.map((n) => n.nombre)}
         fichaInicial={desempaquetarFicha(previos.ficha)}
         fichaCatalogo={miFrasco ? null : fichaCatalogo}
