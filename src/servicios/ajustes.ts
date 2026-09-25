@@ -8,23 +8,38 @@
 import 'server-only';
 import { eq } from 'drizzle-orm';
 import { crearDb, schema } from '@/db';
+import { headers } from 'next/headers';
 import { UMBRALES_POR_DEFECTO, type UmbralesEstacion } from '@/dominio/estacion';
+import {
+  UBICACION_POR_DEFECTO,
+  interpretarAjusteUbicacion,
+  ubicacionDesdeCabeceras,
+  type Ubicacion,
+} from '@/dominio/ubicacion';
 
-export interface Ubicacion {
-  lat: number;
-  lon: number;
-  etiqueta: string;
-}
-
-export const UBICACION_POR_DEFECTO: Ubicacion = {
-  lat: 38.4257,
-  lon: -0.4009,
-  etiqueta: 'El Campello, Alicante',
-};
+export type { Ubicacion };
 
 export interface Configuracion {
+  /** La ubicacion ya resuelta: la fija, o la de la conexion en modo automatico. */
   ubicacion: Ubicacion;
+  modoUbicacion: 'auto' | 'fija';
+  /**
+   * En modo automatico, false si la peticion no traia geolocalizacion (fuera
+   * de Vercel, en el cron) y se ha caido a la ubicacion por defecto.
+   */
+  ubicacionDetectada: boolean;
   umbrales: UmbralesEstacion;
+}
+
+/** Ubicacion de la peticion en curso, o null si no hay peticion o no la trae. */
+async function ubicacionDeLaPeticion(): Promise<Ubicacion | null> {
+  try {
+    const cabeceras = await headers();
+    return ubicacionDesdeCabeceras((nombre) => cabeceras.get(nombre));
+  } catch {
+    // Fuera de una peticion (scripts, tests) `headers()` lanza.
+    return null;
+  }
 }
 
 const CLAVES_UMBRAL: Record<keyof UmbralesEstacion, string> = {
@@ -55,13 +70,21 @@ export async function leerConfiguracion(userId: string): Promise<Configuracion> 
     if (typeof valor === 'number' && Number.isFinite(valor)) umbrales[campo] = valor;
   }
 
-  const guardada = mapa.get('ubicacion');
-  const ubicacion =
-    guardada && typeof guardada === 'object' && 'lat' in guardada
-      ? (guardada as Ubicacion)
-      : UBICACION_POR_DEFECTO;
+  // Sin ajuste guardado, automatica: la ubicacion por defecto solo tiene
+  // sentido para quien vive alli.
+  const ajuste = interpretarAjusteUbicacion(mapa.get('ubicacion')) ?? { modo: 'auto' as const };
+  if (ajuste.modo === 'fija') {
+    const { lat, lon, etiqueta } = ajuste;
+    return { ubicacion: { lat, lon, etiqueta }, modoUbicacion: 'fija', ubicacionDetectada: true, umbrales };
+  }
 
-  return { ubicacion, umbrales };
+  const detectada = await ubicacionDeLaPeticion();
+  return {
+    ubicacion: detectada ?? UBICACION_POR_DEFECTO,
+    modoUbicacion: 'auto',
+    ubicacionDetectada: detectada !== null,
+    umbrales,
+  };
 }
 
 export async function guardarAjuste(

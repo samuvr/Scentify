@@ -36,6 +36,13 @@
       "when": 1790323019219,
       "tag": "0004_familias_frescas",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790400000000,
+      "tag": "0005_ubicacion_por_usuario",
+      "breakpoints": true
     }
   ]
 }
