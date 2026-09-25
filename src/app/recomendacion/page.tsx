@@ -5,12 +5,17 @@
  * real, la enseña con su explicacion y deja sobrescribirla.
  */
 import { redirect } from 'next/navigation';
-import { listarContextos, candidatosParaRecomendar, descartesDeHoy } from '@/servicios/consultas';
-import { estacionEfectivaDe, hoyIso } from '@/servicios/usos';
+import {
+  candidatosParaRecomendar,
+  contextoHabitual,
+  descartesDeHoy,
+  listarContextos,
+} from '@/servicios/consultas';
+import { esFinDeSemana, estacionEfectivaDe, hoyIso, momentoDeAhora } from '@/servicios/usos';
 import { usuarioActual } from '@/servicios/auth';
 import { recomendar } from '@/dominio/recomendacion';
 import type { Estacion, Momento } from '@/dominio/tipos';
-import { TarjetaRecomendacion, BloqueSinEstrenar } from './Tarjetas';
+import { BloqueSinEstrenar, FilaRecomendacion, TarjetaPrincipal } from './Tarjetas';
 import { SelectorPeticion } from './SelectorPeticion';
 
 export const dynamic = 'force-dynamic';
@@ -33,17 +38,23 @@ export default async function PaginaRecomendacion({
 
   const parametros = await searchParams;
   const hoy = hoyIso();
-  const momento: Momento = parametros.momento === 'NOCHE' ? 'NOCHE' : 'DIA';
+  // Sin eleccion en la URL, lo que toca ahora: el momento por la hora y el
+  // contexto habitual de ese momento en este tipo de dia.
+  const momento: Momento =
+    parametros.momento === 'NOCHE' || parametros.momento === 'DIA'
+      ? parametros.momento
+      : momentoDeAhora();
 
-  const [contextos, candidatos, descartados, estacionCalculada] = await Promise.all([
+  const [contextos, candidatos, descartados, estacionCalculada, habitual] = await Promise.all([
     listarContextos(userId),
     candidatosParaRecomendar(userId),
     descartesDeHoy(userId, hoy),
     estacionEfectivaDe(userId, hoy, momento),
+    parametros.contexto ? null : contextoHabitual(userId, momento, esFinDeSemana(hoy)),
   ]);
 
   const contextoElegido =
-    contextos.find((c) => c.id === parametros.contexto) ?? contextos[0] ?? null;
+    contextos.find((c) => c.id === (parametros.contexto ?? habitual)) ?? contextos[0] ?? null;
 
   // La estacion propuesta siempre es sobrescribible (7.1).
   const forzadas = leerEstaciones(parametros.estaciones);
@@ -61,10 +72,13 @@ export default async function PaginaRecomendacion({
       })
     : { recomendaciones: [], nuncaUsados: [] };
 
+  const peticion = { momento, contextoId: contextoElegido?.id ?? '', fecha: hoy };
+  const [primera, ...resto] = resultado.recomendaciones;
+
   return (
     <div className="space-y-6">
       <header className="space-y-1">
-        <h1 className="text-2xl font-bold">Recomiéndame</h1>
+        <h1 className="titulo">Recomiéndame</h1>
         <p className="text-sm text-texto-tenue">
           {forzadas ? 'Estación elegida a mano.' : estacionCalculada.explicacion}
           {estacionCalculada.origen === 'CALENDARIO' && !forzadas ? ' Sin conexión con Open-Meteo.' : ''}
@@ -80,18 +94,20 @@ export default async function PaginaRecomendacion({
         sobrescrita={forzadas !== null}
       />
 
-      {resultado.recomendaciones.length > 0 ? (
-        <ul className="space-y-3">
-          {resultado.recomendaciones.map((r) => (
-            <TarjetaRecomendacion
-              key={r.perfume.id}
-              recomendacion={r}
-              momento={momento}
-              contextoId={contextoElegido?.id ?? ''}
-              fecha={hoy}
-            />
-          ))}
-        </ul>
+      {primera ? (
+        <>
+          <TarjetaPrincipal recomendacion={primera} {...peticion} />
+          {resto.length > 0 ? (
+            <section className="space-y-1">
+              <h2 className="subtitulo">Si no, también encajan</h2>
+              <ul className="divide-y divide-borde/70">
+                {resto.map((r) => (
+                  <FilaRecomendacion key={r.perfume.id} recomendacion={r} {...peticion} />
+                ))}
+              </ul>
+            </section>
+          ) : null}
+        </>
       ) : (
         <p className="tarjeta text-sm text-texto-tenue">
           No hay ningún perfume que encaje del todo ni a medias con esta combinación. Prueba con
@@ -99,12 +115,7 @@ export default async function PaginaRecomendacion({
         </p>
       )}
 
-      <BloqueSinEstrenar
-        perfumes={resultado.nuncaUsados}
-        momento={momento}
-        contextoId={contextoElegido?.id ?? ''}
-        fecha={hoy}
-      />
+      <BloqueSinEstrenar perfumes={resultado.nuncaUsados} {...peticion} />
     </div>
   );
 }

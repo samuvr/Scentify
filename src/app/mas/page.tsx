@@ -18,7 +18,7 @@ export default async function PaginaMas() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Más</h1>
+      <h1 className="titulo">Más</h1>
       <ul className="space-y-2">
         {SECCIONES.map((s) => (
           <li key={s.href}>

@@ -34,17 +34,16 @@ export function SelectorPeriodo({
 
   return (
     <section className="space-y-3">
-      <div className="tabla-scroll">
-        <div className="flex gap-2 pb-1">
+      {/* En varias lineas y no en scroll: a 390 px el ultimo periodo quedaba oculto. */}
+      <div>
+        <div className="flex flex-wrap gap-2">
           {(Object.keys(ETIQUETAS) as Periodo[]).map((clave) => (
             <button
               key={clave}
               type="button"
               aria-pressed={periodo === clave}
               onClick={() => poner({ periodo: clave })}
-              className={`etiqueta whitespace-nowrap ${
-                periodo === clave ? 'border-acento bg-acento/15 text-acento' : ''
-              }`}
+              className="chip"
             >
               {ETIQUETAS[clave]}
             </button>

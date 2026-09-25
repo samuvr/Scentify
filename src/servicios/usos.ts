@@ -25,6 +25,25 @@ export function hoyIso(zona = 'Europe/Madrid'): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: zona }).format(new Date());
 }
 
+/**
+ * Momento del dia que toca ahora mismo, como valor por defecto del registro:
+ * a partir de las 18:00 (y de madrugada) es de noche.
+ */
+export function momentoDeAhora(zona = 'Europe/Madrid'): Momento {
+  const hora = Number(
+    new Intl.DateTimeFormat('en-GB', { timeZone: zona, hour: '2-digit', hourCycle: 'h23' }).format(
+      new Date(),
+    ),
+  );
+  return hora >= 18 || hora < 5 ? 'NOCHE' : 'DIA';
+}
+
+/** Sabado o domingo, para una fecha 'YYYY-MM-DD'. */
+export function esFinDeSemana(iso: string): boolean {
+  const dia = new Date(`${iso}T12:00:00Z`).getUTCDay();
+  return dia === 0 || dia === 6;
+}
+
 export function desplazarDias(iso: string, dias: number): string {
   const t = Date.parse(`${iso}T00:00:00Z`) + dias * 86_400_000;
   return new Date(t).toISOString().slice(0, 10);

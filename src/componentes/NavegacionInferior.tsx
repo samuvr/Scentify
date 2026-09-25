@@ -11,7 +11,7 @@ const DESTINOS = [
   { href: '/', etiqueta: 'Hoy', icono: 'M12 3v18M3 12h18' },
   { href: '/recomendacion', etiqueta: 'Sugerir', icono: 'M12 2l2.4 7.4H22l-6 4.4 2.3 7.2-6.3-4.6L5.7 21 8 13.8 2 9.4h7.6z' },
   { href: '/coleccion', etiqueta: 'Colección', icono: 'M4 6h16M4 12h16M4 18h16' },
-  { href: '/estadisticas', etiqueta: 'Stats', icono: 'M4 20V10M10 20V4M16 20v-7M22 20H2' },
+  { href: '/estadisticas', etiqueta: 'Estadísticas', icono: 'M4 20V10M10 20V4M16 20v-7M22 20H2' },
   { href: '/mas', etiqueta: 'Más', icono: 'M5 12h.01M12 12h.01M19 12h.01' },
 ] as const;
 

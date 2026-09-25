@@ -38,7 +38,7 @@ export default async function PaginaConfiguracion() {
 
   return (
     <div className="space-y-5">
-      <h1 className="text-2xl font-bold">Configuración</h1>
+      <h1 className="titulo">Configuración</h1>
 
       <form action={accionGuardarConfiguracion} className="space-y-5">
         <section className="tarjeta space-y-3">

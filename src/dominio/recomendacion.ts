@@ -60,7 +60,13 @@ export interface Recomendacion {
   diasSinUsar: number | null;
   /** Que ejes fallan, para marcarlo visualmente. */
   ejesQueFallan: (keyof EjesIdoneidad)[];
+  /** La frase completa: por que este, y que esperar de el. */
   explicacion: string;
+  /**
+   * Solo el por que (tiempo sin usar y encaje), sin los promedios. Es lo que
+   * pinta la tarjeta, que ya enseña los promedios aparte y no los repite.
+   */
+  motivo: string;
 }
 
 export interface ResultadoRecomendacion {
@@ -105,15 +111,17 @@ function comoInciso(frase: string): string {
   return frase.replace(/\.$/, '').replace(/^./, (c) => c.toLowerCase());
 }
 
-function explicarRecomendacion(
+function motivoDeRecomendacion(
   perfume: PerfumeCandidato,
   idoneidad: Idoneidad,
   diasSinUsar: number | null,
   peticion: PeticionRecomendacion,
-): string {
+): string[] {
   const partes: string[] = [];
 
-  if (diasSinUsar !== null) {
+  if (diasSinUsar === 0) {
+    partes.push('Te lo has puesto hoy');
+  } else if (diasSinUsar !== null) {
     partes.push(`Llevas ${diasSinUsar} ${diasSinUsar === 1 ? 'día' : 'días'} sin ponértelo`);
   }
 
@@ -132,6 +140,11 @@ function explicarRecomendacion(
     partes.push(comoInciso(idoneidad.explicacion));
   }
 
+  return partes;
+}
+
+function explicarRecomendacion(perfume: PerfumeCandidato, motivo: string[]): string {
+  const partes = [...motivo];
   const { spraysHabituales, duracionEsperada } = perfume.promedios ?? {};
   if (spraysHabituales != null) partes.push(`sueles echarte ${spraysHabituales} sprays`);
   if (duracionEsperada) partes.push(`te suele durar ${DURACION_LEGIBLE[duracionEsperada]}`);
@@ -162,13 +175,15 @@ export function recomendar(peticion: PeticionRecomendacion): ResultadoRecomendac
     const ejesQueFallan = (['momento', 'contexto', 'estacion'] as const).filter(
       (eje) => !idoneidad.detalle[eje],
     );
+    const motivo = motivoDeRecomendacion(perfume, idoneidad, diasSinUsar, peticion);
     return {
       perfume,
       idoneidad,
       parcial: idoneidad.pct === 67,
       diasSinUsar,
       ejesQueFallan,
-      explicacion: explicarRecomendacion(perfume, idoneidad, diasSinUsar, peticion),
+      explicacion: explicarRecomendacion(perfume, motivo),
+      motivo: `${motivo.join(' · ')}.`,
     };
   };
 

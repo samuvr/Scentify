@@ -10,8 +10,20 @@ import { FormularioRegistro } from '@/componentes/FormularioRegistro';
 import { SincronizadorOffline } from '@/componentes/SincronizadorOffline';
 import { InsigniaIdoneidad } from '@/componentes/Idoneidad';
 import { usuarioActual } from '@/servicios/auth';
-import { listarContextos, usadosRecientemente, usoDeAyer } from '@/servicios/consultas';
-import { desplazarDias, estacionEfectivaDe, hoyIso, usosDelDia } from '@/servicios/usos';
+import {
+  contextoHabitual,
+  listarContextos,
+  usadosRecientemente,
+  usoDeAyer,
+} from '@/servicios/consultas';
+import {
+  desplazarDias,
+  esFinDeSemana,
+  estacionEfectivaDe,
+  hoyIso,
+  momentoDeAhora,
+  usosDelDia,
+} from '@/servicios/usos';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,18 +32,23 @@ export default async function PaginaHoy() {
   if (!userId) redirect('/login');
 
   const hoy = hoyIso();
-  const [contextos, recientes, ayer, registrados, estacion] = await Promise.all([
-    listarContextos(userId),
-    usadosRecientemente(userId),
-    usoDeAyer(userId, desplazarDias(hoy, -1)),
-    usosDelDia(userId, hoy),
-    estacionEfectivaDe(userId, hoy, 'DIA'),
-  ]);
+  const momento = momentoDeAhora();
+  const finde = esFinDeSemana(hoy);
+  const [contextos, recientes, ayer, registrados, estacion, habitualDia, habitualNoche] =
+    await Promise.all([
+      listarContextos(userId),
+      usadosRecientemente(userId),
+      usoDeAyer(userId, desplazarDias(hoy, -1)),
+      usosDelDia(userId, hoy),
+      estacionEfectivaDe(userId, hoy, momento),
+      contextoHabitual(userId, 'DIA', finde),
+      contextoHabitual(userId, 'NOCHE', finde),
+    ]);
 
   return (
     <div className="space-y-6">
       <header className="space-y-1">
-        <h1 className="text-2xl font-bold">Hoy estoy usando…</h1>
+        <h1 className="titulo">Hoy estoy usando…</h1>
         <p className="text-sm text-texto-tenue">{estacion.explicacion}</p>
       </header>
 
@@ -44,22 +61,27 @@ export default async function PaginaHoy() {
       ) : (
         <FormularioRegistro
           contextos={contextos.map((c) => ({ id: c.id, nombre: c.nombre }))}
-          recientes={recientes.map((p) => ({ id: p.id, nombre: p.nombre, marca: p.marca }))}
+          recientes={recientes.map((p) => ({
+            id: p.id,
+            nombre: p.nombre,
+            marca: p.marca,
+            spraysHabituales: p.spraysHabituales,
+          }))}
           ayer={ayer}
           hoy={hoy}
+          momentoInicial={momento}
+          contextoPorMomento={{ DIA: habitualDia, NOCHE: habitualNoche }}
         />
       )}
 
       {registrados.length > 0 ? (
         <section className="space-y-3">
-          <h2 className="text-lg font-semibold">
-            Registrado hoy ({registrados.length})
-          </h2>
+          <h2 className="subtitulo">Registrado hoy · {registrados.length}</h2>
           <ul className="space-y-2">
             {registrados.map((uso) => (
               <li key={uso.id} className="tarjeta flex items-start justify-between gap-3">
                 <div>
-                  <p className="font-semibold">{uso.nombre}</p>
+                  <p className="nombre-perfume text-lg">{uso.nombre}</p>
                   <p className="text-sm text-texto-tenue">
                     {uso.marca} · {uso.momento === 'DIA' ? 'Día' : 'Noche'} · {uso.contexto}
                     {uso.sprays !== null ? ` · ${uso.sprays} sprays` : ''}

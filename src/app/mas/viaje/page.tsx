@@ -73,7 +73,7 @@ export default async function PaginaViaje({
   return (
     <div className="space-y-5">
       <header className="space-y-1">
-        <h1 className="text-2xl font-bold">Modo viaje</h1>
+        <h1 className="titulo">Modo viaje</h1>
         <p className="text-sm text-texto-tenue">
           El set mínimo de frascos que cubre lo que tienes previsto.
         </p>
@@ -94,7 +94,7 @@ export default async function PaginaViaje({
 
           {resultado.frascos.length > 0 ? (
             <section className="space-y-3">
-              <h2 className="text-lg font-semibold">
+              <h2 className="subtitulo">
                 Llévate {resultado.frascos.length}{' '}
                 {resultado.frascos.length === 1 ? 'frasco' : 'frascos'}
                 {resultado.esOptimo ? '' : ' (aproximado)'}
@@ -103,7 +103,7 @@ export default async function PaginaViaje({
                 {resultado.frascos.map(({ perfume, cubre }) => (
                   <li key={perfume.id} className="tarjeta space-y-2">
                     <div>
-                      <p className="font-semibold">{perfume.nombre}</p>
+                      <p className="nombre-perfume text-lg">{perfume.nombre}</p>
                       <p className="text-sm text-texto-tenue">{perfume.marca}</p>
                     </div>
                     <p className="text-sm">
@@ -125,12 +125,12 @@ export default async function PaginaViaje({
 
           {resultado.sinCubrir.length > 0 ? (
             <section className="space-y-2">
-              <h2 className="text-lg font-semibold">Sin cubrir</h2>
+              <h2 className="subtitulo">Sin cubrir</h2>
               <ul className="flex flex-wrap gap-2">
                 {resultado.sinCubrir.map((r) => (
                   <li
                     key={`${r.contextoId}-${r.momento}`}
-                    className="etiqueta border-id-nula/40 text-sm text-id-nula"
+                    className="etiqueta text-sm text-id-nula"
                   >
                     {nombreContexto(r.contextoId)} · {NOMBRE_MOMENTO[r.momento]}
                   </li>

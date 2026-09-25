@@ -4,18 +4,21 @@
  * Seccion 6 — "Hoy estoy usando…".
  *
  * El objetivo es registrar en menos de diez segundos de pie con una mano, asi
- * que el camino corto es: acceso rapido -> guardar. Todo lo demas (duracion,
- * valoracion, comentario) esta plegado y se rellena por la noche desde el
- * historial.
+ * que el camino corto es UN toque: un acceso rapido registra directamente con
+ * el momento de ahora, el contexto habitual y la media de sprays, y deja un
+ * aviso con "Deshacer" y "Ajustar". El formulario completo queda para cuando
+ * se busca un perfume o se quiere cambiar algo; y aun ahi la duracion, la
+ * valoracion y el comentario estan plegados y se rellenan por la noche.
  *
  * El envio va contra /api/usos con un id generado aqui: si no hay conexion, el
  * service worker lo encola y lo reenvia, y el mismo id evita duplicados.
  */
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { BloquePromedios } from './BloquePromedios';
+import { PromediosEnLinea, formatearFecha } from './BloquePromedios';
 import { DesgloseIdoneidad, InsigniaIdoneidad } from './Idoneidad';
-import { encolarUso } from '@/cliente/cola-offline';
+import { descartarPendiente, encolarUso } from '@/cliente/cola-offline';
+import { accionBorrarUso } from '@/app/acciones';
 import type { EjesIdoneidad, Momento, PromediosPerfume } from '@/dominio/tipos';
 
 const MINIMO_BUSQUEDA = 3;
@@ -24,7 +27,19 @@ interface PerfumeBreve {
   id: string;
   nombre: string;
   marca: string;
+  spraysHabituales?: number | null;
 }
+
+/** Lo que se acaba de registrar de un toque, para poder deshacerlo. */
+interface RegistroReciente {
+  usoId: string;
+  perfume: PerfumeBreve;
+  momento: Momento;
+  contextoId: string;
+  encolado: boolean;
+}
+
+const SEGUNDOS_AVISO = 8;
 
 interface Contexto {
   id: string;
@@ -46,11 +61,24 @@ export function FormularioRegistro({
   recientes,
   ayer,
   hoy,
+  momentoInicial,
+  contextoPorMomento,
 }: {
   contextos: Contexto[];
   recientes: PerfumeBreve[];
-  ayer: { perfumeId: string; nombre: string; marca: string; momento: Momento; contextoId: string } | null;
+  ayer: {
+    perfumeId: string;
+    nombre: string;
+    marca: string;
+    momento: Momento;
+    contextoId: string;
+    sprays: number | null;
+  } | null;
   hoy: string;
+  /** El que toca por la hora: de noche a partir de las 18:00. */
+  momentoInicial: Momento;
+  /** Contexto habitual de cada momento en este tipo de dia (laborable o finde). */
+  contextoPorMomento: Record<Momento, string | null>;
 }) {
   const router = useRouter();
 
@@ -59,9 +87,15 @@ export function FormularioRegistro({
   const [elegido, setElegido] = useState<PerfumeBreve | null>(null);
   const [resumen, setResumen] = useState<Resumen | null>(null);
 
+  const contextoPorDefecto = (m: Momento) => contextoPorMomento[m] ?? contextos[0]?.id ?? '';
+
   const [fecha, setFecha] = useState(hoy);
-  const [momento, setMomento] = useState<Momento>('DIA');
-  const [contextoId, setContextoId] = useState(contextos[0]?.id ?? '');
+  const [verFecha, setVerFecha] = useState(false);
+  const [momento, setMomento] = useState<Momento>(momentoInicial);
+  const [contextoId, setContextoId] = useState(contextoPorDefecto(momentoInicial));
+  // Mientras no se toque el contexto a mano, sigue al momento: cambiar a Noche
+  // propone el contexto habitual de la noche.
+  const [contextoTocado, setContextoTocado] = useState(false);
   const [sprays, setSprays] = useState('');
   const [duracion, setDuracion] = useState('');
   const [valoracion, setValoracion] = useState('');
@@ -72,6 +106,7 @@ export function FormularioRegistro({
   const [duplicado, setDuplicado] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
+  const [reciente, setReciente] = useState<RegistroReciente | null>(null);
 
   const cajaBusqueda = useRef<HTMLInputElement>(null);
 
@@ -148,6 +183,80 @@ export function FormularioRegistro({
     };
   }, [elegido, fecha, momento, contextoId]);
 
+  // El aviso de "Deshacer" se va solo: es una red, no un paso mas.
+  useEffect(() => {
+    if (!reciente) return;
+    const t = setTimeout(() => setReciente(null), SEGUNDOS_AVISO * 1000);
+    return () => clearTimeout(t);
+  }, [reciente]);
+
+  const nombreContexto = (id: string) => contextos.find((c) => c.id === id)?.nombre ?? '';
+
+  function cambiarMomento(m: Momento) {
+    setMomento(m);
+    if (!contextoTocado) setContextoId(contextoPorDefecto(m));
+  }
+
+  function elegirContexto(id: string) {
+    setContextoId(id);
+    setContextoTocado(true);
+  }
+
+  /**
+   * Registro de un toque desde los accesos rapidos: nada que rellenar. Si no
+   * es lo que se queria, el aviso ofrece deshacerlo o abrir el formulario.
+   */
+  async function registrarAlToque(perfume: PerfumeBreve, m: Momento, ctx: string) {
+    if (!ctx || guardando) return;
+    setGuardando(true);
+    setAviso(null);
+    const usoId = crypto.randomUUID();
+    const resultado = await encolarUso({
+      id: usoId,
+      perfumeId: perfume.id,
+      fecha: hoy,
+      momento: m,
+      contextoId: ctx,
+      sprays: perfume.spraysHabituales ?? null,
+      duracionPercibida: null,
+      valoracionDia: null,
+      comentario: null,
+    });
+    setGuardando(false);
+
+    if (resultado === 'error') {
+      setAviso('No se ha podido guardar. Inténtalo otra vez.');
+      return;
+    }
+    setReciente({ usoId, perfume, momento: m, contextoId: ctx, encolado: resultado === 'encolado' });
+    if (resultado === 'guardado') router.refresh();
+  }
+
+  async function deshacer(): Promise<RegistroReciente | null> {
+    const r = reciente;
+    if (!r) return null;
+    setReciente(null);
+    if (r.encolado) {
+      await descartarPendiente(r.usoId);
+    } else {
+      const datos = new FormData();
+      datos.set('usoId', r.usoId);
+      await accionBorrarUso(datos);
+      router.refresh();
+    }
+    return r;
+  }
+
+  /** "Ajustar": deshace el registro de un toque y abre el formulario con lo mismo. */
+  async function ajustar() {
+    const r = await deshacer();
+    if (!r) return;
+    elegir(r.perfume);
+    setMomento(r.momento);
+    setContextoId(r.contextoId);
+    setContextoTocado(true);
+  }
+
   function elegir(perfume: PerfumeBreve) {
     setElegido(perfume);
     setConsulta('');
@@ -156,9 +265,11 @@ export function FormularioRegistro({
 
   function repetirAyer() {
     if (!ayer) return;
-    elegir({ id: ayer.perfumeId, nombre: ayer.nombre, marca: ayer.marca });
-    setMomento(ayer.momento);
-    setContextoId(ayer.contextoId);
+    void registrarAlToque(
+      { id: ayer.perfumeId, nombre: ayer.nombre, marca: ayer.marca, spraysHabituales: ayer.sprays },
+      ayer.momento,
+      ayer.contextoId,
+    );
   }
 
   async function guardar() {
@@ -202,11 +313,40 @@ export function FormularioRegistro({
     setValoracion('');
     setComentario('');
     setMasCampos(false);
+    setFecha(hoy);
+    setVerFecha(false);
+    setMomento(momentoInicial);
+    setContextoId(contextoPorDefecto(momentoInicial));
+    setContextoTocado(false);
     cajaBusqueda.current?.blur();
   }
 
+  const avisoReciente = reciente ? (
+    <div role="status" className="aviso-flotante">
+      <div className="min-w-0">
+        <p className="truncate">
+          <span className="text-id-total" aria-hidden="true">✓ </span>
+          {reciente.perfume.nombre}
+        </p>
+        <p className="truncate text-xs text-texto-tenue">
+          {reciente.encolado ? 'Sin conexión, se enviará luego · ' : ''}
+          {reciente.momento === 'DIA' ? 'Día' : 'Noche'} · {nombreContexto(reciente.contextoId)}
+        </p>
+      </div>
+      <div className="flex shrink-0 gap-1">
+        <button type="button" onClick={ajustar} className="boton-fantasma px-2 text-sm">
+          Ajustar
+        </button>
+        <button type="button" onClick={deshacer} className="boton-fantasma px-2 text-sm text-acento">
+          Deshacer
+        </button>
+      </div>
+    </div>
+  ) : null;
+
   return (
     <section className="space-y-4">
+      {avisoReciente}
       {!elegido ? (
         <>
           <div>
@@ -229,7 +369,7 @@ export function FormularioRegistro({
               {resultados.map((p) => (
                 <li key={p.id}>
                   <button type="button" onClick={() => elegir(p)} className="fila-toque">
-                    <span className="font-semibold">{p.nombre}</span>
+                    <span className="nombre-perfume">{p.nombre}</span>
                     <span className="text-sm text-texto-tenue">{p.marca}</span>
                   </button>
                 </li>
@@ -239,73 +379,77 @@ export function FormularioRegistro({
 
           {(recientes.length > 0 || ayer) && consulta.length < MINIMO_BUSQUEDA ? (
             <div className="space-y-2">
-              <p className="text-sm text-texto-tenue">Accesos rápidos</p>
+              <div className="flex items-baseline justify-between gap-3">
+                <p className="subtitulo">Un toque y listo</p>
+                {/* Lo que se va a guardar, dicho antes de pulsar. */}
+                <p className="text-xs text-texto-tenue">
+                  {momentoInicial === 'DIA' ? 'Día' : 'Noche'} ·{' '}
+                  {nombreContexto(contextoPorDefecto(momentoInicial))}
+                </p>
+              </div>
               <div className="flex flex-wrap gap-2">
                 {ayer ? (
-                  <button type="button" onClick={repetirAyer} className="etiqueta border-acento/50 text-acento">
+                  <button type="button" onClick={repetirAyer} disabled={guardando} className="chip border-acento/60 text-acento">
                     ↺ Repetir el de ayer
                   </button>
                 ) : null}
                 {recientes.map((p) => (
-                  <button key={p.id} type="button" onClick={() => elegir(p)} className="etiqueta">
+                  <button
+                    key={p.id}
+                    type="button"
+                    disabled={guardando}
+                    onClick={() => registrarAlToque(p, momentoInicial, contextoPorDefecto(momentoInicial))}
+                    className="chip"
+                  >
                     {p.nombre}
                   </button>
                 ))}
               </div>
             </div>
           ) : null}
+
+          {aviso ? <p className="aviso-atencion">{aviso}</p> : null}
         </>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-5">
           <div className="tarjeta space-y-3">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-lg font-semibold">{elegido.nombre}</p>
+                <p className="nombre-perfume text-xl">{elegido.nombre}</p>
                 <p className="text-sm text-texto-tenue">{elegido.marca}</p>
               </div>
               <button type="button" onClick={reiniciar} className="boton-fantasma px-2 text-sm">
                 Cambiar
               </button>
             </div>
+            {/* Los promedios en una linea: aqui importan, pero no deben empujar el formulario. */}
             {resumen ? (
-              <BloquePromedios
-                promedios={resumen}
-                vecesUsado={resumen.vecesUsado}
-                ultimoUso={resumen.ultimoUso}
-              />
+              <div className="space-y-0.5">
+                <p className="text-sm text-texto-tenue">
+                  {resumen.vecesUsado > 0
+                    ? `${resumen.vecesUsado} ${resumen.vecesUsado === 1 ? 'uso' : 'usos'}`
+                    : 'Todavía no lo has usado'}
+                  {resumen.ultimoUso ? ` · último ${formatearFecha(resumen.ultimoUso)}` : ''}
+                </p>
+                <PromediosEnLinea promedios={resumen} />
+              </div>
             ) : null}
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label htmlFor="fecha">Fecha</label>
-              {/* Editable hacia atras; no se permite el futuro. */}
-              <input
-                id="fecha"
-                type="date"
-                value={fecha}
-                max={hoy}
-                onChange={(e) => setFecha(e.target.value)}
-                className="mt-1"
-              />
-            </div>
-            <div>
-              <span className="block text-sm font-medium text-texto-tenue">Momento</span>
-              <div className="mt-1 grid grid-cols-2 gap-2">
-                {(['DIA', 'NOCHE'] as const).map((m) => (
-                  <button
-                    key={m}
-                    type="button"
-                    aria-pressed={momento === m}
-                    onClick={() => setMomento(m)}
-                    className={`boton px-2 text-sm ${
-                      momento === m ? 'bg-acento text-fondo' : 'border border-borde bg-superficie'
-                    }`}
-                  >
-                    {m === 'DIA' ? 'Día' : 'Noche'}
-                  </button>
-                ))}
-              </div>
+          <div>
+            <span className="block text-sm font-medium text-texto-tenue">Momento</span>
+            <div className="mt-1 grid grid-cols-2 gap-2">
+              {(['DIA', 'NOCHE'] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  aria-pressed={momento === m}
+                  onClick={() => cambiarMomento(m)}
+                  className="opcion"
+                >
+                  {m === 'DIA' ? 'Día' : 'Noche'}
+                </button>
+              ))}
             </div>
           </div>
 
@@ -317,10 +461,8 @@ export function FormularioRegistro({
                   key={c.id}
                   type="button"
                   aria-pressed={contextoId === c.id}
-                  onClick={() => setContextoId(c.id)}
-                  className={`etiqueta ${
-                    contextoId === c.id ? 'border-acento bg-acento/15 text-acento' : ''
-                  }`}
+                  onClick={() => elegirContexto(c.id)}
+                  className="chip"
                 >
                   {c.nombre}
                 </button>
@@ -328,25 +470,55 @@ export function FormularioRegistro({
             </div>
           </div>
 
-          <div>
-            <label htmlFor="sprays">Sprays</label>
-            <input
-              id="sprays"
-              type="number"
-              inputMode="numeric"
-              min={0}
-              max={100}
-              value={sprays}
-              onChange={(e) => setSprays(e.target.value)}
-              placeholder={resumen?.spraysHabituales ? String(resumen.spraysHabituales) : 'opcional'}
-              className="mt-1"
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label htmlFor="sprays">Sprays</label>
+              <input
+                id="sprays"
+                type="number"
+                inputMode="numeric"
+                min={0}
+                max={100}
+                value={sprays}
+                onChange={(e) => setSprays(e.target.value)}
+                placeholder={resumen?.spraysHabituales ? String(resumen.spraysHabituales) : 'opcional'}
+                className="mt-1"
+              />
+            </div>
+            <div>
+              {/* Casi siempre es hoy: la fecha se pliega y se abre si hace falta. */}
+              {verFecha ? (
+                <>
+                  <label htmlFor="fecha">Fecha</label>
+                  <input
+                    id="fecha"
+                    type="date"
+                    value={fecha}
+                    max={hoy}
+                    onChange={(e) => setFecha(e.target.value || hoy)}
+                    className="mt-1"
+                  />
+                </>
+              ) : (
+                <>
+                  <span className="block text-sm font-medium text-texto-tenue">Fecha</span>
+                  <button
+                    type="button"
+                    onClick={() => setVerFecha(true)}
+                    className="opcion mt-1 w-full justify-between font-normal"
+                  >
+                    Hoy
+                    <span className="text-sm text-texto-tenue">Cambiar</span>
+                  </button>
+                </>
+              )}
+            </div>
           </div>
 
           {previa ? (
             <div className="tarjeta space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-texto-tenue">Idoneidad</span>
+                <span className="subtitulo">Idoneidad</span>
                 <InsigniaIdoneidad pct={previa.idoneidad.pct} />
               </div>
               <DesgloseIdoneidad
@@ -398,11 +570,11 @@ export function FormularioRegistro({
                     <button
                       key={n}
                       type="button"
+                      aria-label={`${n} de 5`}
                       aria-pressed={valoracion === String(n)}
+                      data-activo={Number(valoracion) >= n}
                       onClick={() => setValoracion(valoracion === String(n) ? '' : String(n))}
-                      className={`boton flex-1 px-0 ${
-                        Number(valoracion) >= n ? 'bg-acento text-fondo' : 'border border-borde'
-                      }`}
+                      className="opcion flex-1 px-0"
                     >
                       {n}
                     </button>
@@ -422,20 +594,19 @@ export function FormularioRegistro({
             </div>
           ) : null}
 
-          {aviso ? (
-            <p className="border border-borde bg-superficie-alta px-4 py-3 text-sm">
-              {aviso}
-            </p>
-          ) : null}
+          {aviso ? <p className="aviso-atencion">{aviso}</p> : null}
 
-          <button
-            type="button"
-            onClick={guardar}
-            disabled={guardando || !contextoId}
-            className="boton-primario w-full"
-          >
-            {guardando ? 'Guardando…' : 'Registrar uso'}
-          </button>
+          {/* Pegado encima de la barra inferior: siempre a mano del pulgar. */}
+          <div className="barra-accion">
+            <button
+              type="button"
+              onClick={guardar}
+              disabled={guardando || !contextoId}
+              className="boton-primario w-full"
+            >
+              {guardando ? 'Guardando…' : 'Registrar uso'}
+            </button>
+          </div>
         </div>
       )}
     </section>

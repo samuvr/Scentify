@@ -56,6 +56,20 @@ export function BloquePromedios({
   );
 }
 
+/**
+ * Los mismos promedios en una linea, para las tarjetas donde el bloque en
+ * rejilla pesaria mas que el propio perfume (la recomendacion).
+ */
+export function PromediosEnLinea({ promedios }: { promedios: PromediosPerfume }) {
+  const partes = [
+    promedios.spraysHabituales !== null ? `${promedios.spraysHabituales} sprays` : null,
+    promedios.duracionEsperada !== null ? `dura ${DURACION_LEGIBLE[promedios.duracionEsperada]}` : null,
+    promedios.valoracionMedia !== null ? `${promedios.valoracionMedia}/5` : null,
+  ].filter((p): p is string => p !== null);
+  if (partes.length === 0) return null;
+  return <p className="text-sm text-texto-tenue">{partes.join(' · ')}</p>;
+}
+
 export function formatearFecha(iso: string): string {
   const [a, m, d] = iso.slice(0, 10).split('-');
   return `${d}/${m}/${a}`;
