@@ -142,18 +142,19 @@ export async function solapamientoConLaColeccion(
   const filas = await db
     .select({
       id: schema.perfume.id,
-      nombre: schema.perfume.nombre,
-      marca: schema.perfume.marca,
+      nombre: schema.ficha.nombre,
+      marca: schema.ficha.marca,
       nota: schema.nota.nombre,
     })
     .from(schema.perfume)
-    .innerJoin(schema.perfumeNota, eq(schema.perfumeNota.perfumeId, schema.perfume.id))
-    .innerJoin(schema.nota, eq(schema.nota.id, schema.perfumeNota.notaId))
+    .innerJoin(schema.ficha, eq(schema.ficha.id, schema.perfume.fichaId))
+    .innerJoin(schema.fichaNota, eq(schema.fichaNota.fichaId, schema.perfume.fichaId))
+    .innerJoin(schema.nota, eq(schema.nota.id, schema.fichaNota.notaId))
     .where(
       and(
         eq(schema.perfume.userId, userId),
         eq(schema.perfume.archivado, false),
-        eq(schema.perfumeNota.nivel, 'FONDO'),
+        eq(schema.fichaNota.nivel, 'FONDO'),
       ),
     );
 

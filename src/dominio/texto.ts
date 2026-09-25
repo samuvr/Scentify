@@ -1,8 +1,9 @@
 /**
  * Normalizacion de texto, compartida por dos sitios que deben coincidir:
  *  - `nota.nombre_normalizado`, que deduplica el vocabulario de notas.
- *  - `perfume.busqueda_normalizada`, que hace la busqueda de la seccion 6.1
- *    insensible a acentos y mayusculas.
+ *  - `ficha.busqueda_normalizada`, que hace la busqueda de la seccion 6.1
+ *    insensible a acentos y mayusculas, y es la clave que evita dar de alta
+ *    dos veces la misma ficha.
  */
 
 /** Minusculas, sin acentos, sin espacios de sobra. */

@@ -255,6 +255,8 @@ export async function accionGuardarConfiguracion(datos: FormData) {
 /* --------------------------------------------------------------- perfumes */
 
 const esquemaPerfume = z.object({
+  /** Ficha del catalogo elegida al dar de alta, si se ha elegido una. */
+  fichaId: z.string().uuid().nullable().optional(),
   nombre: z.string().min(1).max(200),
   marca: z.string().min(1).max(200),
   concentracion: z

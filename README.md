@@ -150,6 +150,7 @@ MVP y fase 2 completos.
 | Modo viaje (secc. 10.3) | Hecho, con tests |
 | Recordatorio diario (secc. 10.4) | Hecho, con tests |
 | Cuentas para amigos con código de invitación | Hecho, con tests |
+| Fichas de perfume compartidas entre cuentas | Hecho, con tests |
 
 ---
 
@@ -248,8 +249,8 @@ tests/              Tests de dominio; tests/integracion/ contra PostgreSQL
 ### Cuentas para amigos
 
 Cada cuenta tiene su propia colección, sus usos, su wishlist, sus contextos y sus
-umbrales; nadie ve lo de nadie. Lo único compartido es el vocabulario de notas y
-familias, que ya era global para que «Ámbar» y «ambar» sean la misma nota.
+umbrales, y nadie ve los de nadie. Lo que sí es común son las **fichas** de los
+perfumes (ver «Fichas compartidas») y el vocabulario de notas y familias.
 
 El registro está en `/registro` y **solo funciona con código de invitación**:
 
@@ -273,6 +274,46 @@ alta o editar un perfume, editar un deseo, restaurar una copia y borrar una
 suscripción de avisos comprueban que los perfumes, contextos y deseos que llegan son
 de la cuenta de la sesión. `tests/integracion/registro.test.ts` lo fija con dos
 cuentas reales.
+
+### Fichas compartidas
+
+Un perfume se da de alta **una sola vez** para todo el grupo. Un perfume de tu
+colección son dos cosas:
+
+| Ficha: común a todos | Frasco: solo tuyo |
+|---|---|
+| Nombre, marca, concentración, año | Lo tengo / lo tuve, archivado |
+| URL de Fragrantica | Valoración, volumen, fecha de compra |
+| Pirámide de notas y familias | Notas personales |
+| | Estaciones, momentos y contextos |
+
+Las estaciones, los momentos y los contextos son del frasco porque son tu opinión
+de cuándo ponértelo, y son lo que mueve la recomendación: que a alguien un perfume
+le parezca de invierno no te lo tiene que quitar a ti del verano.
+
+- **Al dar de alta**, mientras escribes el nombre aparece «Ya está en Scentify» con
+  las fichas que coinciden. «Usar esta ficha» rellena de golpe lo común y te lleva a
+  lo tuyo, con las estaciones y los momentos de quien la dio de alta ya marcados
+  como punto de partida. Si ya lo tienes, te lleva a tu frasco.
+- **Compartir desde Fragrantica** una ficha que alguien ya dio de alta la usa
+  directamente, sin volver a leerla.
+- **Editar la ficha la edita para todos.** La pantalla de edición avisa cuando
+  alguien más tiene el perfume. Si al corregir la concentración resulta que esa
+  ficha ya existe (lo metiste como EDT y era EDP), tu frasco pasa a la ficha que
+  ya existía, en vez de dar error.
+- **Dar de alta a mano algo que ya existe**, sin elegirlo de la lista, o importarlo
+  por CSV, lo engancha a la ficha que ya hay y solo rellena lo que le falte. Quien
+  lo escribe no ha visto la ficha, y así no puede dejar sin notas a los demás.
+
+La clave de una ficha es nombre + marca + concentración, sin distinguir tildes ni
+mayúsculas. El EDT y el EDP de un mismo perfume son dos fichas, porque huelen
+distinto.
+
+La migración `0003_fichas_compartidas` convierte los perfumes que ya hubiera en
+fichas + frascos sin perder nada: los ids de los perfumes no cambian, así que los
+usos, los descartes y la wishlist siguen apuntando donde estaban. La copia de
+seguridad pasa a la versión 2, con las fichas dentro, y restaurar una copia de la
+versión 1 sigue funcionando.
 
 ### El recordatorio diario
 

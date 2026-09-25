@@ -29,6 +29,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
 
@@ -77,9 +78,10 @@ export const origenEstacionEnum = pgEnum('origen_estacion', [
 
 /**
  * Las tablas principales llevan `user_id` desde el primer dia (seccion 2), y
- * eso es lo que ha permitido abrir cuentas a mas personas sin migracion. Las
- * tablas hijas (`perfume_nota`, `perfume_contexto`...) no lo llevan: cuelgan
- * de un perfume, y es el servicio quien comprueba que ese perfume es propio.
+ * eso es lo que ha permitido abrir cuentas a mas personas. Las tablas hijas
+ * de un frasco (`perfume_contexto`, `perfume_estacion`, `perfume_momento`) no
+ * lo llevan: cuelgan del perfume, y es el servicio quien comprueba que ese
+ * perfume es propio. Las fichas, en cambio, son comunes a todos.
  */
 export const usuario = pgTable('usuario', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -136,51 +138,62 @@ export const contexto = pgTable(
   (t) => [unique('uq_contexto_usuario_slug').on(t.userId, t.slug)],
 );
 
-/* -------------------------------------------------------------- perfumes */
+/* ---------------------------------------------------------------- fichas */
 
-export const perfume = pgTable(
-  'perfume',
+/**
+ * La ficha de un perfume: lo que es igual para quien lo tenga. Catalogo comun
+ * a todas las cuentas, como las notas y las familias, para que un perfume se
+ * de de alta una sola vez y el resto lo encuentre ya hecho.
+ *
+ * Lo personal —cuando me lo pongo, cuanto me queda, que me parece— vive en
+ * `perfume`, que es el frasco de cada uno y apunta aqui.
+ *
+ * Un mismo nombre y marca en dos concentraciones son perfumes distintos (el EDT
+ * y el EDP huelen distinto), asi que la clave de deduplicacion incluye la
+ * concentracion.
+ */
+export const ficha = pgTable(
+  'ficha',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    userId: uuid('user_id')
-      .notNull()
-      .references(() => usuario.id, { onDelete: 'cascade' }),
     nombre: text('nombre').notNull(),
     marca: text('marca').notNull(),
     /** Clave de busqueda insensible a acentos y mayusculas (seccion 6.1). */
     busquedaNormalizada: text('busqueda_normalizada').notNull(),
     concentracion: concentracionEnum('concentracion'),
     anioLanzamiento: integer('anio_lanzamiento'),
-    volumenMl: integer('volumen_ml'),
-    fechaCompra: date('fecha_compra'),
-    estado: estadoPerfumeEnum('estado').notNull().default('LO_TENGO'),
-    valoracion: smallint('valoracion'),
-    notasPersonales: text('notas_personales'),
     /** Se conserva para poder reconsultar bajo demanda. Los votos no se persisten. */
     fragranticaUrl: text('fragrantica_url'),
-    archivado: boolean('archivado').notNull().default(false),
+    /** Quien la dio de alta. Si esa cuenta desaparece, la ficha sigue. */
+    creadaPor: uuid('creada_por').references(() => usuario.id, { onDelete: 'set null' }),
     creadoEn: timestamp('creado_en', { withTimezone: true }).notNull().defaultNow(),
     actualizadoEn: timestamp('actualizado_en', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
-    check('ck_perfume_valoracion', sql`${t.valoracion} is null or ${t.valoracion} between 1 and 5`),
     check(
-      'ck_perfume_anio',
+      'ck_ficha_anio',
       sql`${t.anioLanzamiento} is null or ${t.anioLanzamiento} between 1700 and 2200`,
     ),
-    check('ck_perfume_volumen', sql`${t.volumenMl} is null or ${t.volumenMl} > 0`),
-    index('idx_perfume_usuario_estado').on(t.userId, t.estado, t.archivado),
-    index('idx_perfume_busqueda').on(t.userId, t.busquedaNormalizada),
+    // Dos indices parciales y no uno con coalesce: el paso de enum a texto no
+    // es IMMUTABLE y Postgres no lo admite en un indice. Y NULLS NOT DISTINCT
+    // exige Postgres 15, que no todos los proyectos de Neon tienen.
+    uniqueIndex('uq_ficha_clave')
+      .on(t.busquedaNormalizada, t.concentracion)
+      .where(sql`${t.concentracion} is not null`),
+    uniqueIndex('uq_ficha_clave_sin_concentracion')
+      .on(t.busquedaNormalizada)
+      .where(sql`${t.concentracion} is null`),
+    index('idx_ficha_busqueda').on(t.busquedaNormalizada),
   ],
 );
 
 /** Piramide olfativa normalizada: permite filtrar y hacer estadistica por nota. */
-export const perfumeNota = pgTable(
-  'perfume_nota',
+export const fichaNota = pgTable(
+  'ficha_nota',
   {
-    perfumeId: uuid('perfume_id')
+    fichaId: uuid('ficha_id')
       .notNull()
-      .references(() => perfume.id, { onDelete: 'cascade' }),
+      .references(() => ficha.id, { onDelete: 'cascade' }),
     notaId: uuid('nota_id')
       .notNull()
       .references(() => nota.id, { onDelete: 'restrict' }),
@@ -188,26 +201,60 @@ export const perfumeNota = pgTable(
     orden: smallint('orden').notNull().default(0),
   },
   (t) => [
-    primaryKey({ name: 'pk_perfume_nota', columns: [t.perfumeId, t.notaId, t.nivel] }),
-    index('idx_perfume_nota_nota').on(t.notaId),
+    primaryKey({ name: 'pk_ficha_nota', columns: [t.fichaId, t.notaId, t.nivel] }),
+    index('idx_ficha_nota_nota').on(t.notaId),
   ],
 );
 
 /** Relacion N:M con orden de relevancia. */
-export const perfumeFamilia = pgTable(
-  'perfume_familia',
+export const fichaFamilia = pgTable(
+  'ficha_familia',
   {
-    perfumeId: uuid('perfume_id')
+    fichaId: uuid('ficha_id')
       .notNull()
-      .references(() => perfume.id, { onDelete: 'cascade' }),
+      .references(() => ficha.id, { onDelete: 'cascade' }),
     familiaId: uuid('familia_id')
       .notNull()
       .references(() => familia.id, { onDelete: 'restrict' }),
     orden: smallint('orden').notNull().default(0),
   },
   (t) => [
-    primaryKey({ name: 'pk_perfume_familia', columns: [t.perfumeId, t.familiaId] }),
-    index('idx_perfume_familia_familia').on(t.familiaId),
+    primaryKey({ name: 'pk_ficha_familia', columns: [t.fichaId, t.familiaId] }),
+    index('idx_ficha_familia_familia').on(t.familiaId),
+  ],
+);
+
+/* -------------------------------------------------------------- perfumes */
+
+/**
+ * El frasco de cada usuario. Lo que describe el perfume esta en su `ficha`,
+ * compartida; aqui solo lo que es de cada uno.
+ */
+export const perfume = pgTable(
+  'perfume',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => usuario.id, { onDelete: 'cascade' }),
+    /** RESTRICT: una ficha con frascos no se puede borrar. */
+    fichaId: uuid('ficha_id')
+      .notNull()
+      .references(() => ficha.id, { onDelete: 'restrict' }),
+    volumenMl: integer('volumen_ml'),
+    fechaCompra: date('fecha_compra'),
+    estado: estadoPerfumeEnum('estado').notNull().default('LO_TENGO'),
+    valoracion: smallint('valoracion'),
+    notasPersonales: text('notas_personales'),
+    archivado: boolean('archivado').notNull().default(false),
+    creadoEn: timestamp('creado_en', { withTimezone: true }).notNull().defaultNow(),
+    actualizadoEn: timestamp('actualizado_en', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check('ck_perfume_valoracion', sql`${t.valoracion} is null or ${t.valoracion} between 1 and 5`),
+    check('ck_perfume_volumen', sql`${t.volumenMl} is null or ${t.volumenMl} > 0`),
+    index('idx_perfume_usuario_estado').on(t.userId, t.estado, t.archivado),
+    index('idx_perfume_ficha').on(t.fichaId),
   ],
 );
 
@@ -470,20 +517,26 @@ export const usuarioRelations = relations(usuario, ({ many }) => ({
   ajustes: many(ajuste),
 }));
 
+export const fichaRelations = relations(ficha, ({ one, many }) => ({
+  creador: one(usuario, { fields: [ficha.creadaPor], references: [usuario.id] }),
+  notas: many(fichaNota),
+  familias: many(fichaFamilia),
+  frascos: many(perfume),
+}));
+
 export const perfumeRelations = relations(perfume, ({ one, many }) => ({
   usuario: one(usuario, { fields: [perfume.userId], references: [usuario.id] }),
-  notas: many(perfumeNota),
-  familias: many(perfumeFamilia),
+  ficha: one(ficha, { fields: [perfume.fichaId], references: [ficha.id] }),
   contextos: many(perfumeContexto),
   estaciones: many(perfumeEstacion),
   momentos: many(perfumeMomento),
   usos: many(uso),
 }));
 
-export const notaRelations = relations(nota, ({ many }) => ({ perfumes: many(perfumeNota) }));
+export const notaRelations = relations(nota, ({ many }) => ({ fichas: many(fichaNota) }));
 
 export const familiaRelations = relations(familia, ({ many }) => ({
-  perfumes: many(perfumeFamilia),
+  fichas: many(fichaFamilia),
 }));
 
 export const contextoRelations = relations(contexto, ({ one, many }) => ({
@@ -492,14 +545,14 @@ export const contextoRelations = relations(contexto, ({ one, many }) => ({
   usos: many(uso),
 }));
 
-export const perfumeNotaRelations = relations(perfumeNota, ({ one }) => ({
-  perfume: one(perfume, { fields: [perfumeNota.perfumeId], references: [perfume.id] }),
-  nota: one(nota, { fields: [perfumeNota.notaId], references: [nota.id] }),
+export const fichaNotaRelations = relations(fichaNota, ({ one }) => ({
+  ficha: one(ficha, { fields: [fichaNota.fichaId], references: [ficha.id] }),
+  nota: one(nota, { fields: [fichaNota.notaId], references: [nota.id] }),
 }));
 
-export const perfumeFamiliaRelations = relations(perfumeFamilia, ({ one }) => ({
-  perfume: one(perfume, { fields: [perfumeFamilia.perfumeId], references: [perfume.id] }),
-  familia: one(familia, { fields: [perfumeFamilia.familiaId], references: [familia.id] }),
+export const fichaFamiliaRelations = relations(fichaFamilia, ({ one }) => ({
+  ficha: one(ficha, { fields: [fichaFamilia.fichaId], references: [ficha.id] }),
+  familia: one(familia, { fields: [fichaFamilia.familiaId], references: [familia.id] }),
 }));
 
 export const perfumeContextoRelations = relations(perfumeContexto, ({ one }) => ({

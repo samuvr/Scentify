@@ -112,8 +112,14 @@ cuando('importación y exportación de la colección (sección 9)', () => {
 
   it('la copia JSON incluye todo y declara su versión', async () => {
     const copia = await servicios.copiaCompleta(USUARIO);
-    expect(copia.version).toBe(1);
-    expect(copia.perfumes.filter((p) => p.marca === marcaDeLaCorrida)).toHaveLength(40);
+    expect(copia.version).toBe(2);
+    // Los perfumes son frascos; el nombre y la marca van en su ficha.
+    const fichasDeLaCorrida = new Set(
+      copia.fichas.filter((f) => f.marca === marcaDeLaCorrida).map((f) => f.id),
+    );
+    expect(fichasDeLaCorrida.size).toBe(40);
+    expect(copia.perfumes.filter((p) => fichasDeLaCorrida.has(p.fichaId))).toHaveLength(40);
+    expect(copia.fichaNota.every((n) => copia.fichas.some((f) => f.id === n.fichaId))).toBe(true);
     expect(copia.contextos).toHaveLength(6);
     // Los ocho ajustes de las semillas tienen que estar; puede haber más
     // (el recordatorio de la 10.4 añade el suyo cuando se configura).

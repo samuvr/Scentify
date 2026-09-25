@@ -214,8 +214,8 @@ export async function usosDelDia(userId: string, fecha: string) {
     .select({
       id: schema.uso.id,
       perfumeId: schema.uso.perfumeId,
-      nombre: schema.perfume.nombre,
-      marca: schema.perfume.marca,
+      nombre: schema.ficha.nombre,
+      marca: schema.ficha.marca,
       momento: schema.uso.momento,
       contexto: schema.contexto.nombre,
       sprays: schema.uso.sprays,
@@ -227,6 +227,7 @@ export async function usosDelDia(userId: string, fecha: string) {
     })
     .from(schema.uso)
     .innerJoin(schema.perfume, eq(schema.perfume.id, schema.uso.perfumeId))
+    .innerJoin(schema.ficha, eq(schema.ficha.id, schema.perfume.fichaId))
     .innerJoin(schema.contexto, eq(schema.contexto.id, schema.uso.contextoId))
     .where(and(eq(schema.uso.userId, userId), eq(schema.uso.fecha, fecha)))
     .orderBy(sql`${schema.uso.creadoEn} desc`);

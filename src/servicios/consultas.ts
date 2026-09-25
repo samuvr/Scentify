@@ -112,8 +112,8 @@ export async function candidatosParaRecomendar(userId: string): Promise<PerfumeC
   const perfumes = await db
     .select({
       id: schema.perfume.id,
-      nombre: schema.perfume.nombre,
-      marca: schema.perfume.marca,
+      nombre: schema.ficha.nombre,
+      marca: schema.ficha.marca,
       estado: schema.perfume.estado,
       archivado: schema.perfume.archivado,
       vecesUsado: agregados.vecesUsado,
@@ -123,6 +123,7 @@ export async function candidatosParaRecomendar(userId: string): Promise<PerfumeC
       duracionEsperada: agregados.duracionEsperada,
     })
     .from(schema.perfume)
+    .innerJoin(schema.ficha, eq(schema.ficha.id, schema.perfume.fichaId))
     .leftJoin(agregados, eq(agregados.perfumeId, schema.perfume.id))
     .where(eq(schema.perfume.userId, userId));
 
@@ -217,19 +218,20 @@ export async function buscarEnColeccion(userId: string, texto: string, limite = 
   return db
     .select({
       id: schema.perfume.id,
-      nombre: schema.perfume.nombre,
-      marca: schema.perfume.marca,
+      nombre: schema.ficha.nombre,
+      marca: schema.ficha.marca,
       estado: schema.perfume.estado,
     })
     .from(schema.perfume)
+    .innerJoin(schema.ficha, eq(schema.ficha.id, schema.perfume.fichaId))
     .where(
       and(
         eq(schema.perfume.userId, userId),
         eq(schema.perfume.archivado, false),
-        ilike(schema.perfume.busquedaNormalizada, `%${consulta}%`),
+        ilike(schema.ficha.busquedaNormalizada, `%${consulta}%`),
       ),
     )
-    .orderBy(asc(schema.perfume.nombre))
+    .orderBy(asc(schema.ficha.nombre))
     .limit(limite);
 }
 
@@ -240,14 +242,15 @@ export async function usadosRecientemente(userId: string, limite = 5) {
   return db
     .select({
       id: schema.perfume.id,
-      nombre: schema.perfume.nombre,
-      marca: schema.perfume.marca,
+      nombre: schema.ficha.nombre,
+      marca: schema.ficha.marca,
       ultimoUso: sql<string>`max(${u.fecha})::text`,
     })
     .from(u)
     .innerJoin(schema.perfume, eq(schema.perfume.id, u.perfumeId))
+    .innerJoin(schema.ficha, eq(schema.ficha.id, schema.perfume.fichaId))
     .where(and(eq(u.userId, userId), eq(schema.perfume.archivado, false)))
-    .groupBy(schema.perfume.id, schema.perfume.nombre, schema.perfume.marca)
+    .groupBy(schema.perfume.id, schema.ficha.nombre, schema.ficha.marca)
     .orderBy(desc(sql`max(${u.fecha})`))
     .limit(limite);
 }
@@ -258,13 +261,14 @@ export async function usoDeAyer(userId: string, ayer: string) {
   const [fila] = await db
     .select({
       perfumeId: schema.uso.perfumeId,
-      nombre: schema.perfume.nombre,
-      marca: schema.perfume.marca,
+      nombre: schema.ficha.nombre,
+      marca: schema.ficha.marca,
       momento: schema.uso.momento,
       contextoId: schema.uso.contextoId,
     })
     .from(schema.uso)
     .innerJoin(schema.perfume, eq(schema.perfume.id, schema.uso.perfumeId))
+    .innerJoin(schema.ficha, eq(schema.ficha.id, schema.perfume.fichaId))
     .where(and(eq(schema.uso.userId, userId), eq(schema.uso.fecha, ayer)))
     .orderBy(desc(schema.uso.creadoEn))
     .limit(1);
@@ -312,25 +316,26 @@ export async function listarColeccion(userId: string, filtros: FiltrosColeccion 
   const db = crearDb();
   const agregados = agregadosDeUso(userId);
   const p = schema.perfume;
+  const f = schema.ficha;
 
   const condiciones = [eq(p.userId, userId)];
   if (!filtros.incluirArchivados) condiciones.push(eq(p.archivado, false));
   if (filtros.estado) condiciones.push(eq(p.estado, filtros.estado));
-  if (filtros.marca) condiciones.push(eq(p.marca, filtros.marca));
+  if (filtros.marca) condiciones.push(eq(f.marca, filtros.marca));
   if (filtros.valoracionMinima) condiciones.push(gte(p.valoracion, filtros.valoracionMinima));
   if (filtros.texto && normalizar(filtros.texto).length > 0) {
-    condiciones.push(ilike(p.busquedaNormalizada, `%${normalizar(filtros.texto)}%`));
+    condiciones.push(ilike(f.busquedaNormalizada, `%${normalizar(filtros.texto)}%`));
   }
   if (filtros.familiaId) {
     condiciones.push(
-      sql`exists (select 1 from ${schema.perfumeFamilia} pf
-                  where pf.perfume_id = ${p.id} and pf.familia_id = ${filtros.familiaId})`,
+      sql`exists (select 1 from ${schema.fichaFamilia} ff
+                  where ff.ficha_id = ${p.fichaId} and ff.familia_id = ${filtros.familiaId})`,
     );
   }
   if (filtros.notaId) {
     condiciones.push(
-      sql`exists (select 1 from ${schema.perfumeNota} pn
-                  where pn.perfume_id = ${p.id} and pn.nota_id = ${filtros.notaId})`,
+      sql`exists (select 1 from ${schema.fichaNota} fn
+                  where fn.ficha_id = ${p.fichaId} and fn.nota_id = ${filtros.notaId})`,
     );
   }
   if (filtros.contextoId) {
@@ -353,8 +358,8 @@ export async function listarColeccion(userId: string, filtros: FiltrosColeccion 
   }
 
   const orden = {
-    nombre: asc(p.nombre),
-    marca: asc(p.marca),
+    nombre: asc(f.nombre),
+    marca: asc(f.marca),
     'ultimo-uso': sql`${agregados.ultimoUso} desc nulls last`,
     'mas-usado': sql`${agregados.vecesUsado} desc nulls last`,
   }[filtros.orden ?? 'nombre'];
@@ -362,16 +367,17 @@ export async function listarColeccion(userId: string, filtros: FiltrosColeccion 
   return db
     .select({
       id: p.id,
-      nombre: p.nombre,
-      marca: p.marca,
+      nombre: f.nombre,
+      marca: f.marca,
       estado: p.estado,
       archivado: p.archivado,
       valoracion: p.valoracion,
-      concentracion: p.concentracion,
+      concentracion: f.concentracion,
       vecesUsado: agregados.vecesUsado,
       ultimoUso: agregados.ultimoUso,
     })
     .from(p)
+    .innerJoin(f, eq(f.id, p.fichaId))
     .leftJoin(agregados, eq(agregados.perfumeId, p.id))
     .where(and(...condiciones))
     .orderBy(orden);
@@ -381,10 +387,11 @@ export async function listarColeccion(userId: string, filtros: FiltrosColeccion 
 export async function marcasDeLaColeccion(userId: string): Promise<string[]> {
   const db = crearDb();
   const filas = await db
-    .selectDistinct({ marca: schema.perfume.marca })
+    .selectDistinct({ marca: schema.ficha.marca })
     .from(schema.perfume)
+    .innerJoin(schema.ficha, eq(schema.ficha.id, schema.perfume.fichaId))
     .where(eq(schema.perfume.userId, userId))
-    .orderBy(asc(schema.perfume.marca));
+    .orderBy(asc(schema.ficha.marca));
   return filas.map((f) => f.marca);
 }
 
@@ -392,38 +399,54 @@ export async function marcasDeLaColeccion(userId: string): Promise<string[]> {
 
 export async function fichaDePerfume(userId: string, perfumeId: string) {
   const db = crearDb();
-  const [perfume] = await db
-    .select()
+  const [fila] = await db
+    .select({ frasco: schema.perfume, ficha: schema.ficha })
     .from(schema.perfume)
+    .innerJoin(schema.ficha, eq(schema.ficha.id, schema.perfume.fichaId))
     .where(and(eq(schema.perfume.userId, userId), eq(schema.perfume.id, perfumeId)))
     .limit(1);
-  if (!perfume) return null;
+  if (!fila) return null;
+  const fichaId = fila.ficha.id;
+  // Frasco y ficha en un solo objeto: las pantallas no tienen por que saber
+  // que parte es de todos y que parte es solo mia.
+  const perfume = {
+    ...fila.frasco,
+    nombre: fila.ficha.nombre,
+    marca: fila.ficha.marca,
+    concentracion: fila.ficha.concentracion,
+    anioLanzamiento: fila.ficha.anioLanzamiento,
+    fragranticaUrl: fila.ficha.fragranticaUrl,
+  };
 
-  const [notas, familias, marcas, promedios, historial] = await Promise.all([
+  const [notas, familias, marcas, promedios, historial, [compartida]] = await Promise.all([
     db
       .select({
         id: schema.nota.id,
         nombre: schema.nota.nombre,
-        nivel: schema.perfumeNota.nivel,
-        orden: schema.perfumeNota.orden,
+        nivel: schema.fichaNota.nivel,
+        orden: schema.fichaNota.orden,
       })
-      .from(schema.perfumeNota)
-      .innerJoin(schema.nota, eq(schema.nota.id, schema.perfumeNota.notaId))
-      .where(eq(schema.perfumeNota.perfumeId, perfumeId))
-      .orderBy(asc(schema.perfumeNota.orden)),
+      .from(schema.fichaNota)
+      .innerJoin(schema.nota, eq(schema.nota.id, schema.fichaNota.notaId))
+      .where(eq(schema.fichaNota.fichaId, fichaId))
+      .orderBy(asc(schema.fichaNota.orden)),
     db
       .select({
         id: schema.familia.id,
         nombre: schema.familia.nombre,
-        orden: schema.perfumeFamilia.orden,
+        orden: schema.fichaFamilia.orden,
       })
-      .from(schema.perfumeFamilia)
-      .innerJoin(schema.familia, eq(schema.familia.id, schema.perfumeFamilia.familiaId))
-      .where(eq(schema.perfumeFamilia.perfumeId, perfumeId))
-      .orderBy(asc(schema.perfumeFamilia.orden)),
+      .from(schema.fichaFamilia)
+      .innerJoin(schema.familia, eq(schema.familia.id, schema.fichaFamilia.familiaId))
+      .where(eq(schema.fichaFamilia.fichaId, fichaId))
+      .orderBy(asc(schema.fichaFamilia.orden)),
     marcasDePerfume([perfumeId]),
     promediosDePerfume(userId, perfumeId),
     historialDePerfume(userId, perfumeId),
+    db
+      .select({ personas: sql<number>`count(distinct ${schema.perfume.userId})::int` })
+      .from(schema.perfume)
+      .where(and(eq(schema.perfume.fichaId, fichaId), ne(schema.perfume.userId, userId))),
   ]);
 
   const [frecuentes] = await db
@@ -436,6 +459,8 @@ export async function fichaDePerfume(userId: string, perfumeId: string) {
 
   return {
     perfume,
+    /** Cuantas personas mas tienen este perfume, y veran lo que se cambie en la ficha. */
+    compartidaCon: compartida?.personas ?? 0,
     notas,
     familias,
     contextos: marcas.contextos.get(perfumeId) ?? [],
@@ -496,22 +521,112 @@ export async function listarWishlist(userId: string, orden: 'prioridad' | 'antig
   return db.select().from(w).where(eq(w.userId, userId)).orderBy(criterio);
 }
 
-/** Duplicados al dar de alta: mismo nombre y marca ya en la coleccion (4.1). */
-export async function posiblesDuplicados(userId: string, nombre: string, marca: string) {
-  const clave = normalizar(`${nombre} ${marca}`);
-  if (clave.length < MINIMO_CARACTERES_BUSQUEDA) return [];
+/* --------------------------------------------------------------- catalogo */
+
+/**
+ * Fichas del catalogo comun que encajan con lo escrito, para no dar de alta
+ * dos veces lo que otra persona ya ha metido. Dice ademas si ya lo tengo, que
+ * es el aviso de duplicado de la seccion 4.1.
+ */
+export async function buscarEnCatalogo(userId: string, texto: string, limite = 6) {
+  const consulta = normalizar(texto);
+  if (consulta.length < MINIMO_CARACTERES_BUSQUEDA) return [];
   const db = crearDb();
+  const f = schema.ficha;
+  const p = schema.perfume;
   return db
-    .select({ id: schema.perfume.id, nombre: schema.perfume.nombre, marca: schema.perfume.marca })
-    .from(schema.perfume)
-    .where(
-      and(
-        eq(schema.perfume.userId, userId),
-        or(
-          ilike(schema.perfume.busquedaNormalizada, `%${normalizar(nombre)}%`),
-          ilike(schema.perfume.busquedaNormalizada, `%${clave}%`),
-        ),
-      ),
-    )
-    .limit(5);
+    .select({
+      id: f.id,
+      nombre: f.nombre,
+      marca: f.marca,
+      concentracion: f.concentracion,
+      anioLanzamiento: f.anioLanzamiento,
+      // Calificado a mano: sin joins, Drizzle escribe las columnas sin tabla y
+      // dentro de la subconsulta "id" seria el del perfume, no el de la ficha.
+      /** El frasco propio con esta ficha, si ya lo tengo. */
+      miPerfumeId: sql<string | null>`(
+        select fr.id from ${p} fr
+        where fr.ficha_id = ${f}.id and fr.user_id = ${userId}
+        order by fr.creado_en limit 1
+      )`,
+      personas: sql<number>`(
+        select count(distinct fr.user_id)::int from ${p} fr where fr.ficha_id = ${f}.id
+      )`,
+    })
+    .from(f)
+    .where(ilike(f.busquedaNormalizada, `%${consulta}%`))
+    .orderBy(asc(f.nombre), asc(f.marca))
+    .limit(limite);
 }
+
+/** La ficha que se comparte desde Fragrantica, si alguien la tiene ya. */
+export async function fichaPorUrl(url: string) {
+  const db = crearDb();
+  const [fila] = await db
+    .select({ id: schema.ficha.id })
+    .from(schema.ficha)
+    .where(eq(schema.ficha.fragranticaUrl, url.trim()))
+    .limit(1);
+  return fila?.id ?? null;
+}
+
+/** Mi frasco de esa ficha, si ya lo tengo. */
+export async function miFrascoDeFicha(userId: string, fichaId: string) {
+  const db = crearDb();
+  const [fila] = await db
+    .select({ id: schema.perfume.id })
+    .from(schema.perfume)
+    .where(and(eq(schema.perfume.userId, userId), eq(schema.perfume.fichaId, fichaId)))
+    .orderBy(asc(schema.perfume.creadoEn))
+    .limit(1);
+  return fila?.id ?? null;
+}
+
+/**
+ * Todo lo necesario para dar de alta un frasco desde una ficha del catalogo.
+ *
+ * Las estaciones y los momentos son personales, pero para no empezar de cero
+ * se proponen los de quien la dio de alta primero. Los contextos no: son de
+ * cada cuenta y no se pueden trasladar.
+ */
+export async function fichaParaAlta(fichaId: string) {
+  const db = crearDb();
+  const [ficha] = await db.select().from(schema.ficha).where(eq(schema.ficha.id, fichaId)).limit(1);
+  if (!ficha) return null;
+
+  const [notas, familias, [primero]] = await Promise.all([
+    db
+      .select({ nombre: schema.nota.nombre, nivel: schema.fichaNota.nivel })
+      .from(schema.fichaNota)
+      .innerJoin(schema.nota, eq(schema.nota.id, schema.fichaNota.notaId))
+      .where(eq(schema.fichaNota.fichaId, fichaId))
+      .orderBy(asc(schema.fichaNota.orden)),
+    db
+      .select({ id: schema.fichaFamilia.familiaId })
+      .from(schema.fichaFamilia)
+      .where(eq(schema.fichaFamilia.fichaId, fichaId))
+      .orderBy(asc(schema.fichaFamilia.orden)),
+    db
+      .select({ id: schema.perfume.id })
+      .from(schema.perfume)
+      .where(eq(schema.perfume.fichaId, fichaId))
+      .orderBy(asc(schema.perfume.creadoEn))
+      .limit(1),
+  ]);
+  const marcas = await marcasDePerfume(primero ? [primero.id] : []);
+
+  return {
+    id: ficha.id,
+    nombre: ficha.nombre,
+    marca: ficha.marca,
+    concentracion: ficha.concentracion,
+    anioLanzamiento: ficha.anioLanzamiento,
+    fragranticaUrl: ficha.fragranticaUrl,
+    notas,
+    familiaIds: familias.map((f) => f.id),
+    estaciones: primero ? (marcas.estaciones.get(primero.id) ?? []) : [],
+    momentos: primero ? (marcas.momentos.get(primero.id) ?? []) : [],
+  };
+}
+
+export type FichaParaAlta = NonNullable<Awaited<ReturnType<typeof fichaParaAlta>>>;

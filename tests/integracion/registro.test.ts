@@ -22,6 +22,9 @@ vi.mock('next/headers', () => ({
 
 const cuando = process.env.DATABASE_URL ? describe : describe.skip;
 const CODIGO = 'perfumes-para-todos';
+// Las fichas son comunes y sobreviven a las cuentas: sin esto, una corrida
+// anterior dejaria hechas las fichas de esta.
+const RONDA = crypto.randomUUID().slice(0, 8);
 
 cuando('registro de cuentas nuevas', () => {
   let auth: typeof import('@/servicios/auth');
@@ -54,6 +57,7 @@ cuando('registro de cuentas nuevas', () => {
     // hacia dentro antes de soltar la cuenta.
     await db.delete(esquema.uso).where(orm.inArray(esquema.uso.userId, creados));
     await db.delete(esquema.perfume).where(orm.inArray(esquema.perfume.userId, creados));
+    await db.delete(esquema.ficha).where(orm.like(esquema.ficha.nombre, `% ${RONDA}`));
     await db.delete(esquema.usuario).where(orm.inArray(esquema.usuario.id, creados));
   });
 
@@ -169,13 +173,13 @@ cuando('registro de cuentas nuevas', () => {
       otra = b.userId;
       miContexto = (await consultas.listarContextos(yo))[0]!.id;
       suContexto = (await consultas.listarContextos(otra))[0]!.id;
-      suPerfume = await perfumes.crearPerfume(otra, perfume(suContexto, 'El de la otra'));
+      suPerfume = await perfumes.crearPerfume(otra, perfume(suContexto, `El de la otra ${RONDA}`));
     });
 
     it('cada cuenta ve solo su colección', async () => {
-      await perfumes.crearPerfume(yo, perfume(miContexto, 'El mío'));
+      await perfumes.crearPerfume(yo, perfume(miContexto, `El mío ${RONDA}`));
       const mia = await consultas.listarColeccion(yo);
-      expect(mia.map((p) => p.nombre)).toEqual(['El mío']);
+      expect(mia.map((p) => p.nombre)).toEqual([`El mío ${RONDA}`]);
       expect(await consultas.fichaDePerfume(yo, suPerfume)).toBeNull();
     });
 
@@ -202,7 +206,7 @@ cuando('registro de cuentas nuevas', () => {
     });
 
     it('no se puede usar el contexto de otra cuenta', async () => {
-      const mio = await perfumes.crearPerfume(yo, perfume(miContexto, 'Otro mío'));
+      const mio = await perfumes.crearPerfume(yo, perfume(miContexto, `Otro mío ${RONDA}`));
       await expect(
         usos.registrarUso(yo, {
           perfumeId: mio,
@@ -213,16 +217,16 @@ cuando('registro de cuentas nuevas', () => {
         }),
       ).rejects.toThrow(perfumes.ErrorValidacion);
       await expect(
-        perfumes.crearPerfume(yo, { ...perfume(miContexto, 'Colado'), contextoIds: [suContexto] }),
+        perfumes.crearPerfume(yo, { ...perfume(miContexto, `Colado ${RONDA}`), contextoIds: [suContexto] }),
       ).rejects.toThrow(perfumes.ErrorValidacion);
     });
 
     it('editar el perfume de otra cuenta no toca sus datos', async () => {
       await expect(
-        perfumes.actualizarPerfume(yo, suPerfume, perfume(miContexto, 'Pisado')),
+        perfumes.actualizarPerfume(yo, suPerfume, perfume(miContexto, `Pisado ${RONDA}`)),
       ).rejects.toThrow(perfumes.ErrorValidacion);
       const ficha = await consultas.fichaDePerfume(otra, suPerfume);
-      expect(ficha?.perfume.nombre).toBe('El de la otra');
+      expect(ficha?.perfume.nombre).toBe(`El de la otra ${RONDA}`);
     });
 
     it('editar un deseo de otra cuenta no le cambia las notas de fondo', async () => {
@@ -245,15 +249,23 @@ cuando('registro de cuentas nuevas', () => {
       const copia = await datos.copiaCompleta(yo);
       // La copia solo lleva lo propio.
       expect(copia.perfumes.every((p) => p.userId === yo)).toBe(true);
-      expect(copia.perfumeNota.some((f) => f.perfumeId === suPerfume)).toBe(false);
+      expect(copia.perfumes.some((p) => p.id === suPerfume)).toBe(false);
 
+      const [suFrasco] = await db
+        .select()
+        .from(esquema.perfume)
+        .where(orm.eq(esquema.perfume.id, suPerfume));
       const [vetiver] = await db
         .select()
         .from(esquema.nota)
         .where(orm.eq(esquema.nota.nombreNormalizado, 'vetiver'));
       const manipulada = {
         ...copia,
-        perfumeNota: [...copia.perfumeNota, { perfumeId: suPerfume, notaId: vetiver!.id, nivel: 'SALIDA' as const, orden: 9 }],
+        // Filas que apuntan al frasco y a la ficha de la otra cuenta.
+        fichaNota: [
+          ...copia.fichaNota,
+          { fichaId: suFrasco!.fichaId, notaId: vetiver!.id, nivel: 'SALIDA' as const, orden: 9 },
+        ],
         perfumeEstacion: [...copia.perfumeEstacion, { perfumeId: suPerfume, estacion: 'VERANO' as const }],
         perfumeContexto: [...copia.perfumeContexto, { perfumeId: suPerfume, contextoId: suContexto }],
       };
@@ -266,13 +278,13 @@ cuando('registro de cuentas nuevas', () => {
       expect(suyas.map((f) => f.estacion)).toEqual(['OTONO']);
       const notas = await db
         .select()
-        .from(esquema.perfumeNota)
-        .where(orm.eq(esquema.perfumeNota.perfumeId, suPerfume));
+        .from(esquema.fichaNota)
+        .where(orm.eq(esquema.fichaNota.fichaId, suFrasco!.fichaId));
       expect(notas.map((n) => n.nivel)).toEqual(['FONDO']);
 
       // Y lo propio vuelve entero.
       const tras = await consultas.listarColeccion(yo);
-      expect(tras.map((p) => p.nombre).sort()).toEqual(['El mío', 'Otro mío']);
+      expect(tras.map((p) => p.nombre).sort()).toEqual([`El mío ${RONDA}`, `Otro mío ${RONDA}`]);
     });
   });
 });
