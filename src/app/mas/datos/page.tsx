@@ -10,7 +10,7 @@ export default async function PaginaDatos() {
 
   return (
     <div className="space-y-5">
-      <h1 className="text-2xl font-bold">Datos</h1>
+      <h1 className="titulo">Datos</h1>
       <p className="text-sm text-texto-tenue">
         Aquí se introduce mucha información a mano. Exporta de vez en cuando.
       </p>

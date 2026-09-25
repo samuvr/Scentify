@@ -48,7 +48,7 @@ export default async function PaginaEstadisticas({
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Estadísticas</h1>
+      <h1 className="titulo">Estadísticas</h1>
 
       <SelectorPeriodo
         periodo={periodo}
@@ -56,11 +56,16 @@ export default async function PaginaEstadisticas({
         contextos={contextos.map((c) => ({ id: c.id, nombre: c.nombre }))}
       />
 
-      <section className="grid grid-cols-2 gap-2">
+      <section className="grid grid-cols-3 gap-2">
+        <Comparativa
+          titulo="Tasa de acierto"
+          comparacion={comparativa.tasaAcierto}
+          formato="pct"
+          destacada
+        />
         <Comparativa titulo="Usos" comparacion={comparativa.usos} />
         <Comparativa titulo="Perfumes distintos" comparacion={comparativa.perfumesDistintos} />
         <Comparativa titulo="Rotación" comparacion={comparativa.rotacion} formato="ratio" />
-        <Comparativa titulo="Tasa de acierto" comparacion={comparativa.tasaAcierto} formato="pct" />
       </section>
       <p className="text-xs text-texto-tenue">
         Rotación: {indicadores.perfumesDistintos} perfumes distintos sobre {datos.totalColeccion} en
@@ -68,7 +73,7 @@ export default async function PaginaEstadisticas({
       </p>
 
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold">Más usados</h2>
+        <h2 className="subtitulo">Más usados</h2>
         {datos.ranking.length === 0 ? (
           <p className="text-sm text-texto-tenue">Sin registros en el periodo.</p>
         ) : (
@@ -90,7 +95,7 @@ export default async function PaginaEstadisticas({
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold">Sin usar en el periodo ({datos.sinUsar.length})</h2>
+        <h2 className="subtitulo">Sin usar en el periodo ({datos.sinUsar.length})</h2>
         <ul className="space-y-1">
           {datos.sinUsar.slice(0, 20).map((fila) => (
             <li key={fila.id}>
@@ -124,7 +129,7 @@ export default async function PaginaEstadisticas({
       />
 
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold">Promedios de aplicación</h2>
+        <h2 className="subtitulo">Promedios de aplicación</h2>
         <dl className="grid grid-cols-3 gap-2 text-sm">
           <div className="bg-superficie-alta px-3 py-2">
             <dt className="text-xs uppercase text-texto-tenue">Sprays</dt>
@@ -146,7 +151,7 @@ export default async function PaginaEstadisticas({
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold">Días con registro</h2>
+        <h2 className="subtitulo">Días con registro</h2>
         <Heatmap semanas={rejillaHeatmap(rango, datos.heatmap)} hasta={rango.hasta} />
       </section>
     </div>

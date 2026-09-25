@@ -16,7 +16,7 @@ export default async function PaginaLogin({
   return (
     <div className="space-y-6 pt-10">
       <header className="space-y-1 text-center">
-        <h1 className="text-3xl font-bold text-acento">Scentify</h1>
+        <h1 className="font-display text-5xl font-semibold tracking-tight text-acento">Scentify</h1>
         <p className="text-sm text-texto-tenue">Mi colección de perfumes</p>
       </header>
       <FormularioLogin siguiente={siguiente} />

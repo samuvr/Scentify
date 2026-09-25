@@ -109,7 +109,8 @@ export function FormularioDeseo({ notasConocidas }: { notasConocidas: string[] }
                 key={n}
                 type="button"
                 onClick={() => quitarNota(n)}
-                className="etiqueta border-acento/50 text-acento"
+                data-activo="true"
+                className="chip"
               >
                 {n} <span aria-hidden="true">×</span>
                 <span className="sr-only">quitar</span>

@@ -113,6 +113,11 @@ export async function encolarUso(uso: UsoPendiente): Promise<ResultadoEnvio> {
 }
 
 /** Reenvia todo lo pendiente. Devuelve cuantos se han sincronizado. */
+/** Saca de la cola un uso que aun no se ha enviado ("Deshacer" sin conexion). */
+export async function descartarPendiente(id: string): Promise<void> {
+  await transaccion('readwrite', (almacen) => almacen.delete(id));
+}
+
 export async function vaciarCola(): Promise<number> {
   const pendientes = await usosPendientes();
   let enviados = 0;

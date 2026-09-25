@@ -10,6 +10,7 @@ import {
   type FiltrosColeccion,
 } from '@/servicios/consultas';
 import { formatearFecha } from '@/componentes/BloquePromedios';
+import { tonoDeFamilia } from '@/componentes/tono-familia';
 import { Filtros } from './Filtros';
 
 export const dynamic = 'force-dynamic';
@@ -50,7 +51,7 @@ export default async function PaginaColeccion({
   return (
     <div className="space-y-5">
       <header className="flex items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold">Colección</h1>
+        <h1 className="titulo">Colección</h1>
         <Link href="/coleccion/nuevo" className="boton-primario px-4 text-sm">
           + Añadir
         </Link>
@@ -66,29 +67,51 @@ export default async function PaginaColeccion({
         {perfumes.length} {perfumes.length === 1 ? 'perfume' : 'perfumes'}
       </p>
 
-      <ul className="space-y-2">
-        {perfumes.map((perfume) => (
-          <li key={perfume.id}>
-            <Link href={`/coleccion/${perfume.id}`} className="tarjeta flex items-center gap-3">
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-semibold">{perfume.nombre}</p>
-                <p className="truncate text-sm text-texto-tenue">
-                  {perfume.marca}
-                  {perfume.concentracion ? ` · ${perfume.concentracion}` : ''}
-                  {perfume.estado === 'LO_TUVE' ? ' · lo tuve' : ''}
-                  {perfume.archivado ? ' · archivado' : ''}
-                </p>
-                <p className="text-xs text-texto-tenue">
-                  {perfume.vecesUsado ?? 0} usos
-                  {perfume.ultimoUso ? ` · último ${formatearFecha(perfume.ultimoUso)}` : ''}
-                </p>
-              </div>
-              {perfume.valoracion ? (
-                <span className="etiqueta text-xs">{perfume.valoracion}/5</span>
-              ) : null}
-            </Link>
-          </li>
-        ))}
+      {/*
+        Filas y no tarjetas: con cincuenta perfumes, cincuenta cajas iguales son
+        un muro. El filete de la izquierda lleva el tono de la familia principal,
+        que es lo que hace reconocible cada fila sin leerla.
+      */}
+      <ul className="-mx-4 divide-y divide-borde/60 border-y border-borde/60">
+        {perfumes.map((perfume) => {
+          const tono = tonoDeFamilia(perfume.familiaPrincipal);
+          return (
+            <li key={perfume.id}>
+              <Link
+                href={`/coleccion/${perfume.id}`}
+                className="flex items-stretch gap-3 px-4 py-3 transition active:bg-superficie-alta"
+              >
+                <span
+                  aria-hidden="true"
+                  className="w-1 shrink-0"
+                  style={{ backgroundColor: tono ?? 'transparent' }}
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="nombre-perfume truncate text-lg">{perfume.nombre}</p>
+                  <p className="truncate text-sm text-texto-tenue">
+                    {perfume.marca}
+                    {perfume.concentracion ? ` · ${perfume.concentracion}` : ''}
+                  </p>
+                  <p className="mt-0.5 text-xs text-texto-tenue">
+                    {perfume.vecesUsado ? `${perfume.vecesUsado} usos` : 'Sin estrenar'}
+                    {perfume.ultimoUso ? ` · último ${formatearFecha(perfume.ultimoUso)}` : ''}
+                  </p>
+                </div>
+                <div className="flex shrink-0 flex-col items-end justify-center gap-1">
+                  {perfume.valoracion ? (
+                    <span className="text-sm text-texto-tenue">
+                      <span aria-hidden="true">★ </span>
+                      {perfume.valoracion}
+                      <span className="sr-only"> de 5</span>
+                    </span>
+                  ) : null}
+                  {perfume.estado === 'LO_TUVE' ? <span className="etiqueta">lo tuve</span> : null}
+                  {perfume.archivado ? <span className="etiqueta">archivado</span> : null}
+                </div>
+              </Link>
+            </li>
+          );
+        })}
       </ul>
 
       {perfumes.length === 0 ? (

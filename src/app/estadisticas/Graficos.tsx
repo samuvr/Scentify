@@ -10,10 +10,13 @@ export function Comparativa({
   titulo,
   comparacion,
   formato = 'entero',
+  destacada = false,
 }: {
   titulo: string;
   comparacion: Comparacion;
   formato?: 'entero' | 'pct' | 'ratio';
+  /** El indicador que mas dice del periodo: a todo el ancho y mas grande. */
+  destacada?: boolean;
 }) {
   const mostrar = (valor: number) =>
     formato === 'pct' ? `${valor}%` : formato === 'ratio' ? valor.toFixed(2) : String(valor);
@@ -22,9 +25,11 @@ export function Comparativa({
   const baja = comparacion.diferencia < 0;
 
   return (
-    <div className="tarjeta space-y-1 p-3">
-      <p className="text-xs uppercase tracking-wide text-texto-tenue">{titulo}</p>
-      <p className="text-2xl font-bold">{mostrar(comparacion.actual)}</p>
+    <div className={`tarjeta space-y-1 ${destacada ? 'col-span-3 border-acento/50 p-4' : 'p-3'}`}>
+      <p className="subtitulo">{titulo}</p>
+      <p className={`font-display font-semibold ${destacada ? 'text-5xl text-acento' : 'text-2xl'}`}>
+        {mostrar(comparacion.actual)}
+      </p>
       <p
         className={`text-xs ${sube ? 'text-id-total' : baja ? 'text-id-nula' : 'text-texto-tenue'}`}
       >
@@ -48,7 +53,7 @@ export function Barras({
 
   return (
     <section className="space-y-2">
-      <h2 className="text-lg font-semibold">{titulo}</h2>
+      <h2 className="subtitulo">{titulo}</h2>
       <ul className="space-y-1.5">
         {datos.map((d) => (
           <li key={d.nombre} className="space-y-1">
@@ -57,8 +62,9 @@ export function Barras({
               <span className="text-texto-tenue">{d.usos}</span>
             </div>
             <div className="h-2 overflow-hidden bg-superficie-alta">
+              {/* En acento lo que domina (todos, si empatan en cabeza); el resto, neutro. */}
               <div
-                className="h-full bg-acento/70"
+                className={`h-full ${d.usos === maximo ? 'bg-acento' : 'bg-texto-tenue/50'}`}
                 style={{ width: `${Math.round((100 * d.usos) / maximo)}%` }}
               />
             </div>

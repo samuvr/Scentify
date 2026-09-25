@@ -92,9 +92,11 @@ function AcordesDeFragrantica({
 function BarraVoto({ voto }: { voto: VotoEje | undefined }) {
   if (!voto) return null;
   return (
-    <span className="ml-2 inline-flex items-center gap-1.5 text-xs text-texto-tenue">
-      <span className="inline-block h-1.5 w-12 overflow-hidden bg-borde">
-        <span className="block h-full bg-acento/70" style={{ width: `${voto.pct}%` }} />
+    // Hereda el color de la fila: sobre la fila elegida (relleno de acento)
+    // un gris tenue no se leeria.
+    <span className="ml-2 inline-flex items-center gap-1.5 text-xs font-normal opacity-80">
+      <span className="inline-block h-2 w-12 overflow-hidden border border-current">
+        <span className="block h-full bg-current" style={{ width: `${voto.pct}%` }} />
       </span>
       {voto.pct}%{voto.votos !== null ? ` · ${voto.votos}` : ''}
     </span>
@@ -493,7 +495,8 @@ export function FormularioPerfume({
                       key={`${n.nombre}-${n.i}`}
                       type="button"
                       onClick={() => cambiar({ notas: v.notas.filter((_, i) => i !== n.i) })}
-                      className="etiqueta border-acento/50 text-acento"
+                      data-activo="true"
+                      className="chip"
                     >
                       {n.nombre} <span aria-hidden="true">×</span>
                       <span className="sr-only">quitar</span>
@@ -531,9 +534,7 @@ export function FormularioPerfume({
                 type="button"
                 aria-pressed={v.familiaIds.includes(f.id)}
                 onClick={() => cambiar({ familiaIds: alternar(v.familiaIds, f.id) })}
-                className={`etiqueta ${
-                  v.familiaIds.includes(f.id) ? 'border-acento bg-acento/15 text-acento' : ''
-                }`}
+                className="chip"
               >
                 {f.nombre}
               </button>
@@ -557,9 +558,7 @@ export function FormularioPerfume({
                   type="button"
                   aria-pressed={v.estaciones.includes(clave)}
                   onClick={() => cambiar({ estaciones: alternar(v.estaciones, clave) })}
-                  className={`fila-toque justify-between border ${
-                    v.estaciones.includes(clave) ? 'border-acento bg-acento/10' : 'border-borde'
-                  }`}
+                  className="opcion fila-toque justify-between"
                 >
                   <span className="font-medium">{nombre}</span>
                   <BarraVoto voto={ficha?.estaciones?.[clave]} />
@@ -580,9 +579,7 @@ export function FormularioPerfume({
                   type="button"
                   aria-pressed={v.momentos.includes(m)}
                   onClick={() => cambiar({ momentos: alternar(v.momentos, m) })}
-                  className={`fila-toque justify-between border ${
-                    v.momentos.includes(m) ? 'border-acento bg-acento/10' : 'border-borde'
-                  }`}
+                  className="opcion fila-toque justify-between"
                 >
                   <span className="font-medium">{m === 'DIA' ? 'Día' : 'Noche'}</span>
                   <BarraVoto voto={ficha?.momentos?.[m]} />
@@ -603,9 +600,7 @@ export function FormularioPerfume({
                 type="button"
                 aria-pressed={v.contextoIds.includes(c.id)}
                 onClick={() => cambiar({ contextoIds: alternar(v.contextoIds, c.id) })}
-                className={`etiqueta ${
-                  v.contextoIds.includes(c.id) ? 'border-acento bg-acento/15 text-acento' : ''
-                }`}
+                className="chip"
               >
                 {c.nombre}
               </button>
@@ -625,7 +620,7 @@ export function FormularioPerfume({
                   type="button"
                   aria-pressed={v.estado === e}
                   onClick={() => cambiar({ estado: e })}
-                  className={`boton ${v.estado === e ? 'bg-acento text-fondo' : 'border border-borde'}`}
+                  className="opcion"
                 >
                   {e === 'LO_TENGO' ? 'Lo tengo' : 'Lo tuve'}
                 </button>
@@ -690,10 +685,10 @@ export function FormularioPerfume({
                 <button
                   key={n}
                   type="button"
+                  aria-label={`${n} de 5`}
+                  data-activo={Number(v.valoracion) >= n}
                   onClick={() => cambiar({ valoracion: v.valoracion === String(n) ? '' : String(n) })}
-                  className={`boton flex-1 px-0 ${
-                    Number(v.valoracion) >= n ? 'bg-acento text-fondo' : 'border border-borde'
-                  }`}
+                  className="opcion flex-1 px-0"
                 >
                   {n}
                 </button>

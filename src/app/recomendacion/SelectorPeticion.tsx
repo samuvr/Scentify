@@ -51,7 +51,7 @@ export function SelectorPeticion({
   }
 
   return (
-    <section className="tarjeta space-y-4">
+    <section className="space-y-3">
       <div>
         <span className="block text-sm font-medium text-texto-tenue">Momento</span>
         <div className="mt-1 grid grid-cols-2 gap-2">
@@ -61,7 +61,7 @@ export function SelectorPeticion({
               type="button"
               aria-pressed={momento === m}
               onClick={() => navegar({ momento: m })}
-              className={`boton ${momento === m ? 'bg-acento text-fondo' : 'border border-borde'}`}
+              className="opcion"
             >
               {m === 'DIA' ? 'Día' : 'Noche'}
             </button>
@@ -78,7 +78,7 @@ export function SelectorPeticion({
               type="button"
               aria-pressed={contextoId === c.id}
               onClick={() => navegar({ contexto: c.id })}
-              className={`etiqueta ${contextoId === c.id ? 'border-acento bg-acento/15 text-acento' : ''}`}
+              className="chip"
             >
               {c.nombre}
             </button>
@@ -107,9 +107,7 @@ export function SelectorPeticion({
                   type="button"
                   aria-pressed={estacionesCompatibles.includes(e)}
                   onClick={() => alternarEstacion(e)}
-                  className={`etiqueta ${
-                    estacionesCompatibles.includes(e) ? 'border-acento bg-acento/15 text-acento' : ''
-                  }`}
+                  className="chip"
                 >
                   {NOMBRE_ESTACION[e]}
                 </button>

@@ -123,6 +123,9 @@ describe('orden por dias desde el ultimo uso, de mas a menos', () => {
     const resultado = recomendar(peticion([usadoHace('Hoy', 0), usadoHace('Ayer', 1)]));
     expect(nombres(resultado.recomendaciones)).toEqual(['Ayer', 'Hoy']);
     expect(resultado.recomendaciones[1]?.diasSinUsar).toBe(0);
+    // «Llevas 0 días sin ponértelo» no es una frase que diga nadie.
+    expect(resultado.recomendaciones[1]?.explicacion).toMatch(/^Te lo has puesto hoy/);
+    expect(resultado.recomendaciones[1]?.explicacion).not.toContain('0 días');
   });
 
   it('a igualdad de dias desempata por nombre, para que el orden sea estable', () => {
@@ -255,6 +258,22 @@ describe('boton "Otro": descarta y muestra la siguiente (criterio 8)', () => {
 });
 
 describe('explicacion de cada recomendacion', () => {
+  it('el motivo es la explicacion sin los promedios, que la tarjeta pinta aparte', () => {
+    const resultado = recomendar(
+      peticion([
+        usadoHace('Khamrah', 47, {
+          promedios: { spraysHabituales: 6, duracionEsperada: 'DE_6_8H', valoracionMedia: 4 },
+        }),
+      ]),
+    );
+    const [r] = resultado.recomendaciones;
+    expect(r?.explicacion).toContain('sueles echarte 6 sprays');
+    expect(r?.motivo).toContain('Llevas 47 días sin ponértelo');
+    expect(r?.motivo).not.toContain('sprays');
+    expect(r?.motivo).not.toContain('durar');
+    expect(r?.motivo.endsWith('.')).toBe(true);
+  });
+
   it('junta tiempo sin usar, encaje y promedios (ejemplo de la especificacion)', () => {
     const resultado = recomendar(
       peticion(

@@ -40,7 +40,7 @@ export default async function PaginaEditar({ params }: { params: Promise<{ id: s
 
   return (
     <div className="space-y-5">
-      <h1 className="text-2xl font-bold">Editar {ficha.perfume.nombre}</h1>
+      <h1 className="titulo">Editar {ficha.perfume.nombre}</h1>
       <FormularioPerfume
         perfumeId={ficha.perfume.id}
         iniciales={iniciales}

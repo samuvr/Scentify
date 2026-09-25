@@ -245,6 +245,8 @@ export async function usadosRecientemente(userId: string, limite = 5) {
       nombre: schema.ficha.nombre,
       marca: schema.ficha.marca,
       ultimoUso: sql<string>`max(${u.fecha})::text`,
+      // Para el registro de un toque: los sprays van con la media de siempre.
+      spraysHabituales: sql<number | null>`round(avg(${u.sprays}))::int`,
     })
     .from(u)
     .innerJoin(schema.perfume, eq(schema.perfume.id, u.perfumeId))
@@ -265,6 +267,7 @@ export async function usoDeAyer(userId: string, ayer: string) {
       marca: schema.ficha.marca,
       momento: schema.uso.momento,
       contextoId: schema.uso.contextoId,
+      sprays: schema.uso.sprays,
     })
     .from(schema.uso)
     .innerJoin(schema.perfume, eq(schema.perfume.id, schema.uso.perfumeId))
@@ -273,6 +276,37 @@ export async function usoDeAyer(userId: string, ayer: string) {
     .orderBy(desc(schema.uso.creadoEn))
     .limit(1);
   return fila ?? null;
+}
+
+/**
+ * Contexto que mas se usa en este momento del dia y en este tipo de dia
+ * (laborable o fin de semana). Es el valor por defecto del registro: el martes
+ * por la manana suele ser Oficina, el sabado por la noche no.
+ *
+ * Cae al contexto mas usado en ese momento sin mirar el dia, y si no hay
+ * historial devuelve null para que se use el primero de la lista.
+ */
+export async function contextoHabitual(
+  userId: string,
+  momento: Momento,
+  finDeSemana: boolean,
+): Promise<string | null> {
+  const db = crearDb();
+  const u = schema.uso;
+  // isodow: 6 sabado, 7 domingo.
+  const esFinde = sql`(extract(isodow from ${u.fecha}) >= 6)`;
+  const [fila] = await db
+    .select({ contextoId: u.contextoId })
+    .from(u)
+    .where(and(eq(u.userId, userId), eq(u.momento, momento)))
+    .groupBy(u.contextoId)
+    .orderBy(
+      desc(sql`count(*) filter (where ${esFinde} = ${finDeSemana}::boolean)`),
+      desc(sql`count(*)`),
+      desc(sql`max(${u.fecha})`),
+    )
+    .limit(1);
+  return fila?.contextoId ?? null;
 }
 
 /** Aviso de posible duplicado: mismo perfume, misma fecha (seccion 6.1). */
@@ -375,6 +409,14 @@ export async function listarColeccion(userId: string, filtros: FiltrosColeccion 
       concentracion: f.concentracion,
       vecesUsado: agregados.vecesUsado,
       ultimoUso: agregados.ultimoUso,
+      // La familia mas relevante, para el filete de color de la lista.
+      familiaPrincipal: sql<string | null>`(
+        select fa.slug from ${schema.fichaFamilia} ff
+        join ${schema.familia} fa on fa.id = ff.familia_id
+        where ff.ficha_id = ${p.fichaId}
+        order by ff.orden
+        limit 1
+      )`,
     })
     .from(p)
     .innerJoin(f, eq(f.id, p.fichaId))

@@ -31,9 +31,8 @@
   }
 
   /*
-   * Canto vivo en todos los campos. El foco no puede apoyarse en un tono,
-   * asi que se marca con borde blanco y un halo gris claro: se ve igual de
-   * bien y no depende de distinguir colores.
+   * Canto vivo en todos los campos. El foco se marca con el acento: es lo
+   * mismo que dice "esto esta activo" en el resto de la app.
    */
   input,
   select,
@@ -55,8 +54,25 @@
     @apply mx-auto w-full max-w-screen-sm px-4;
   }
 
+  /*
+   * Tipografia en dos voces: la serif de display para los titulos y los
+   * nombres de perfume, que es donde esta el caracter; la del sistema para
+   * todo lo demas, que tiene que leerse rapido.
+   */
+  .titulo {
+    @apply font-display text-3xl font-semibold leading-tight tracking-tight;
+  }
+
+  .subtitulo {
+    @apply text-xs font-semibold uppercase tracking-wider text-texto-tenue;
+  }
+
+  .nombre-perfume {
+    @apply font-display font-semibold leading-snug;
+  }
+
   .tarjeta {
-    @apply border border-borde bg-superficie p-4;
+    @apply border border-borde/70 bg-superficie p-4;
   }
 
   .boton {
@@ -64,34 +80,76 @@
            text-base font-semibold transition active:scale-[0.98];
   }
 
-  /* Blanco sobre negro: el unico contraste posible es tambien el mas rotundo. */
   .boton-primario {
-    @apply boton bg-acento text-fondo hover:bg-acento-tenue;
+    @apply boton bg-acento text-fondo;
   }
 
   .boton-secundario {
-    @apply boton border border-borde bg-superficie-alta text-texto hover:bg-borde;
+    @apply boton border border-borde bg-superficie-alta text-texto;
   }
 
   .boton-fantasma {
-    @apply boton text-texto-tenue hover:text-texto;
+    @apply boton text-texto-tenue;
   }
 
   /*
-   * Deshabilitado sin color. Con la paleta ambar bastaba bajar la opacidad,
-   * pero un boton blanco al 60 % sobre negro queda gris solido y se confunde
-   * con uno activo. Se vacia el relleno y queda solo el contorno, que no
-   * invita a pulsar. Se define una vez aqui en lugar de repetir una utilidad
-   * de opacidad en cada boton.
+   * El hover solo en lo que se puede pulsar. Escrito con :not(:disabled) y no
+   * con `hover:` dentro del @apply: Tailwind genera ese hover despues del
+   * :disabled con la misma especificidad, y un boton deshabilitado con el
+   * cursor encima (o con el hover pegado tras un toque en iOS) volvia a
+   * pintarse relleno.
    */
+  .boton-primario:hover:not(:disabled) {
+    @apply bg-acento-tenue;
+  }
+  .boton-secundario:hover:not(:disabled) {
+    @apply bg-borde;
+  }
+  .boton-fantasma:hover:not(:disabled) {
+    @apply text-texto;
+  }
+
+  /* Deshabilitado: se vacia el relleno y queda el contorno, que no invita a pulsar. */
   .boton:disabled {
     @apply border border-borde bg-transparent text-texto-tenue active:scale-100;
   }
 
-  /* Rectangular a proposito: la pastilla redonda restaba seriedad. */
+  /*
+   * Dos familias de piezas, y no se mezclan:
+   *
+   * - Las que se pulsan (`.opcion`, `.chip`) llevan contorno, area tactil
+   *   completa y, al estar elegidas, relleno de acento. Siempre el mismo
+   *   relleno: Dia/Noche, un contexto o una estacion se marcan igual.
+   * - Las que solo informan (`.etiqueta`) no llevan borde ni area tactil: son
+   *   texto con un fondo tintado, para que no parezcan botones.
+   *
+   * El estado elegido se lee de aria-pressed (o de data-activo cuando el boton
+   * no es un interruptor), asi el estilo y la accesibilidad no se separan.
+   */
+  .opcion {
+    @apply boton border border-borde bg-superficie px-3 text-texto;
+  }
+
+  .chip {
+    @apply inline-flex min-h-tactil items-center gap-1.5 border border-borde
+           bg-superficie px-4 text-sm text-texto transition active:scale-[0.98];
+  }
+
+  .opcion:hover:not([aria-pressed='true']):not([data-activo='true']),
+  .chip:hover:not([aria-pressed='true']):not([data-activo='true']) {
+    @apply border-texto-tenue;
+  }
+
+  .opcion[aria-pressed='true'],
+  .opcion[data-activo='true'],
+  .chip[aria-pressed='true'],
+  .chip[data-activo='true'] {
+    @apply border-acento bg-acento font-semibold text-fondo;
+  }
+
   .etiqueta {
-    @apply inline-flex items-center border border-borde bg-superficie-alta
-           px-3 py-1 text-sm;
+    @apply inline-flex items-center gap-1 bg-superficie-alta px-2 py-0.5 text-xs
+           text-texto-tenue;
   }
 
   /* Tablas anchas: scroll horizontal controlado, nunca desbordando la página. */
@@ -104,23 +162,35 @@
     @apply flex min-h-tactil w-full items-center gap-3 px-3 py-2 text-left
            transition active:bg-superficie-alta;
   }
-}
 
   /*
-   * Estados sin color. En la paleta anterior el rojo marcaba el error y el
-   * verde el acierto; aqui no hay tono que gaste, asi que la jerarquia la dan
-   * el filete lateral, el peso y la claridad del texto. El error es lo unico
-   * que llega a blanco puro con filete grueso, para que siga siendo lo primero
-   * que se ve en la pantalla.
+   * La accion principal de una pantalla, pegada encima de la barra inferior
+   * para que el pulgar la tenga siempre a mano aunque el formulario crezca.
+   * 3.5rem es la altura de la barra de navegacion.
    */
+  .barra-accion {
+    @apply sticky z-30 -mx-4 border-t border-borde/70 bg-fondo/95 px-4 py-3 backdrop-blur;
+    bottom: calc(3.5rem + env(safe-area-inset-bottom));
+  }
+
+  /* Aviso flotante (p. ej. "Registrado · Deshacer"), sobre la barra inferior. */
+  .aviso-flotante {
+    @apply fixed inset-x-0 z-50 mx-auto flex max-w-screen-sm items-center justify-between
+           gap-3 border border-borde bg-superficie-alta px-4 py-2 text-sm shadow-lg;
+    bottom: calc(4rem + env(safe-area-inset-bottom));
+    width: calc(100% - 2rem);
+  }
+
+  /* Estados: el filete lateral lleva el tono semantico; el texto, el contraste. */
   .aviso-error {
-    @apply border-l-2 border-acento bg-superficie-alta py-2 pl-3 text-sm font-medium text-texto;
+    @apply border-l-2 border-id-nula bg-superficie-alta py-2 pl-3 text-sm font-medium text-texto;
   }
 
   .aviso-atencion {
-    @apply border-l-2 border-texto-tenue bg-superficie-alta py-2 pl-3 text-sm text-texto;
+    @apply border-l-2 border-id-parcial bg-superficie-alta py-2 pl-3 text-sm text-texto;
   }
 
   .aviso-hecho {
-    @apply border-l-2 border-borde py-2 pl-3 text-sm text-texto-tenue;
+    @apply border-l-2 border-id-total bg-superficie-alta py-2 pl-3 text-sm text-texto-tenue;
   }
+}

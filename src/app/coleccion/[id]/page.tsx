@@ -38,7 +38,7 @@ export default async function PaginaFicha({ params }: { params: Promise<{ id: st
       <header className="space-y-2">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold">{perfume.nombre}</h1>
+            <h1 className="titulo">{perfume.nombre}</h1>
             <p className="text-texto-tenue">
               {perfume.marca}
               {perfume.concentracion ? ` · ${perfume.concentracion}` : ''}
@@ -58,7 +58,7 @@ export default async function PaginaFicha({ params }: { params: Promise<{ id: st
       </header>
 
       <section className="space-y-2">
-        <h2 className="text-lg font-semibold">Promedios</h2>
+        <h2 className="subtitulo">Promedios</h2>
         <BloquePromedios
           promedios={promedios}
           vecesUsado={promedios.vecesUsado}
@@ -77,7 +77,7 @@ export default async function PaginaFicha({ params }: { params: Promise<{ id: st
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold">Pirámide</h2>
+        <h2 className="subtitulo">Pirámide</h2>
         {(['SALIDA', 'CORAZON', 'FONDO'] as const).map((nivel) => {
           const delNivel = notas.filter((n) => n.nivel === nivel);
           if (delNivel.length === 0) return null;
@@ -100,7 +100,7 @@ export default async function PaginaFicha({ params }: { params: Promise<{ id: st
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold">Cómo lo tengo marcado</h2>
+        <h2 className="subtitulo">Cómo lo tengo marcado</h2>
         <div className="space-y-2 text-sm">
           <p>
             <span className="text-texto-tenue">Familias: </span>
@@ -131,13 +131,13 @@ export default async function PaginaFicha({ params }: { params: Promise<{ id: st
 
       {perfume.notasPersonales ? (
         <section className="space-y-2">
-          <h2 className="text-lg font-semibold">Notas personales</h2>
+          <h2 className="subtitulo">Notas personales</h2>
           <p className="whitespace-pre-line text-sm">{perfume.notasPersonales}</p>
         </section>
       ) : null}
 
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold">Historial ({historial.length})</h2>
+        <h2 className="subtitulo">Historial ({historial.length})</h2>
         {historial.length === 0 ? (
           <p className="text-sm text-texto-tenue">Todavía no lo has usado.</p>
         ) : (
@@ -172,7 +172,7 @@ export default async function PaginaFicha({ params }: { params: Promise<{ id: st
       </section>
 
       <section className="space-y-2 border-t border-borde pt-4">
-        <h2 className="text-lg font-semibold">Acciones</h2>
+        <h2 className="subtitulo">Acciones</h2>
         <div className="flex flex-wrap gap-2">
           <form action={accionCambiarEstado}>
             <input type="hidden" name="perfumeId" value={perfume.id} />

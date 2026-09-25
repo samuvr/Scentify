@@ -43,7 +43,7 @@ export default async function PaginaHuecos() {
   return (
     <div className="space-y-5">
       <header className="space-y-1">
-        <h1 className="text-2xl font-bold">Huecos</h1>
+        <h1 className="titulo">Huecos</h1>
         <p className="text-sm text-texto-tenue">
           Contextos × momentos × estaciones que no cubre ningún perfume que tengas.
         </p>
@@ -69,9 +69,9 @@ export default async function PaginaHuecos() {
         <section className="space-y-4">
           {[...porContexto.entries()].map(([contextoId, huecos]) => (
             <div key={contextoId} className="space-y-2">
-              <h2 className="text-lg font-semibold">
+              <h2 className="subtitulo">
                 {nombreContexto(contextoId)}{' '}
-                <span className="text-sm font-normal text-texto-tenue">
+                <span className="font-normal normal-case tracking-normal">
                   ({huecos.length} sin cubrir)
                 </span>
               </h2>
@@ -82,7 +82,7 @@ export default async function PaginaHuecos() {
                       href={`/mas/wishlist?hueco=${encodeURIComponent(
                         `${nombreContexto(contextoId)} + ${NOMBRE_ESTACION[hueco.estacion]} + ${NOMBRE_MOMENTO[hueco.momento]}`,
                       )}`}
-                      className="etiqueta border-id-nula/40 text-sm text-id-nula"
+                      className="chip text-id-nula"
                     >
                       {NOMBRE_ESTACION[hueco.estacion]} · {NOMBRE_MOMENTO[hueco.momento]}
                     </Link>
@@ -96,7 +96,7 @@ export default async function PaginaHuecos() {
 
       {resultado.frageles.length > 0 ? (
         <section className="space-y-2">
-          <h2 className="text-lg font-semibold">Pendientes de un hilo</h2>
+          <h2 className="subtitulo">Pendientes de un hilo</h2>
           <p className="text-sm text-texto-tenue">
             Estas las cubre un solo frasco: si lo vendes o se acaba, se abre un hueco.
           </p>
@@ -104,7 +104,7 @@ export default async function PaginaHuecos() {
             {resultado.frageles.map((c) => (
               <li
                 key={`${c.contextoId}-${c.momento}-${c.estacion}`}
-                className="etiqueta border-id-parcial/40 text-sm text-id-parcial"
+                className="etiqueta text-sm text-id-parcial"
               >
                 {nombreContexto(c.contextoId)} · {NOMBRE_ESTACION[c.estacion]} ·{' '}
                 {NOMBRE_MOMENTO[c.momento]}

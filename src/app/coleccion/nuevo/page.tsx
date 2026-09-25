@@ -45,7 +45,7 @@ export default async function PaginaNuevoPerfume({
 
   return (
     <div className="space-y-5">
-      <h1 className="text-2xl font-bold">Añadir perfume</h1>
+      <h1 className="titulo">Añadir perfume</h1>
       {miFrasco ? (
         <p className="aviso-atencion">
           Este perfume ya está en tu colección.{' '}

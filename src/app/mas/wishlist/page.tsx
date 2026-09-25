@@ -10,8 +10,8 @@ import { FormularioDeseo } from './FormularioDeseo';
 export const dynamic = 'force-dynamic';
 
 const PRIORIDAD: Record<string, { texto: string; clase: string }> = {
-  LO_NECESITO: { texto: 'Lo necesito', clase: 'border-id-nula/50 text-id-nula' },
-  LO_QUIERO: { texto: 'Lo quiero', clase: 'border-id-parcial/50 text-id-parcial' },
+  LO_NECESITO: { texto: 'Lo necesito', clase: 'bg-id-nula/15 text-id-nula' },
+  LO_QUIERO: { texto: 'Lo quiero', clase: 'bg-id-parcial/15 text-id-parcial' },
   EN_EL_RADAR: { texto: 'En el radar', clase: '' },
 };
 
@@ -37,17 +37,19 @@ export default async function PaginaWishlist({
   return (
     <div className="space-y-5">
       <header className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Wishlist</h1>
+        <h1 className="titulo">Wishlist</h1>
         <div className="flex gap-2 text-sm">
           <Link
             href="/mas/wishlist"
-            className={`etiqueta ${orden !== 'antiguedad' ? 'border-acento text-acento' : ''}`}
+            data-activo={orden !== 'antiguedad'}
+            className="chip"
           >
             Prioridad
           </Link>
           <Link
             href="/mas/wishlist?orden=antiguedad"
-            className={`etiqueta ${orden === 'antiguedad' ? 'border-acento text-acento' : ''}`}
+            data-activo={orden === 'antiguedad'}
+            className="chip"
           >
             Antigüedad
           </Link>
@@ -63,7 +65,7 @@ export default async function PaginaWishlist({
             <li key={d.id} className="tarjeta space-y-2">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="font-semibold">{d.nombre}</p>
+                  <p className="nombre-perfume text-lg">{d.nombre}</p>
                   <p className="text-sm text-texto-tenue">{d.marca}</p>
                 </div>
                 <span className={`etiqueta text-xs ${PRIORIDAD[d.prioridad]?.clase ?? ''}`}>
