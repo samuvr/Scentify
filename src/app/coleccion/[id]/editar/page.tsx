@@ -44,8 +44,9 @@ export default async function PaginaEditar({ params }: { params: Promise<{ id: s
       <FormularioPerfume
         perfumeId={ficha.perfume.id}
         iniciales={iniciales}
+        compartidaCon={ficha.compartidaCon}
         contextos={contextos.map((c) => ({ id: c.id, nombre: c.nombre }))}
-        familias={familias.map((f) => ({ id: f.id, nombre: f.nombre }))}
+        familias={familias.map((f) => ({ id: f.id, slug: f.slug, nombre: f.nombre }))}
         notasConocidas={notas.map((n) => n.nombre)}
       />
     </div>

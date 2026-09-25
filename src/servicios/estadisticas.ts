@@ -89,6 +89,7 @@ export async function calcularEstadisticas(
   const db = crearDb();
   const u = schema.uso;
   const p = schema.perfume;
+  const f = schema.ficha;
   const donde = and(...condicionesUso(userId, rango, filtros));
 
   // El denominador de la rotacion es lo que tengo, no lo que tuve.
@@ -118,21 +119,23 @@ export async function calcularEstadisticas(
     db
       .select({
         id: p.id,
-        nombre: p.nombre,
-        marca: p.marca,
+        nombre: f.nombre,
+        marca: f.marca,
         usos: sql<number>`count(*)::int`,
       })
       .from(u)
       .innerJoin(p, eq(p.id, u.perfumeId))
+      .innerJoin(f, eq(f.id, p.fichaId))
       .where(donde)
-      .groupBy(p.id, p.nombre, p.marca)
-      .orderBy(desc(sql`count(*)`), asc(p.nombre)),
+      .groupBy(p.id, f.nombre, f.marca)
+      .orderBy(desc(sql`count(*)`), asc(f.nombre)),
 
     db
       .select({ nombre: schema.familia.nombre, usos: sql<number>`count(*)::int` })
       .from(u)
-      .innerJoin(schema.perfumeFamilia, eq(schema.perfumeFamilia.perfumeId, u.perfumeId))
-      .innerJoin(schema.familia, eq(schema.familia.id, schema.perfumeFamilia.familiaId))
+      .innerJoin(p, eq(p.id, u.perfumeId))
+      .innerJoin(schema.fichaFamilia, eq(schema.fichaFamilia.fichaId, p.fichaId))
+      .innerJoin(schema.familia, eq(schema.familia.id, schema.fichaFamilia.familiaId))
       .where(donde)
       .groupBy(schema.familia.nombre)
       .orderBy(desc(sql`count(*)`)),
@@ -140,8 +143,9 @@ export async function calcularEstadisticas(
     db
       .select({ nombre: schema.nota.nombre, usos: sql<number>`count(*)::int` })
       .from(u)
-      .innerJoin(schema.perfumeNota, eq(schema.perfumeNota.perfumeId, u.perfumeId))
-      .innerJoin(schema.nota, eq(schema.nota.id, schema.perfumeNota.notaId))
+      .innerJoin(p, eq(p.id, u.perfumeId))
+      .innerJoin(schema.fichaNota, eq(schema.fichaNota.fichaId, p.fichaId))
+      .innerJoin(schema.nota, eq(schema.nota.id, schema.fichaNota.notaId))
       .where(donde)
       .groupBy(schema.nota.nombre)
       .orderBy(desc(sql`count(*)`))
@@ -190,13 +194,14 @@ export async function calcularEstadisticas(
   const sinUsar = await db
     .select({
       id: p.id,
-      nombre: p.nombre,
-      marca: p.marca,
+      nombre: f.nombre,
+      marca: f.marca,
       ultimoUso: sql<string | null>`(
         select max(fecha)::text from ${u} where ${u.perfumeId} = ${p.id}
       )`,
     })
     .from(p)
+    .innerJoin(f, eq(f.id, p.fichaId))
     .where(
       and(
         eq(p.userId, userId),

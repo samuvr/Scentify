@@ -8,7 +8,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { destinoSeguro } from '@/dominio/navegacion';
-import { cerrarSesion, exigirUsuario, iniciarSesion } from '@/servicios/auth';
+import { cerrarSesion, exigirUsuario, iniciarSesion, registrarUsuario } from '@/servicios/auth';
 import {
   actualizarPerfume,
   archivarPerfume,
@@ -81,6 +81,49 @@ export async function accionIniciarSesion(_previo: string | null, datos: FormDat
   redirect(destinoSeguro(datos.get('siguiente')));
 }
 
+const esquemaRegistro = z.object({
+  email: z.string().trim().email('Ese correo no es válido.').max(200),
+  password: z
+    .string()
+    .min(8, 'La contraseña necesita al menos 8 caracteres.')
+    .max(200, 'La contraseña es demasiado larga.'),
+  codigo: z.string().trim().min(1, 'Falta el código de invitación.').max(200),
+});
+
+const MENSAJES_REGISTRO = {
+  CERRADO: 'El registro está cerrado.',
+  CODIGO: 'El código de invitación no es correcto.',
+  EXISTE: 'Ya hay una cuenta con ese correo. Entra con tu contraseña.',
+} as const;
+
+/**
+ * Devuelve el correo y el codigo junto al error porque React vacia el
+ * formulario al terminar la accion, y reescribir los tres campos en el movil
+ * por una errata en uno solo es justo lo que hace abandonar. La contrasenia
+ * no vuelve al navegador.
+ */
+export type EstadoRegistro = { error: string; email: string; codigo: string };
+
+export async function accionRegistrarse(
+  _previo: EstadoRegistro | null,
+  datos: FormData,
+): Promise<EstadoRegistro> {
+  const entrada = {
+    email: String(datos.get('email') ?? ''),
+    password: String(datos.get('password') ?? ''),
+    codigo: String(datos.get('codigo') ?? ''),
+  };
+  const conError = (error: string) => ({ error, email: entrada.email, codigo: entrada.codigo });
+
+  const analisis = esquemaRegistro.safeParse(entrada);
+  if (!analisis.success) return conError(analisis.error.issues[0]?.message ?? 'Datos no válidos.');
+
+  const { email, password, codigo } = analisis.data;
+  const resultado = await registrarUsuario(email, password, codigo);
+  if (!resultado.ok) return conError(MENSAJES_REGISTRO[resultado.motivo]);
+  redirect(destinoSeguro(datos.get('siguiente')));
+}
+
 export async function accionCerrarSesion() {
   await cerrarSesion();
   redirect('/login');
@@ -95,7 +138,13 @@ export async function accionRegistrarUso(_previo: unknown, datos: FormData) {
     return { ok: false as const, error: 'Faltan datos del registro.' };
   }
 
-  const resultado = await registrarUso(userId, analisis.data as DatosUso);
+  let resultado;
+  try {
+    resultado = await registrarUso(userId, analisis.data as DatosUso);
+  } catch (error) {
+    if (error instanceof ErrorValidacion) return { ok: false as const, error: error.message };
+    throw error;
+  }
   revalidatePath('/');
   revalidatePath('/coleccion');
   revalidatePath('/estadisticas');
@@ -114,7 +163,12 @@ export async function accionRegistrarDesdeRecomendacion(datos: FormData) {
   const userId = await exigirUsuario();
   const analisis = esquemaUso.safeParse(desdeFormulario(datos));
   if (!analisis.success) return;
-  await registrarUso(userId, analisis.data as DatosUso);
+  try {
+    await registrarUso(userId, analisis.data as DatosUso);
+  } catch (error) {
+    if (error instanceof ErrorValidacion) return;
+    throw error;
+  }
   revalidatePath('/');
   revalidatePath('/recomendacion');
   redirect('/?registrado=1');
@@ -201,6 +255,8 @@ export async function accionGuardarConfiguracion(datos: FormData) {
 /* --------------------------------------------------------------- perfumes */
 
 const esquemaPerfume = z.object({
+  /** Ficha del catalogo elegida al dar de alta, si se ha elegido una. */
+  fichaId: z.string().uuid().nullable().optional(),
   nombre: z.string().min(1).max(200),
   marca: z.string().min(1).max(200),
   concentracion: z
@@ -388,6 +444,6 @@ export async function accionSuscribirAvisos(suscripcion: {
 }
 
 export async function accionCancelarAvisos(endpoint: string) {
-  await exigirUsuario();
-  await borrarSuscripcion(endpoint);
+  const userId = await exigirUsuario();
+  await borrarSuscripcion(userId, endpoint);
 }

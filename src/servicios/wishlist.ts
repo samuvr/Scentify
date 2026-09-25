@@ -44,11 +44,14 @@ export async function actualizarDeseo(
   datos: DatosDeseo,
 ): Promise<void> {
   const db = crearDb();
-  await db
+  const actualizados = await db
     .update(schema.wishlist)
     .set(aFila(datos))
-    .where(and(eq(schema.wishlist.userId, userId), eq(schema.wishlist.id, id)));
+    .where(and(eq(schema.wishlist.userId, userId), eq(schema.wishlist.id, id)))
+    .returning({ id: schema.wishlist.id });
 
+  // Las notas de fondo no llevan `user_id`: solo se tocan si el deseo es suyo.
+  if (actualizados.length === 0) return;
   await guardarNotasFondo(id, datos.notasFondo ?? []);
 }
 
@@ -139,18 +142,19 @@ export async function solapamientoConLaColeccion(
   const filas = await db
     .select({
       id: schema.perfume.id,
-      nombre: schema.perfume.nombre,
-      marca: schema.perfume.marca,
+      nombre: schema.ficha.nombre,
+      marca: schema.ficha.marca,
       nota: schema.nota.nombre,
     })
     .from(schema.perfume)
-    .innerJoin(schema.perfumeNota, eq(schema.perfumeNota.perfumeId, schema.perfume.id))
-    .innerJoin(schema.nota, eq(schema.nota.id, schema.perfumeNota.notaId))
+    .innerJoin(schema.ficha, eq(schema.ficha.id, schema.perfume.fichaId))
+    .innerJoin(schema.fichaNota, eq(schema.fichaNota.fichaId, schema.perfume.fichaId))
+    .innerJoin(schema.nota, eq(schema.nota.id, schema.fichaNota.notaId))
     .where(
       and(
         eq(schema.perfume.userId, userId),
         eq(schema.perfume.archivado, false),
-        eq(schema.perfumeNota.nivel, 'FONDO'),
+        eq(schema.fichaNota.nivel, 'FONDO'),
       ),
     );
 

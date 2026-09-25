@@ -16,8 +16,8 @@ import {
   type ErrorFila,
   type FilaColeccion,
 } from '@/dominio/csv';
-import { normalizar } from '@/dominio/texto';
-import { crearPerfume } from './perfumes';
+import { claveBusqueda, normalizar } from '@/dominio/texto';
+import { crearPerfume, resolverFicha } from './perfumes';
 import type { Estacion, Momento } from '@/dominio/tipos';
 
 /* ------------------------------------------------------------ exportacion */
@@ -26,31 +26,49 @@ export async function exportarColeccionCsv(userId: string): Promise<string> {
   const db = crearDb();
 
   const perfumes = await db
-    .select()
+    .select({
+      id: schema.perfume.id,
+      nombre: schema.ficha.nombre,
+      marca: schema.ficha.marca,
+      concentracion: schema.ficha.concentracion,
+      anioLanzamiento: schema.ficha.anioLanzamiento,
+      fragranticaUrl: schema.ficha.fragranticaUrl,
+      volumenMl: schema.perfume.volumenMl,
+      fechaCompra: schema.perfume.fechaCompra,
+      estado: schema.perfume.estado,
+      valoracion: schema.perfume.valoracion,
+      notasPersonales: schema.perfume.notasPersonales,
+    })
     .from(schema.perfume)
+    .innerJoin(schema.ficha, eq(schema.ficha.id, schema.perfume.fichaId))
     .where(eq(schema.perfume.userId, userId))
-    .orderBy(asc(schema.perfume.marca), asc(schema.perfume.nombre));
+    .orderBy(asc(schema.ficha.marca), asc(schema.ficha.nombre));
 
   const ids = perfumes.map((p) => p.id);
   if (ids.length === 0) return serializarCsv([[...CABECERAS_COLECCION]]);
 
   const [notas, familias, contextos, estaciones, momentos] = await Promise.all([
+    // La piramide y las familias son de la ficha; se leen por el frasco para
+    // seguir agrupando por perfume como el resto de columnas.
     db
       .select({
-        perfumeId: schema.perfumeNota.perfumeId,
-        nivel: schema.perfumeNota.nivel,
+        perfumeId: schema.perfume.id,
+        nivel: schema.fichaNota.nivel,
         nombre: schema.nota.nombre,
-        orden: schema.perfumeNota.orden,
+        orden: schema.fichaNota.orden,
       })
-      .from(schema.perfumeNota)
-      .innerJoin(schema.nota, eq(schema.nota.id, schema.perfumeNota.notaId))
-      .where(inArray(schema.perfumeNota.perfumeId, ids))
-      .orderBy(asc(schema.perfumeNota.orden)),
+      .from(schema.perfume)
+      .innerJoin(schema.fichaNota, eq(schema.fichaNota.fichaId, schema.perfume.fichaId))
+      .innerJoin(schema.nota, eq(schema.nota.id, schema.fichaNota.notaId))
+      .where(inArray(schema.perfume.id, ids))
+      .orderBy(asc(schema.fichaNota.orden)),
     db
-      .select({ perfumeId: schema.perfumeFamilia.perfumeId, nombre: schema.familia.nombre })
-      .from(schema.perfumeFamilia)
-      .innerJoin(schema.familia, eq(schema.familia.id, schema.perfumeFamilia.familiaId))
-      .where(inArray(schema.perfumeFamilia.perfumeId, ids)),
+      .select({ perfumeId: schema.perfume.id, nombre: schema.familia.nombre })
+      .from(schema.perfume)
+      .innerJoin(schema.fichaFamilia, eq(schema.fichaFamilia.fichaId, schema.perfume.fichaId))
+      .innerJoin(schema.familia, eq(schema.familia.id, schema.fichaFamilia.familiaId))
+      .where(inArray(schema.perfume.id, ids))
+      .orderBy(asc(schema.fichaFamilia.orden)),
     db
       .select({ perfumeId: schema.perfumeContexto.perfumeId, nombre: schema.contexto.nombre })
       .from(schema.perfumeContexto)
@@ -135,8 +153,8 @@ export async function exportarUsosCsv(userId: string): Promise<string> {
   const usos = await db
     .select({
       fecha: schema.uso.fecha,
-      perfume: schema.perfume.nombre,
-      marca: schema.perfume.marca,
+      perfume: schema.ficha.nombre,
+      marca: schema.ficha.marca,
       momento: schema.uso.momento,
       contexto: schema.contexto.nombre,
       sprays: schema.uso.sprays,
@@ -151,6 +169,7 @@ export async function exportarUsosCsv(userId: string): Promise<string> {
     })
     .from(schema.uso)
     .innerJoin(schema.perfume, eq(schema.perfume.id, schema.uso.perfumeId))
+    .innerJoin(schema.ficha, eq(schema.ficha.id, schema.perfume.fichaId))
     .innerJoin(schema.contexto, eq(schema.contexto.id, schema.uso.contextoId))
     .where(eq(schema.uso.userId, userId))
     .orderBy(asc(schema.uso.fecha));
@@ -201,8 +220,9 @@ export async function previsualizarImportacion(
     db.select().from(schema.contexto).where(eq(schema.contexto.userId, userId)),
     db.select().from(schema.familia),
     db
-      .select({ clave: schema.perfume.busquedaNormalizada })
+      .select({ clave: schema.ficha.busquedaNormalizada })
       .from(schema.perfume)
+      .innerJoin(schema.ficha, eq(schema.ficha.id, schema.perfume.fichaId))
       .where(eq(schema.perfume.userId, userId)),
   ]);
 
@@ -274,8 +294,9 @@ export async function importarColeccion(
     db.select().from(schema.contexto).where(eq(schema.contexto.userId, userId)),
     db.select().from(schema.familia),
     db
-      .select({ clave: schema.perfume.busquedaNormalizada })
+      .select({ clave: schema.ficha.busquedaNormalizada })
       .from(schema.perfume)
+      .innerJoin(schema.ficha, eq(schema.ficha.id, schema.perfume.fichaId))
       .where(eq(schema.perfume.userId, userId)),
   ]);
 
@@ -340,7 +361,13 @@ export async function importarColeccion(
 
 /* ------------------------------------------------------------------ backup */
 
-/** Volcado completo. Lo que sale de aqui vuelve a entrar tal cual. */
+/**
+ * Volcado completo. Lo que sale de aqui vuelve a entrar tal cual.
+ *
+ * Version 2: los perfumes son frascos que apuntan a `fichas`, y la copia lleva
+ * las fichas de mis frascos con su piramide y familias. Asi se puede restaurar
+ * en otra base, o despues de que otra persona haya cambiado la ficha.
+ */
 export async function copiaCompleta(userId: string) {
   const db = crearDb();
   const perfumes = await db
@@ -348,10 +375,14 @@ export async function copiaCompleta(userId: string) {
     .from(schema.perfume)
     .where(eq(schema.perfume.userId, userId));
   const ids = perfumes.map((p) => p.id);
-  const dePerfumes = <T extends { perfumeId: string }>(filas: T[]) =>
-    filas.filter((f) => ids.includes(f.perfumeId));
+  const fichaIds = [...new Set(perfumes.map((p) => p.fichaId))];
+  // Las tablas hijas no llevan `user_id`: se filtran por los perfumes propios
+  // en la consulta, no despues, para no leer las filas de las demas cuentas.
+  // Con `inArray` vacio no hay consulta valida; sin perfumes no hay hijas.
+  const conIds = <T>(consulta: () => Promise<T[]>) =>
+    ids.length === 0 ? Promise.resolve([] as T[]) : consulta();
 
-  const [contextos, usos, deseos, ajustes, notas, familias, pn, pf, pc, pe, pm] =
+  const [contextos, usos, deseos, ajustes, notas, familias, fichas, fn, ff, pc, pe, pm] =
     await Promise.all([
       db.select().from(schema.contexto).where(eq(schema.contexto.userId, userId)),
       db.select().from(schema.uso).where(eq(schema.uso.userId, userId)),
@@ -359,39 +390,114 @@ export async function copiaCompleta(userId: string) {
       db.select().from(schema.ajuste).where(eq(schema.ajuste.userId, userId)),
       db.select().from(schema.nota),
       db.select().from(schema.familia),
-      db.select().from(schema.perfumeNota),
-      db.select().from(schema.perfumeFamilia),
-      db.select().from(schema.perfumeContexto),
-      db.select().from(schema.perfumeEstacion),
-      db.select().from(schema.perfumeMomento),
+      conIds(() => db.select().from(schema.ficha).where(inArray(schema.ficha.id, fichaIds))),
+      conIds(() =>
+        db.select().from(schema.fichaNota).where(inArray(schema.fichaNota.fichaId, fichaIds)),
+      ),
+      conIds(() =>
+        db.select().from(schema.fichaFamilia).where(inArray(schema.fichaFamilia.fichaId, fichaIds)),
+      ),
+      conIds(() =>
+        db
+          .select()
+          .from(schema.perfumeContexto)
+          .where(inArray(schema.perfumeContexto.perfumeId, ids)),
+      ),
+      conIds(() =>
+        db
+          .select()
+          .from(schema.perfumeEstacion)
+          .where(inArray(schema.perfumeEstacion.perfumeId, ids)),
+      ),
+      conIds(() =>
+        db.select().from(schema.perfumeMomento).where(inArray(schema.perfumeMomento.perfumeId, ids)),
+      ),
     ]);
 
   return {
-    version: 1 as const,
+    version: 2 as const,
     generado: new Date().toISOString(),
     perfumes,
+    fichas,
+    fichaNota: fn,
+    fichaFamilia: ff,
     contextos,
     usos,
     wishlist: deseos,
     ajustes,
     notas,
     familias,
-    perfumeNota: dePerfumes(pn),
-    perfumeFamilia: dePerfumes(pf),
-    perfumeContexto: dePerfumes(pc),
-    perfumeEstacion: dePerfumes(pe),
-    perfumeMomento: dePerfumes(pm),
+    perfumeContexto: pc,
+    perfumeEstacion: pe,
+    perfumeMomento: pm,
   };
 }
 
 export type Copia = Awaited<ReturnType<typeof copiaCompleta>>;
 
+type FilaFicha = Copia['fichas'][number];
+
+/**
+ * Las copias de antes de las fichas compartidas llevaban la ficha dentro de
+ * cada perfume y la piramide en `perfumeNota`/`perfumeFamilia`. Se traducen a
+ * la forma nueva: una ficha por perfume, con el mismo id, y al restaurar ya se
+ * juntan con las que existan.
+ */
+interface CopiaV1 extends Omit<Copia, 'version' | 'perfumes' | 'fichas' | 'fichaNota' | 'fichaFamilia'> {
+  version: 1;
+  perfumes: (Omit<Copia['perfumes'][number], 'fichaId'> &
+    Pick<FilaFicha, 'nombre' | 'marca' | 'concentracion' | 'anioLanzamiento' | 'fragranticaUrl'>)[];
+  perfumeNota: { perfumeId: string; notaId: string; nivel: 'SALIDA' | 'CORAZON' | 'FONDO'; orden: number }[];
+  perfumeFamilia: { perfumeId: string; familiaId: string; orden: number }[];
+}
+
+export function aVersion2(copia: Copia | CopiaV1): Copia {
+  if (copia.version === 2) return copia;
+  if (copia.version !== 1) throw new Error('Versión de copia no soportada.');
+  const { perfumeNota, perfumeFamilia, ...resto } = copia;
+  return {
+    ...resto,
+    version: 2,
+    perfumes: copia.perfumes.map((p) => ({
+      id: p.id,
+      userId: p.userId,
+      fichaId: p.id,
+      volumenMl: p.volumenMl,
+      fechaCompra: p.fechaCompra,
+      estado: p.estado,
+      valoracion: p.valoracion,
+      notasPersonales: p.notasPersonales,
+      archivado: p.archivado,
+      creadoEn: p.creadoEn,
+      actualizadoEn: p.actualizadoEn,
+    })),
+    fichas: copia.perfumes.map((p) => ({
+      id: p.id,
+      nombre: p.nombre,
+      marca: p.marca,
+      busquedaNormalizada: claveBusqueda(p.nombre, p.marca),
+      concentracion: p.concentracion,
+      anioLanzamiento: p.anioLanzamiento,
+      fragranticaUrl: p.fragranticaUrl,
+      creadaPor: p.userId,
+      creadoEn: p.creadoEn,
+      actualizadoEn: p.actualizadoEn,
+    })),
+    fichaNota: perfumeNota.map(({ perfumeId, ...n }) => ({ ...n, fichaId: perfumeId })),
+    fichaFamilia: perfumeFamilia.map(({ perfumeId, ...f }) => ({ ...f, fichaId: perfumeId })),
+  };
+}
+
 /**
  * Restauracion: reemplaza TODO lo del usuario por lo que traiga la copia.
  * Destructivo a proposito; la pantalla lo confirma antes de llamar aqui.
+ *
+ * Las fichas no se reemplazan, porque son de todos: cada ficha de la copia se
+ * junta con la que ya haya con el mismo nombre, marca y concentracion, y solo
+ * se le rellena lo que le falte. Si no existe, se crea.
  */
-export async function restaurarCopia(userId: string, copia: Copia): Promise<void> {
-  if (copia.version !== 1) throw new Error('Versión de copia no soportada.');
+export async function restaurarCopia(userId: string, entrada: Copia | CopiaV1): Promise<void> {
+  const copia = aVersion2(entrada);
   const db = crearDb();
 
   // Orden inverso al de las dependencias: primero lo que apunta a otros.
@@ -408,8 +514,6 @@ export async function restaurarCopia(userId: string, copia: Copia): Promise<void
   const ids = mios.map((p) => p.id);
   if (ids.length > 0) {
     await Promise.all([
-      db.delete(schema.perfumeNota).where(inArray(schema.perfumeNota.perfumeId, ids)),
-      db.delete(schema.perfumeFamilia).where(inArray(schema.perfumeFamilia.perfumeId, ids)),
       db.delete(schema.perfumeContexto).where(inArray(schema.perfumeContexto.perfumeId, ids)),
       db.delete(schema.perfumeEstacion).where(inArray(schema.perfumeEstacion.perfumeId, ids)),
       db.delete(schema.perfumeMomento).where(inArray(schema.perfumeMomento.perfumeId, ids)),
@@ -426,31 +530,80 @@ export async function restaurarCopia(userId: string, copia: Copia): Promise<void
     await db.insert(schema.familia).values(copia.familias).onConflictDoNothing();
   }
 
+  // Las notas y familias de la copia se resuelven por nombre y slug, no por
+  // id: en otra base la misma nota puede tener otro id.
+  const familiasBase = await db.select().from(schema.familia);
+  const familiaPorSlug = new Map(familiasBase.map((f) => [f.slug, f.id]));
+  const slugDeFamilia = new Map(copia.familias.map((f) => [f.id, f.slug]));
+  const nombreDeNota = new Map(copia.notas.map((n) => [n.id, n.nombre]));
+
+  const fichaReal = new Map<string, string>();
+  for (const ficha of copia.fichas) {
+    const notas = copia.fichaNota
+      .filter((n) => n.fichaId === ficha.id)
+      .sort((a, b) => a.orden - b.orden)
+      .map((n) => ({ nombre: nombreDeNota.get(n.notaId) ?? '', nivel: n.nivel, orden: n.orden }))
+      .filter((n) => n.nombre);
+    const familiaIds = copia.fichaFamilia
+      .filter((f) => f.fichaId === ficha.id)
+      .sort((a, b) => a.orden - b.orden)
+      .map((f) => familiaPorSlug.get(slugDeFamilia.get(f.familiaId) ?? ''))
+      .filter((id): id is string => Boolean(id));
+    fichaReal.set(
+      ficha.id,
+      await resolverFicha(userId, {
+        nombre: ficha.nombre,
+        marca: ficha.marca,
+        concentracion: ficha.concentracion,
+        anioLanzamiento: ficha.anioLanzamiento,
+        fragranticaUrl: ficha.fragranticaUrl,
+        notas,
+        familiaIds,
+      }),
+    );
+  }
+
   const conUsuario = <T extends object>(filas: T[]) => filas.map((f) => ({ ...f, userId }));
+
+  /*
+   * Las filas que cuelgan de un perfume o de un contexto solo entran si ese
+   * perfume o contexto viene en la misma copia. El `user_id` de perfumes,
+   * contextos y usos se fuerza al de la sesion, pero las tablas hijas no lo
+   * tienen: una copia manipulada podria meter contextos o usos en los
+   * perfumes de otra cuenta con solo poner sus ids.
+   */
+  const perfumes = copia.perfumes
+    .filter((p) => fichaReal.has(p.fichaId))
+    .map((p) => ({ ...p, fichaId: fichaReal.get(p.fichaId)! }));
+  const perfumesCopia = new Set(perfumes.map((p) => p.id));
+  const contextosCopia = new Set(copia.contextos.map((c) => c.id));
+  const deMisPerfumes = <T extends { perfumeId: string }>(filas: T[]) =>
+    filas.filter((f) => perfumesCopia.has(f.perfumeId));
+  const perfumeEstacion = deMisPerfumes(copia.perfumeEstacion);
+  const perfumeMomento = deMisPerfumes(copia.perfumeMomento);
+  const perfumeContexto = deMisPerfumes(copia.perfumeContexto).filter((f) =>
+    contextosCopia.has(f.contextoId),
+  );
+  const usos = deMisPerfumes(copia.usos).filter((u) => contextosCopia.has(u.contextoId));
+  const deseos = copia.wishlist.map((d) =>
+    d.convertidoAPerfumeId && !perfumesCopia.has(d.convertidoAPerfumeId)
+      ? { ...d, convertidoAPerfumeId: null }
+      : d,
+  );
 
   if (copia.contextos.length > 0) {
     await db.insert(schema.contexto).values(conUsuario(copia.contextos));
   }
-  if (copia.perfumes.length > 0) {
-    await db.insert(schema.perfume).values(conUsuario(copia.perfumes));
+  if (perfumes.length > 0) {
+    await db.insert(schema.perfume).values(conUsuario(perfumes));
   }
   await Promise.all([
-    copia.perfumeNota.length ? db.insert(schema.perfumeNota).values(copia.perfumeNota) : null,
-    copia.perfumeFamilia.length
-      ? db.insert(schema.perfumeFamilia).values(copia.perfumeFamilia)
-      : null,
-    copia.perfumeContexto.length
-      ? db.insert(schema.perfumeContexto).values(copia.perfumeContexto)
-      : null,
-    copia.perfumeEstacion.length
-      ? db.insert(schema.perfumeEstacion).values(copia.perfumeEstacion)
-      : null,
-    copia.perfumeMomento.length
-      ? db.insert(schema.perfumeMomento).values(copia.perfumeMomento)
-      : null,
+    perfumeContexto.length ? db.insert(schema.perfumeContexto).values(perfumeContexto) : null,
+    perfumeEstacion.length ? db.insert(schema.perfumeEstacion).values(perfumeEstacion) : null,
+    perfumeMomento.length ? db.insert(schema.perfumeMomento).values(perfumeMomento) : null,
   ]);
-  if (copia.usos.length > 0) await db.insert(schema.uso).values(conUsuario(copia.usos));
-  if (copia.wishlist.length > 0) await db.insert(schema.wishlist).values(conUsuario(copia.wishlist));
+  if (usos.length > 0) await db.insert(schema.uso).values(conUsuario(usos));
+  if (deseos.length > 0) await db.insert(schema.wishlist).values(conUsuario(deseos));
   if (copia.ajustes.length > 0) {
     await db.insert(schema.ajuste).values(conUsuario(copia.ajustes)).onConflictDoNothing();
   }

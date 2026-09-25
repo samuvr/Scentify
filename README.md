@@ -1,6 +1,7 @@
 # Scentify
 
-Webapp personal de gestión de colección de perfumes. Un solo usuario, uso principal
+Webapp personal de gestión de colección de perfumes. Una cuenta por persona, cada
+una con su colección, abierta a invitados con código (ver «Cuentas para amigos»); uso principal
 desde el móvil, de pie, por la mañana, en menos de diez segundos.
 
 La especificación funcional completa vive en [`spec-webapp-perfumes.md`](./spec-webapp-perfumes.md).
@@ -22,7 +23,7 @@ restricciones de la sección 11.
 | Offline | **Service Worker propio + IndexedDB** | Cola de usos offline con Background Sync; sin depender de plugins que envuelven el build. |
 | Tiempo | **Open-Meteo** (`forecast` con `past_days`) | Gratuita, sin API key ni registro; una llamada al día, cacheada en servidor. |
 | Tests | **Vitest** | Arranque inmediato, misma resolución de módulos y alias que la app. |
-| Despliegue | **Vercel** (hobby) + **Neon** (free) | Coste cero real; `git push` despliega y las migraciones corren en el `buildCommand`. |
+| Despliegue | **Vercel** (hobby) + **Neon** (free) | Coste cero real; `git push` despliega y las migraciones corren en el `buildCommand` de producción. |
 
 ### Justificación
 
@@ -148,6 +149,8 @@ MVP y fase 2 completos.
 | Solapamiento en wishlist (secc. 10.2) | Hecho, con tests |
 | Modo viaje (secc. 10.3) | Hecho, con tests |
 | Recordatorio diario (secc. 10.4) | Hecho, con tests |
+| Cuentas para amigos con código de invitación | Hecho, con tests |
+| Fichas de perfume compartidas entre cuentas | Hecho, con tests |
 
 ---
 
@@ -170,7 +173,7 @@ es lo único que funciona igual en Windows, macOS y Linux.
 En `.env` hacen falta tres cosas para arrancar. `DATABASE_URL` es la cadena de Neon —la
 directa, sin `-pooler`, que sirve igual para migrar, sembrar y servir la app—.
 `AUTH_SECRET` es cualquier cadena larga y aleatoria. `SCENTIFY_USER_PASSWORD` fija la
-contraseña del único usuario: **sin ella el usuario se crea sin acceso posible**. El
+contraseña del primer usuario, el tuyo: **sin ella el usuario se crea sin acceso posible**. El
 correo de `SCENTIFY_USER_EMAIL` se guarda siempre en minúsculas, porque así es como lo
 busca el login.
 
@@ -202,8 +205,15 @@ Neon (base) → variables en Vercel → importar el repo → sembrar el usuario
 3. **Variables de entorno**, antes del primer despliegue. `DATABASE_URL` y `AUTH_SECRET`
    son las únicas imprescindibles. Si se añaden después, hay que volver a desplegar.
 4. **Desplegar.** El `buildCommand` de `vercel.json` aplica las migraciones antes de
-   compilar, así que cada despliegue deja la base al día. Un fallo de conexión rompe el
-   build en vez de publicar una app sin tablas, que es lo que se quiere.
+   compilar, así que cada despliegue de producción deja la base al día. Un fallo de
+   conexión rompe el build en vez de publicar una app sin tablas, que es lo que se quiere.
+
+   **Las previews no migran.** Cada PR tiene su despliegue de preview, y si comparte
+   `DATABASE_URL` con producción migraría la base real antes de fusionar, con la versión
+   publicada todavía en el código viejo. `src/db/migrate.ts` solo migra cuando
+   `VERCEL_ENV` es `production`. Si las previews tienen base propia (una rama de Neon,
+   por ejemplo con la integración de Neon para Vercel), pon
+   `SCENTIFY_MIGRAR_EN_PREVIEW=1` en el entorno Preview y migrarán también.
 5. **Sembrar el usuario**, una sola vez, desde local apuntando a Neon:
 
    ```bash
@@ -218,6 +228,10 @@ Neon (base) → variables en Vercel → importar el repo → sembrar el usuario
    forma de **cambiar la contraseña**: si se da `SCENTIFY_USER_PASSWORD` se actualiza,
    y si no se da se conserva la que hubiera. La salida dice siempre en qué estado
    queda el acceso, leyéndolo de la base.
+
+Para que tus amigos puedan crearse cuenta hace falta además
+`SCENTIFY_CODIGO_INVITACION` (ver «Cuentas para amigos»). Sin ella el registro está
+cerrado y la app sigue siendo solo tuya.
 
 Para el recordatorio diario hacen falta además `VAPID_PUBLIC_KEY`,
 `VAPID_PRIVATE_KEY`, `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_SUBJECT` y `CRON_SECRET`
@@ -238,6 +252,75 @@ src/dominio/        Lógica pura: idoneidad, estación, recomendación, CSV,
 src/servicios/      Acceso a datos, auth, clima, Fragrantica, importación
 tests/              Tests de dominio; tests/integracion/ contra PostgreSQL
 ```
+
+### Cuentas para amigos
+
+Cada cuenta tiene su propia colección, sus usos, su wishlist, sus contextos y sus
+umbrales, y nadie ve los de nadie. Lo que sí es común son las **fichas** de los
+perfumes (ver «Fichas compartidas») y el vocabulario de notas y familias.
+
+El registro está en `/registro` y **solo funciona con código de invitación**:
+
+1. En Vercel, añade la variable `SCENTIFY_CODIGO_INVITACION` con el código que
+   quieras (algo largo: es lo único que separa tu base de Neon de cualquiera que
+   encuentre la URL) y vuelve a desplegar.
+2. Pásale a tu amigo el enlace con el código ya puesto:
+   `https://<tu-app>.vercel.app/registro?codigo=<el código>`. También puede ir al
+   login y pulsar «Crea tu cuenta».
+3. Al crear la cuenta se le siembran los seis contextos y los umbrales por defecto
+   —lo mismo que hace `db:seed` contigo— y entra directamente.
+
+Para cerrar el registro, borra la variable y vuelve a desplegar; las cuentas que ya
+existan siguen funcionando. Cambiar el código invalida los enlaces que hayas pasado.
+No hay recuperación de contraseña: si alguien la olvida, hay que cambiársela a mano
+en la base.
+
+Con la app de un solo usuario no importaba que una consulta se fiara del id que
+mandaba el cliente. Con varias cuentas sí, y se ha cerrado: registrar un uso, dar de
+alta o editar un perfume, editar un deseo, restaurar una copia y borrar una
+suscripción de avisos comprueban que los perfumes, contextos y deseos que llegan son
+de la cuenta de la sesión. `tests/integracion/registro.test.ts` lo fija con dos
+cuentas reales.
+
+### Fichas compartidas
+
+Un perfume se da de alta **una sola vez** para todo el grupo. Un perfume de tu
+colección son dos cosas:
+
+| Ficha: común a todos | Frasco: solo tuyo |
+|---|---|
+| Nombre, marca, concentración, año | Lo tengo / lo tuve, archivado |
+| URL de Fragrantica | Valoración, volumen, fecha de compra |
+| Pirámide de notas y familias | Notas personales |
+| | Estaciones, momentos y contextos |
+
+Las estaciones, los momentos y los contextos son del frasco porque son tu opinión
+de cuándo ponértelo, y son lo que mueve la recomendación: que a alguien un perfume
+le parezca de invierno no te lo tiene que quitar a ti del verano.
+
+- **Al dar de alta**, mientras escribes el nombre aparece «Ya está en Scentify» con
+  las fichas que coinciden. «Usar esta ficha» rellena de golpe lo común y te lleva a
+  lo tuyo, con las estaciones y los momentos de quien la dio de alta ya marcados
+  como punto de partida. Si ya lo tienes, te lleva a tu frasco.
+- **Compartir desde Fragrantica** una ficha que alguien ya dio de alta la usa
+  directamente, sin volver a leerla.
+- **Editar la ficha la edita para todos.** La pantalla de edición avisa cuando
+  alguien más tiene el perfume. Si al corregir la concentración resulta que esa
+  ficha ya existe (lo metiste como EDT y era EDP), tu frasco pasa a la ficha que
+  ya existía, en vez de dar error.
+- **Dar de alta a mano algo que ya existe**, sin elegirlo de la lista, o importarlo
+  por CSV, lo engancha a la ficha que ya hay y solo rellena lo que le falte. Quien
+  lo escribe no ha visto la ficha, y así no puede dejar sin notas a los demás.
+
+La clave de una ficha es nombre + marca + concentración, sin distinguir tildes ni
+mayúsculas. El EDT y el EDP de un mismo perfume son dos fichas, porque huelen
+distinto.
+
+La migración `0003_fichas_compartidas` convierte los perfumes que ya hubiera en
+fichas + frascos sin perder nada: los ids de los perfumes no cambian, así que los
+usos, los descartes y la wishlist siguen apuntando donde estaban. La copia de
+seguridad pasa a la versión 2, con las fichas dentro, y restaurar una copia de la
+versión 1 sigue funcionando.
 
 ### El recordatorio diario
 
@@ -295,6 +378,12 @@ Lo que la ficha real hace y no era evidente:
   `fragrantica-pegado-ruidoso.txt` es esa página entera y lo fija.
 - La misma página repite cada nota dos veces y el bloque de votos entero otra vez más;
   el parser deduplica y se queda con el primer bloque.
+- Los acordes principales marcan solas las familias que coinciden
+  (`src/dominio/familias.ts`). Fragrantica los escribe en plural a veces
+  («florales», «afrutados») y en inglés en la ficha inglesa, así que se comparan en
+  singular y con una tabla de alias, pero siempre enteros: «cálido especiado» tiene
+  familia propia y no marca además «Especiado». Lo que no tiene familia en Scentify
+  (lavanda, herbal…) se dice debajo en vez de inventar una.
 
 **En el móvil: Compartir → Scentify.** Seleccionar y copiar texto en un teléfono es
 incómodo, así que la app se registra como destino de compartir (`share_target` del

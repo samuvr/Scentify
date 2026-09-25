@@ -18,6 +18,7 @@ import type { DuracionPercibida, Estacion, Momento } from '@/dominio/tipos';
 import { leerConfiguracion } from './ajustes';
 import { obtenerClima } from './clima';
 import { marcasParaIdoneidad } from './consultas';
+import { ErrorValidacion } from './perfumes';
 
 /** Fecha de hoy en 'YYYY-MM-DD', en la zona horaria de la ubicacion del usuario. */
 export function hoyIso(zona = 'Europe/Madrid'): string {
@@ -79,6 +80,7 @@ export async function previsualizarIdoneidad(
   userId: string,
   datos: Pick<DatosUso, 'perfumeId' | 'fecha' | 'momento' | 'contextoId' | 'estacionesForzadas'>,
 ): Promise<{ idoneidad: Idoneidad; estacion: ResultadoEstacionEfectiva }> {
+  await comprobarPropiedad(userId, datos.perfumeId, datos.contextoId);
   const estacion = await resolverEstacion(userId, datos);
   const marcas = await marcasParaIdoneidad(datos.perfumeId);
   const idoneidad = calcularIdoneidad(marcas, {
@@ -87,6 +89,33 @@ export async function previsualizarIdoneidad(
     estacionesCompatibles: estacion.estaciones,
   });
   return { idoneidad, estacion };
+}
+
+/**
+ * El perfume y el contexto tienen que ser del usuario de la sesion. Las claves
+ * ajenas solo exigen que existan, asi que sin esto se podria apuntar un uso al
+ * perfume de otra cuenta y ver su nombre en el historial propio.
+ */
+async function comprobarPropiedad(
+  userId: string,
+  perfumeId: string,
+  contextoId: string,
+): Promise<void> {
+  const db = crearDb();
+  const [perfume, contexto] = await Promise.all([
+    db
+      .select({ id: schema.perfume.id })
+      .from(schema.perfume)
+      .where(and(eq(schema.perfume.userId, userId), eq(schema.perfume.id, perfumeId)))
+      .limit(1),
+    db
+      .select({ id: schema.contexto.id })
+      .from(schema.contexto)
+      .where(and(eq(schema.contexto.userId, userId), eq(schema.contexto.id, contextoId)))
+      .limit(1),
+  ]);
+  if (perfume.length === 0) throw new ErrorValidacion('Perfume no encontrado.');
+  if (contexto.length === 0) throw new ErrorValidacion('Contexto no encontrado.');
 }
 
 async function resolverEstacion(
@@ -185,8 +214,8 @@ export async function usosDelDia(userId: string, fecha: string) {
     .select({
       id: schema.uso.id,
       perfumeId: schema.uso.perfumeId,
-      nombre: schema.perfume.nombre,
-      marca: schema.perfume.marca,
+      nombre: schema.ficha.nombre,
+      marca: schema.ficha.marca,
       momento: schema.uso.momento,
       contexto: schema.contexto.nombre,
       sprays: schema.uso.sprays,
@@ -198,6 +227,7 @@ export async function usosDelDia(userId: string, fecha: string) {
     })
     .from(schema.uso)
     .innerJoin(schema.perfume, eq(schema.perfume.id, schema.uso.perfumeId))
+    .innerJoin(schema.ficha, eq(schema.ficha.id, schema.perfume.fichaId))
     .innerJoin(schema.contexto, eq(schema.contexto.id, schema.uso.contextoId))
     .where(and(eq(schema.uso.userId, userId), eq(schema.uso.fecha, fecha)))
     .orderBy(sql`${schema.uso.creadoEn} desc`);

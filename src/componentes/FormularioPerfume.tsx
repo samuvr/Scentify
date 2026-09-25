@@ -10,12 +10,18 @@
  *
  * Los votos que llegan de Fragrantica se pintan junto a cada casilla y mueren
  * aqui: lo que se envia al servidor son unicamente mis selecciones (5.3).
+ *
+ * La ficha (nombre, marca, notas, familias, concentracion, anio) es comun a
+ * todas las cuentas. Al escribir el nombre se busca en ese catalogo, y elegir
+ * una ficha rellena todo eso de golpe: solo queda lo personal.
  */
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { accionGuardarPerfume, type RespuestaPerfume } from '@/app/acciones';
 import type { Estacion, Momento } from '@/dominio/tipos';
+import { familiasDeAcordes } from '@/dominio/familias';
 import type { FichaFragrantica, VotoEje } from '@/dominio/fragrantica';
+import type { FichaParaAlta } from '@/servicios/consultas';
 import { VALORES_VACIOS, type Nivel, type ValoresPerfume } from '@/componentes/valores-perfume';
 
 const NIVELES: { clave: Nivel; titulo: string }[] = [
@@ -31,6 +37,19 @@ const ESTACIONES: { clave: Estacion; nombre: string }[] = [
   { clave: 'INVIERNO', nombre: 'Invierno' },
 ];
 
+/** Primer paso que es solo mio: lo anterior viene hecho con la ficha. */
+const PRIMER_PASO_PERSONAL = 4;
+
+interface ResultadoCatalogo {
+  id: string;
+  nombre: string;
+  marca: string;
+  concentracion: string | null;
+  anioLanzamiento: number | null;
+  miPerfumeId: string | null;
+  personas: number;
+}
+
 const PASOS = [
   'Nombre y marca',
   'Fragrantica',
@@ -44,6 +63,29 @@ const PASOS = [
 
 function alternar<T>(lista: T[], valor: T): T[] {
   return lista.includes(valor) ? lista.filter((v) => v !== valor) : [...lista, valor];
+}
+
+/**
+ * Los acordes de Fragrantica bajo las familias: cuales se han marcado y cuales
+ * no tienen familia en Scentify, para que se vea por que falta algo.
+ */
+function AcordesDeFragrantica({
+  acordes,
+  familias,
+}: {
+  acordes: string[];
+  familias: { id: string; slug: string; nombre: string }[];
+}) {
+  const sinFamilia = acordes.filter((a) => familiasDeAcordes([a], familias).length === 0);
+  return (
+    <div className="space-y-1 text-xs text-texto-tenue">
+      <p>Acordes en Fragrantica: {acordes.join(', ')}.</p>
+      <p>
+        Se marcan solas las familias que coinciden.
+        {sinFamilia.length > 0 ? ` Sin familia en Scentify: ${sinFamilia.join(', ')}.` : ''}
+      </p>
+    </div>
+  );
 }
 
 /** Barra de apoyo con el voto de Fragrantica. Solo visual: no decide nada. */
@@ -66,9 +108,18 @@ export function FormularioPerfume({
   familias,
   notasConocidas,
   fichaInicial,
+  fichaCatalogo,
+  compartidaCon = 0,
 }: {
   perfumeId?: string;
   iniciales?: ValoresPerfume;
+  /**
+   * Ficha del catalogo que ya encaja con lo que llega, p. ej. la misma URL de
+   * Fragrantica compartida desde el movil. Se usa directamente.
+   */
+  fichaCatalogo?: FichaParaAlta | null;
+  /** Al editar: cuantas personas mas tienen este perfume y veran la ficha. */
+  compartidaCon?: number;
   /**
    * Ficha ya leida en el servidor, cuando se comparte el texto de la pagina
    * desde el movil. Llega parseada para no tener que mandar los 17 kB de
@@ -76,7 +127,7 @@ export function FormularioPerfume({
    */
   fichaInicial?: FichaFragrantica | null;
   contextos: { id: string; nombre: string }[];
-  familias: { id: string; nombre: string }[];
+  familias: { id: string; slug: string; nombre: string }[];
   notasConocidas: string[];
 }) {
   const router = useRouter();
@@ -86,9 +137,15 @@ export function FormularioPerfume({
    * seria pedir lo que ya se tiene, asi que se salta al de Fragrantica.
    */
   const compartida = !perfumeId && Boolean(iniciales?.fragranticaUrl || fichaInicial);
-  const [paso, setPaso] = useState(compartida ? 1 : 0);
-  const [v, setV] = useState<ValoresPerfume>(iniciales ?? VALORES_VACIOS);
-  const [duplicados, setDuplicados] = useState<{ id: string; nombre: string; marca: string }[]>([]);
+  const [paso, setPaso] = useState(
+    fichaCatalogo ? PRIMER_PASO_PERSONAL : compartida ? 1 : 0,
+  );
+  const [v, setV] = useState<ValoresPerfume>(() =>
+    fichaCatalogo ? conFicha(iniciales ?? VALORES_VACIOS, fichaCatalogo) : (iniciales ?? VALORES_VACIOS),
+  );
+  const [fichaId, setFichaId] = useState<string | null>(fichaCatalogo?.id ?? null);
+  const [catalogo, setCatalogo] = useState<ResultadoCatalogo[]>([]);
+  const [cargandoFicha, setCargandoFicha] = useState(false);
   const [ficha, setFicha] = useState<FichaFragrantica | null>(null);
   const [avisoFragrantica, setAvisoFragrantica] = useState<string | null>(null);
   const [textoPegado, setTextoPegado] = useState('');
@@ -108,6 +165,13 @@ export function FormularioPerfume({
   useEffect(() => {
     if (!compartida || yaConsultada.current) return;
     yaConsultada.current = true;
+    // Ya estaba en el catalogo: la ficha esta hecha y no hace falta leer nada.
+    // Del texto compartido solo interesan los votos, que acompañan las
+    // casillas de estaciones y momentos.
+    if (fichaCatalogo) {
+      if (fichaInicial) setFicha(fichaInicial);
+      return;
+    }
     // Si el texto compartido ya venia leido, no hay nada que pedir: se aplica
     // y se acabo. Solo se consulta cuando lo unico que hay es la direccion.
     if (fichaInicial) {
@@ -119,14 +183,48 @@ export function FormularioPerfume({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function comprobarDuplicados() {
-    if (perfumeId || v.nombre.trim().length < 3) return;
+  /**
+   * Mientras se escribe el nombre se mira si alguien lo ha dado de alta ya.
+   * Tambien es el aviso de duplicado: el resultado dice si ya lo tengo.
+   */
+  useEffect(() => {
+    if (perfumeId || fichaId || v.nombre.trim().length < 3) {
+      setCatalogo([]);
+      return;
+    }
+    const control = new AbortController();
+    const espera = setTimeout(async () => {
+      try {
+        const r = await fetch(`/api/catalogo?q=${encodeURIComponent(v.nombre)}`, {
+          signal: control.signal,
+        });
+        const datos = await r.json();
+        setCatalogo(datos.resultados ?? []);
+      } catch {
+        // Sin conexion no hay catalogo, pero el alta a mano sigue.
+      }
+    }, 300);
+    return () => {
+      clearTimeout(espera);
+      control.abort();
+    };
+  }, [v.nombre, perfumeId, fichaId]);
+
+  async function usarFicha(id: string) {
+    setCargandoFicha(true);
+    setError(null);
     try {
-      const r = await fetch(`/api/buscar?q=${encodeURIComponent(v.nombre)}`);
+      const r = await fetch(`/api/catalogo?id=${id}`);
       const datos = await r.json();
-      setDuplicados(datos.resultados ?? []);
+      if (!r.ok || !datos.ficha) throw new Error();
+      setV((previo) => conFicha(previo, datos.ficha));
+      setFichaId(id);
+      setCatalogo([]);
+      setPaso(PRIMER_PASO_PERSONAL);
     } catch {
-      // Sin conexion no hay aviso de duplicado, pero el alta sigue.
+      setError('No se ha podido cargar la ficha. Sigue a mano o inténtalo otra vez.');
+    } finally {
+      setCargandoFicha(false);
     }
   }
 
@@ -142,6 +240,8 @@ export function FormularioPerfume({
       marca: v.marca || nueva.marca || '',
       anioLanzamiento: v.anioLanzamiento || (nueva.anio ? String(nueva.anio) : ''),
       notas: v.notas.length > 0 ? v.notas : notasNuevas,
+      // Las familias que coinciden con los acordes, en su orden de fuerza.
+      familiaIds: v.familiaIds.length > 0 ? v.familiaIds : familiasDeAcordes(nueva.acordes, familias),
     });
   }
 
@@ -168,6 +268,7 @@ export function FormularioPerfume({
     setGuardando(true);
     setError(null);
     const respuesta: RespuestaPerfume = await accionGuardarPerfume(perfumeId ?? null, {
+      fichaId,
       nombre: v.nombre,
       marca: v.marca,
       concentracion: v.concentracion || null,
@@ -215,6 +316,30 @@ export function FormularioPerfume({
         </div>
       </div>
 
+      {perfumeId && compartidaCon > 0 ? (
+        <p className="aviso-atencion">
+          {compartidaCon === 1 ? 'Otra persona tiene' : `Otras ${compartidaCon} personas tienen`} este
+          perfume. Lo que cambies en nombre, marca, notas, familias, concentración o año lo verán
+          también; tus estaciones, momentos, contextos e inventario son solo tuyos.
+        </p>
+      ) : null}
+
+      {!perfumeId && fichaId ? (
+        <div className="aviso-hecho flex items-start justify-between gap-3">
+          <p>
+            Usando la ficha de Scentify de <strong className="text-texto">{v.nombre}</strong>. Solo
+            te queda lo tuyo: estaciones, momentos, contextos e inventario.
+          </p>
+          <button
+            type="button"
+            onClick={() => setFichaId(null)}
+            className="shrink-0 text-sm underline"
+          >
+            Quitar
+          </button>
+        </div>
+      ) : null}
+
       {paso === 0 ? (
         <section className="space-y-4">
           <div>
@@ -223,7 +348,6 @@ export function FormularioPerfume({
               id="nombre"
               value={v.nombre}
               onChange={(e) => cambiar({ nombre: e.target.value })}
-              onBlur={comprobarDuplicados}
               className="mt-1"
             />
           </div>
@@ -237,16 +361,38 @@ export function FormularioPerfume({
               className="mt-1"
             />
           </div>
-          {duplicados.length > 0 ? (
-            <div className="aviso-atencion">
-              <p className="font-medium">Puede que ya lo tengas:</p>
-              <ul className="mt-1 space-y-0.5 text-texto-tenue">
-                {duplicados.map((d) => (
-                  <li key={d.id}>
-                    {d.nombre} · {d.marca}
+          {catalogo.length > 0 ? (
+            <div className="tarjeta space-y-3">
+              <p className="font-medium">Ya está en Scentify</p>
+              <ul className="space-y-2">
+                {catalogo.map((c) => (
+                  <li key={c.id} className="flex items-center justify-between gap-3">
+                    <span className="min-w-0">
+                      <span className="block truncate">{c.nombre}</span>
+                      <span className="block truncate text-sm text-texto-tenue">
+                        {[c.marca, c.concentracion, c.anioLanzamiento].filter(Boolean).join(' · ')}
+                      </span>
+                    </span>
+                    {c.miPerfumeId ? (
+                      <a href={`/coleccion/${c.miPerfumeId}`} className="shrink-0 text-sm underline">
+                        Ya lo tienes
+                      </a>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={cargandoFicha}
+                        onClick={() => usarFicha(c.id)}
+                        className="boton-secundario shrink-0 px-3 text-sm"
+                      >
+                        Usar esta ficha
+                      </button>
+                    )}
                   </li>
                 ))}
               </ul>
+              <p className="text-sm text-texto-tenue">
+                Si no es ninguno, sigue: se creará una ficha nueva.
+              </p>
             </div>
           ) : null}
         </section>
@@ -394,9 +540,7 @@ export function FormularioPerfume({
             ))}
           </div>
           {ficha && ficha.acordes.length > 0 ? (
-            <p className="text-xs text-texto-tenue">
-              Acordes en Fragrantica: {ficha.acordes.join(', ')}
-            </p>
+            <AcordesDeFragrantica acordes={ficha.acordes} familias={familias} />
           ) : null}
         </section>
       ) : null}
@@ -605,4 +749,24 @@ export function FormularioPerfume({
       </datalist>
     </div>
   );
+}
+
+/**
+ * Vuelca una ficha del catalogo en el formulario. Lo de la ficha se sustituye
+ * entero; de las estaciones y los momentos, que son personales, solo se
+ * proponen los de quien la dio de alta si todavia no hay nada marcado.
+ */
+function conFicha(previo: ValoresPerfume, ficha: FichaParaAlta): ValoresPerfume {
+  return {
+    ...previo,
+    nombre: ficha.nombre,
+    marca: ficha.marca,
+    concentracion: ficha.concentracion ?? '',
+    anioLanzamiento: ficha.anioLanzamiento?.toString() ?? '',
+    fragranticaUrl: ficha.fragranticaUrl ?? previo.fragranticaUrl,
+    notas: ficha.notas,
+    familiaIds: ficha.familiaIds,
+    estaciones: previo.estaciones.length > 0 ? previo.estaciones : ficha.estaciones,
+    momentos: previo.momentos.length > 0 ? previo.momentos : ficha.momentos,
+  };
 }

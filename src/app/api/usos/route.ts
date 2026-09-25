@@ -9,6 +9,7 @@ import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { usuarioActual } from '@/servicios/auth';
+import { ErrorValidacion } from '@/servicios/perfumes';
 import { registrarUso } from '@/servicios/usos';
 import { yaRegistradoEse } from '@/servicios/consultas';
 
@@ -34,7 +35,17 @@ export async function POST(peticion: Request) {
     return NextResponse.json({ error: 'Datos no válidos' }, { status: 400 });
   }
 
-  const resultado = await registrarUso(userId, analisis.data);
+  let resultado;
+  try {
+    resultado = await registrarUso(userId, analisis.data);
+  } catch (error) {
+    // Un perfume que no es de esta cuenta. Es un 4xx a proposito: el service
+    // worker saca de la cola lo que no se arregla reintentando.
+    if (error instanceof ErrorValidacion) {
+      return NextResponse.json({ error: error.message }, { status: 404 });
+    }
+    throw error;
+  }
   revalidatePath('/');
   revalidatePath('/estadisticas');
 

@@ -25,6 +25,6 @@ export async function DELETE(peticion: Request) {
   if (!userId) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
 
   const { endpoint } = (await peticion.json().catch(() => ({}))) as { endpoint?: string };
-  if (endpoint) await borrarSuscripcion(endpoint);
+  if (endpoint) await borrarSuscripcion(userId, endpoint);
   return NextResponse.json({ ok: true });
 }
