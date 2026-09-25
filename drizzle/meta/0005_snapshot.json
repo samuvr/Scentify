@@ -1,0 +1,1780 @@
+{
+  "id": "ecc96978-ec30-42c0-a11a-08c24a52c4d6",
+  "prevId": "9bae1932-836f-4264-9a19-d1b9bb1d29c6",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.ajuste": {
+      "name": "ajuste",
+      "schema": "",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "clave": {
+          "name": "clave",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "valor": {
+          "name": "valor",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "descripcion": {
+          "name": "descripcion",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "actualizado_en": {
+          "name": "actualizado_en",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "ajuste_user_id_usuario_id_fk": {
+          "name": "ajuste_user_id_usuario_id_fk",
+          "tableFrom": "ajuste",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "tableTo": "usuario",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {
+        "pk_ajuste": {
+          "name": "pk_ajuste",
+          "columns": [
+            "user_id",
+            "clave"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.clima_diario": {
+      "name": "clima_diario",
+      "schema": "",
+      "columns": {
+        "lat": {
+          "name": "lat",
+          "type": "numeric(8, 5)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "lon": {
+          "name": "lon",
+          "type": "numeric(8, 5)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "fecha": {
+          "name": "fecha",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "temperatura_max": {
+          "name": "temperatura_max",
+          "type": "numeric(4, 1)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "temperatura_min": {
+          "name": "temperatura_min",
+          "type": "numeric(4, 1)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "humedad_media": {
+          "name": "humedad_media",
+          "type": "numeric(5, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "obtenido_en": {
+          "name": "obtenido_en",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "pk_clima_diario": {
+          "name": "pk_clima_diario",
+          "columns": [
+            "lat",
+            "lon",
+            "fecha"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.contexto": {
+      "name": "contexto",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "slug": {
+          "name": "slug",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "nombre": {
+          "name": "nombre",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "orden": {
+          "name": "orden",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "archivado": {
+          "name": "archivado",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "creado_en": {
+          "name": "creado_en",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "contexto_user_id_usuario_id_fk": {
+          "name": "contexto_user_id_usuario_id_fk",
+          "tableFrom": "contexto",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "tableTo": "usuario",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "uq_contexto_usuario_slug": {
+          "name": "uq_contexto_usuario_slug",
+          "columns": [
+            "user_id",
+            "slug"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.familia": {
+      "name": "familia",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "slug": {
+          "name": "slug",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "nombre": {
+          "name": "nombre",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "creado_en": {
+          "name": "creado_en",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "familia_slug_unique": {
+          "name": "familia_slug_unique",
+          "columns": [
+            "slug"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.ficha": {
+      "name": "ficha",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "nombre": {
+          "name": "nombre",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "marca": {
+          "name": "marca",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "busqueda_normalizada": {
+          "name": "busqueda_normalizada",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "concentracion": {
+          "name": "concentracion",
+          "type": "concentracion",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "anio_lanzamiento": {
+          "name": "anio_lanzamiento",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fragrantica_url": {
+          "name": "fragrantica_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "creada_por": {
+          "name": "creada_por",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "creado_en": {
+          "name": "creado_en",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "actualizado_en": {
+          "name": "actualizado_en",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "uq_ficha_clave": {
+          "name": "uq_ficha_clave",
+          "columns": [
+            {
+              "expression": "busqueda_normalizada",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "concentracion",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "with": {},
+          "method": "btree",
+          "where": "\"ficha\".\"concentracion\" is not null",
+          "concurrently": false
+        },
+        "uq_ficha_clave_sin_concentracion": {
+          "name": "uq_ficha_clave_sin_concentracion",
+          "columns": [
+            {
+              "expression": "busqueda_normalizada",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "with": {},
+          "method": "btree",
+          "where": "\"ficha\".\"concentracion\" is null",
+          "concurrently": false
+        },
+        "idx_ficha_busqueda": {
+          "name": "idx_ficha_busqueda",
+          "columns": [
+            {
+              "expression": "busqueda_normalizada",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "ficha_creada_por_usuario_id_fk": {
+          "name": "ficha_creada_por_usuario_id_fk",
+          "tableFrom": "ficha",
+          "columnsFrom": [
+            "creada_por"
+          ],
+          "tableTo": "usuario",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "set null"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "ck_ficha_anio": {
+          "name": "ck_ficha_anio",
+          "value": "\"ficha\".\"anio_lanzamiento\" is null or \"ficha\".\"anio_lanzamiento\" between 1700 and 2200"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.ficha_familia": {
+      "name": "ficha_familia",
+      "schema": "",
+      "columns": {
+        "ficha_id": {
+          "name": "ficha_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "familia_id": {
+          "name": "familia_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "orden": {
+          "name": "orden",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        }
+      },
+      "indexes": {
+        "idx_ficha_familia_familia": {
+          "name": "idx_ficha_familia_familia",
+          "columns": [
+            {
+              "expression": "familia_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "ficha_familia_ficha_id_ficha_id_fk": {
+          "name": "ficha_familia_ficha_id_ficha_id_fk",
+          "tableFrom": "ficha_familia",
+          "columnsFrom": [
+            "ficha_id"
+          ],
+          "tableTo": "ficha",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        },
+        "ficha_familia_familia_id_familia_id_fk": {
+          "name": "ficha_familia_familia_id_familia_id_fk",
+          "tableFrom": "ficha_familia",
+          "columnsFrom": [
+            "familia_id"
+          ],
+          "tableTo": "familia",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "restrict"
+        }
+      },
+      "compositePrimaryKeys": {
+        "pk_ficha_familia": {
+          "name": "pk_ficha_familia",
+          "columns": [
+            "ficha_id",
+            "familia_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.ficha_nota": {
+      "name": "ficha_nota",
+      "schema": "",
+      "columns": {
+        "ficha_id": {
+          "name": "ficha_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "nota_id": {
+          "name": "nota_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "nivel": {
+          "name": "nivel",
+          "type": "nivel_piramide",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "orden": {
+          "name": "orden",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        }
+      },
+      "indexes": {
+        "idx_ficha_nota_nota": {
+          "name": "idx_ficha_nota_nota",
+          "columns": [
+            {
+              "expression": "nota_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "ficha_nota_ficha_id_ficha_id_fk": {
+          "name": "ficha_nota_ficha_id_ficha_id_fk",
+          "tableFrom": "ficha_nota",
+          "columnsFrom": [
+            "ficha_id"
+          ],
+          "tableTo": "ficha",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        },
+        "ficha_nota_nota_id_nota_id_fk": {
+          "name": "ficha_nota_nota_id_nota_id_fk",
+          "tableFrom": "ficha_nota",
+          "columnsFrom": [
+            "nota_id"
+          ],
+          "tableTo": "nota",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "restrict"
+        }
+      },
+      "compositePrimaryKeys": {
+        "pk_ficha_nota": {
+          "name": "pk_ficha_nota",
+          "columns": [
+            "ficha_id",
+            "nota_id",
+            "nivel"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.nota": {
+      "name": "nota",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "nombre": {
+          "name": "nombre",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "nombre_normalizado": {
+          "name": "nombre_normalizado",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "creado_en": {
+          "name": "creado_en",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "idx_nota_normalizado": {
+          "name": "idx_nota_normalizado",
+          "columns": [
+            {
+              "expression": "nombre_normalizado",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "nota_nombre_normalizado_unique": {
+          "name": "nota_nombre_normalizado_unique",
+          "columns": [
+            "nombre_normalizado"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.perfume": {
+      "name": "perfume",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ficha_id": {
+          "name": "ficha_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "volumen_ml": {
+          "name": "volumen_ml",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fecha_compra": {
+          "name": "fecha_compra",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "estado": {
+          "name": "estado",
+          "type": "estado_perfume",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'LO_TENGO'"
+        },
+        "valoracion": {
+          "name": "valoracion",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "notas_personales": {
+          "name": "notas_personales",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "archivado": {
+          "name": "archivado",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "creado_en": {
+          "name": "creado_en",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "actualizado_en": {
+          "name": "actualizado_en",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "idx_perfume_usuario_estado": {
+          "name": "idx_perfume_usuario_estado",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "estado",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "archivado",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "idx_perfume_ficha": {
+          "name": "idx_perfume_ficha",
+          "columns": [
+            {
+              "expression": "ficha_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "perfume_user_id_usuario_id_fk": {
+          "name": "perfume_user_id_usuario_id_fk",
+          "tableFrom": "perfume",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "tableTo": "usuario",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        },
+        "perfume_ficha_id_ficha_id_fk": {
+          "name": "perfume_ficha_id_ficha_id_fk",
+          "tableFrom": "perfume",
+          "columnsFrom": [
+            "ficha_id"
+          ],
+          "tableTo": "ficha",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "restrict"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "ck_perfume_valoracion": {
+          "name": "ck_perfume_valoracion",
+          "value": "\"perfume\".\"valoracion\" is null or \"perfume\".\"valoracion\" between 1 and 5"
+        },
+        "ck_perfume_volumen": {
+          "name": "ck_perfume_volumen",
+          "value": "\"perfume\".\"volumen_ml\" is null or \"perfume\".\"volumen_ml\" > 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.perfume_contexto": {
+      "name": "perfume_contexto",
+      "schema": "",
+      "columns": {
+        "perfume_id": {
+          "name": "perfume_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "contexto_id": {
+          "name": "contexto_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "idx_perfume_contexto_contexto": {
+          "name": "idx_perfume_contexto_contexto",
+          "columns": [
+            {
+              "expression": "contexto_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "perfume_contexto_perfume_id_perfume_id_fk": {
+          "name": "perfume_contexto_perfume_id_perfume_id_fk",
+          "tableFrom": "perfume_contexto",
+          "columnsFrom": [
+            "perfume_id"
+          ],
+          "tableTo": "perfume",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        },
+        "perfume_contexto_contexto_id_contexto_id_fk": {
+          "name": "perfume_contexto_contexto_id_contexto_id_fk",
+          "tableFrom": "perfume_contexto",
+          "columnsFrom": [
+            "contexto_id"
+          ],
+          "tableTo": "contexto",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "restrict"
+        }
+      },
+      "compositePrimaryKeys": {
+        "pk_perfume_contexto": {
+          "name": "pk_perfume_contexto",
+          "columns": [
+            "perfume_id",
+            "contexto_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.perfume_estacion": {
+      "name": "perfume_estacion",
+      "schema": "",
+      "columns": {
+        "perfume_id": {
+          "name": "perfume_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "estacion": {
+          "name": "estacion",
+          "type": "estacion",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "perfume_estacion_perfume_id_perfume_id_fk": {
+          "name": "perfume_estacion_perfume_id_perfume_id_fk",
+          "tableFrom": "perfume_estacion",
+          "columnsFrom": [
+            "perfume_id"
+          ],
+          "tableTo": "perfume",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {
+        "pk_perfume_estacion": {
+          "name": "pk_perfume_estacion",
+          "columns": [
+            "perfume_id",
+            "estacion"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.perfume_momento": {
+      "name": "perfume_momento",
+      "schema": "",
+      "columns": {
+        "perfume_id": {
+          "name": "perfume_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "momento": {
+          "name": "momento",
+          "type": "momento",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "perfume_momento_perfume_id_perfume_id_fk": {
+          "name": "perfume_momento_perfume_id_perfume_id_fk",
+          "tableFrom": "perfume_momento",
+          "columnsFrom": [
+            "perfume_id"
+          ],
+          "tableTo": "perfume",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {
+        "pk_perfume_momento": {
+          "name": "pk_perfume_momento",
+          "columns": [
+            "perfume_id",
+            "momento"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.push_suscripcion": {
+      "name": "push_suscripcion",
+      "schema": "",
+      "columns": {
+        "endpoint": {
+          "name": "endpoint",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "p256dh": {
+          "name": "p256dh",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "auth": {
+          "name": "auth",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "creado_en": {
+          "name": "creado_en",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "idx_push_usuario": {
+          "name": "idx_push_usuario",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "push_suscripcion_user_id_usuario_id_fk": {
+          "name": "push_suscripcion_user_id_usuario_id_fk",
+          "tableFrom": "push_suscripcion",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "tableTo": "usuario",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.recomendacion_descarte": {
+      "name": "recomendacion_descarte",
+      "schema": "",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "perfume_id": {
+          "name": "perfume_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "fecha": {
+          "name": "fecha",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "current_date"
+        },
+        "creado_en": {
+          "name": "creado_en",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "recomendacion_descarte_user_id_usuario_id_fk": {
+          "name": "recomendacion_descarte_user_id_usuario_id_fk",
+          "tableFrom": "recomendacion_descarte",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "tableTo": "usuario",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        },
+        "recomendacion_descarte_perfume_id_perfume_id_fk": {
+          "name": "recomendacion_descarte_perfume_id_perfume_id_fk",
+          "tableFrom": "recomendacion_descarte",
+          "columnsFrom": [
+            "perfume_id"
+          ],
+          "tableTo": "perfume",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {
+        "pk_recomendacion_descarte": {
+          "name": "pk_recomendacion_descarte",
+          "columns": [
+            "user_id",
+            "perfume_id",
+            "fecha"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.recordatorio_enviado": {
+      "name": "recordatorio_enviado",
+      "schema": "",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "fecha": {
+          "name": "fecha",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "enviado_en": {
+          "name": "enviado_en",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "recordatorio_enviado_user_id_usuario_id_fk": {
+          "name": "recordatorio_enviado_user_id_usuario_id_fk",
+          "tableFrom": "recordatorio_enviado",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "tableTo": "usuario",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {
+        "pk_recordatorio_enviado": {
+          "name": "pk_recordatorio_enviado",
+          "columns": [
+            "user_id",
+            "fecha"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.uso": {
+      "name": "uso",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "perfume_id": {
+          "name": "perfume_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "fecha": {
+          "name": "fecha",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "current_date"
+        },
+        "momento": {
+          "name": "momento",
+          "type": "momento",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "contexto_id": {
+          "name": "contexto_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sprays": {
+          "name": "sprays",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "duracion_percibida": {
+          "name": "duracion_percibida",
+          "type": "duracion_percibida",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "valoracion_dia": {
+          "name": "valoracion_dia",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "idoneidad_pct": {
+          "name": "idoneidad_pct",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "idoneidad_detalle": {
+          "name": "idoneidad_detalle",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "estacion_efectiva": {
+          "name": "estacion_efectiva",
+          "type": "estacion",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "estaciones_efectivas": {
+          "name": "estaciones_efectivas",
+          "type": "estacion[]",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "origen_estacion": {
+          "name": "origen_estacion",
+          "type": "origen_estacion",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'TEMPERATURA'"
+        },
+        "comentario": {
+          "name": "comentario",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "creado_en": {
+          "name": "creado_en",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "idx_uso_usuario_fecha": {
+          "name": "idx_uso_usuario_fecha",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "fecha",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "idx_uso_perfume_fecha": {
+          "name": "idx_uso_perfume_fecha",
+          "columns": [
+            {
+              "expression": "perfume_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "fecha",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "idx_uso_contexto": {
+          "name": "idx_uso_contexto",
+          "columns": [
+            {
+              "expression": "contexto_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "uso_user_id_usuario_id_fk": {
+          "name": "uso_user_id_usuario_id_fk",
+          "tableFrom": "uso",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "tableTo": "usuario",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        },
+        "uso_perfume_id_perfume_id_fk": {
+          "name": "uso_perfume_id_perfume_id_fk",
+          "tableFrom": "uso",
+          "columnsFrom": [
+            "perfume_id"
+          ],
+          "tableTo": "perfume",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "restrict"
+        },
+        "uso_contexto_id_contexto_id_fk": {
+          "name": "uso_contexto_id_contexto_id_fk",
+          "tableFrom": "uso",
+          "columnsFrom": [
+            "contexto_id"
+          ],
+          "tableTo": "contexto",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "restrict"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "ck_uso_idoneidad": {
+          "name": "ck_uso_idoneidad",
+          "value": "\"uso\".\"idoneidad_pct\" in (0, 33, 67, 100)"
+        },
+        "ck_uso_valoracion_dia": {
+          "name": "ck_uso_valoracion_dia",
+          "value": "\"uso\".\"valoracion_dia\" is null or \"uso\".\"valoracion_dia\" between 1 and 5"
+        },
+        "ck_uso_sprays": {
+          "name": "ck_uso_sprays",
+          "value": "\"uso\".\"sprays\" is null or \"uso\".\"sprays\" between 0 and 100"
+        },
+        "ck_uso_estaciones_efectivas": {
+          "name": "ck_uso_estaciones_efectivas",
+          "value": "cardinality(\"uso\".\"estaciones_efectivas\") between 1 and 2"
+        },
+        "ck_uso_estacion_dominante": {
+          "name": "ck_uso_estacion_dominante",
+          "value": "\"uso\".\"estacion_efectiva\" = any(\"uso\".\"estaciones_efectivas\")"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.usuario": {
+      "name": "usuario",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "password_hash": {
+          "name": "password_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "creado_en": {
+          "name": "creado_en",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "usuario_email_unique": {
+          "name": "usuario_email_unique",
+          "columns": [
+            "email"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.wishlist": {
+      "name": "wishlist",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "nombre": {
+          "name": "nombre",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "marca": {
+          "name": "marca",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "prioridad": {
+          "name": "prioridad",
+          "type": "prioridad_wishlist",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'EN_EL_RADAR'"
+        },
+        "precio_objetivo": {
+          "name": "precio_objetivo",
+          "type": "numeric(10, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "notas": {
+          "name": "notas",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fragrantica_url": {
+          "name": "fragrantica_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "convertido_a_perfume_id": {
+          "name": "convertido_a_perfume_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "creado_en": {
+          "name": "creado_en",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "idx_wishlist_usuario_prioridad": {
+          "name": "idx_wishlist_usuario_prioridad",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "prioridad",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "wishlist_user_id_usuario_id_fk": {
+          "name": "wishlist_user_id_usuario_id_fk",
+          "tableFrom": "wishlist",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "tableTo": "usuario",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        },
+        "wishlist_convertido_a_perfume_id_perfume_id_fk": {
+          "name": "wishlist_convertido_a_perfume_id_perfume_id_fk",
+          "tableFrom": "wishlist",
+          "columnsFrom": [
+            "convertido_a_perfume_id"
+          ],
+          "tableTo": "perfume",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "set null"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "ck_wishlist_precio": {
+          "name": "ck_wishlist_precio",
+          "value": "\"wishlist\".\"precio_objetivo\" is null or \"wishlist\".\"precio_objetivo\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.wishlist_nota": {
+      "name": "wishlist_nota",
+      "schema": "",
+      "columns": {
+        "wishlist_id": {
+          "name": "wishlist_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "nota_id": {
+          "name": "nota_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "orden": {
+          "name": "orden",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        }
+      },
+      "indexes": {
+        "idx_wishlist_nota_nota": {
+          "name": "idx_wishlist_nota_nota",
+          "columns": [
+            {
+              "expression": "nota_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "wishlist_nota_wishlist_id_wishlist_id_fk": {
+          "name": "wishlist_nota_wishlist_id_wishlist_id_fk",
+          "tableFrom": "wishlist_nota",
+          "columnsFrom": [
+            "wishlist_id"
+          ],
+          "tableTo": "wishlist",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        },
+        "wishlist_nota_nota_id_nota_id_fk": {
+          "name": "wishlist_nota_nota_id_nota_id_fk",
+          "tableFrom": "wishlist_nota",
+          "columnsFrom": [
+            "nota_id"
+          ],
+          "tableTo": "nota",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "restrict"
+        }
+      },
+      "compositePrimaryKeys": {
+        "pk_wishlist_nota": {
+          "name": "pk_wishlist_nota",
+          "columns": [
+            "wishlist_id",
+            "nota_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {
+    "public.concentracion": {
+      "name": "concentracion",
+      "schema": "public",
+      "values": [
+        "EDC",
+        "EDT",
+        "EDP",
+        "EXTRAIT",
+        "PARFUM",
+        "ACEITE",
+        "OTRO"
+      ]
+    },
+    "public.duracion_percibida": {
+      "name": "duracion_percibida",
+      "schema": "public",
+      "values": [
+        "MENOS_2H",
+        "DE_2_4H",
+        "DE_4_6H",
+        "DE_6_8H",
+        "MAS_8H"
+      ]
+    },
+    "public.estacion": {
+      "name": "estacion",
+      "schema": "public",
+      "values": [
+        "PRIMAVERA",
+        "VERANO",
+        "OTONO",
+        "INVIERNO"
+      ]
+    },
+    "public.estado_perfume": {
+      "name": "estado_perfume",
+      "schema": "public",
+      "values": [
+        "LO_TENGO",
+        "LO_TUVE"
+      ]
+    },
+    "public.momento": {
+      "name": "momento",
+      "schema": "public",
+      "values": [
+        "DIA",
+        "NOCHE"
+      ]
+    },
+    "public.nivel_piramide": {
+      "name": "nivel_piramide",
+      "schema": "public",
+      "values": [
+        "SALIDA",
+        "CORAZON",
+        "FONDO"
+      ]
+    },
+    "public.origen_estacion": {
+      "name": "origen_estacion",
+      "schema": "public",
+      "values": [
+        "TEMPERATURA",
+        "CALENDARIO",
+        "MANUAL"
+      ]
+    },
+    "public.prioridad_wishlist": {
+      "name": "prioridad_wishlist",
+      "schema": "public",
+      "values": [
+        "EN_EL_RADAR",
+        "LO_QUIERO",
+        "LO_NECESITO"
+      ]
+    }
+  },
+  "schemas": {},
+  "views": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

@@ -233,7 +233,11 @@ export async function accionGuardarConfiguracion(datos: FormData) {
       lon: datos.get('lon'),
       etiqueta: datos.get('etiqueta'),
     });
-  if (ubicacion.success) await guardarAjuste(userId, 'ubicacion', ubicacion.data);
+  if (datos.get('modoUbicacion') === 'auto') {
+    await guardarAjuste(userId, 'ubicacion', { modo: 'auto' });
+  } else if (ubicacion.success) {
+    await guardarAjuste(userId, 'ubicacion', { modo: 'fija', ...ubicacion.data });
+  }
 
   const umbrales = z
     .object({
@@ -248,6 +252,7 @@ export async function accionGuardarConfiguracion(datos: FormData) {
     .safeParse(Object.fromEntries(datos.entries()));
   if (umbrales.success) await guardarUmbrales(userId, umbrales.data);
 
+  revalidatePath('/');
   revalidatePath('/mas/configuracion');
   revalidatePath('/recomendacion');
 }

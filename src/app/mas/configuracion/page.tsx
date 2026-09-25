@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { usuarioActual } from '@/servicios/auth';
 import { leerConfiguracion } from '@/servicios/ajustes';
 import { accionGuardarConfiguracion, accionGuardarRecordatorio } from '@/app/acciones';
+import { CamposUbicacion } from './CamposUbicacion';
 import { AvisosDiarios } from '@/componentes/AvisosDiarios';
 import { RECORDATORIO_POR_DEFECTO, type AjusteRecordatorio } from '@/servicios/recordatorio';
 
@@ -22,7 +23,7 @@ export default async function PaginaConfiguracion() {
   const userId = await usuarioActual();
   if (!userId) redirect('/login');
 
-  const { ubicacion, umbrales } = await leerConfiguracion(userId);
+  const { ubicacion, modoUbicacion, umbrales } = await leerConfiguracion(userId);
 
   const { crearDb, schema } = await import('@/db');
   const { and, eq } = await import('drizzle-orm');
@@ -45,22 +46,9 @@ export default async function PaginaConfiguracion() {
           <h2 className="font-semibold">Ubicación</h2>
           <p className="text-sm text-texto-tenue">
             De aquí sale el tiempo con el que se deduce la estación. No se pide permiso de
-            geolocalización al abrir la app.
+            geolocalización al abrir la app: en automática se usa la de tu conexión.
           </p>
-          <div>
-            <label htmlFor="etiqueta">Etiqueta</label>
-            <input id="etiqueta" name="etiqueta" defaultValue={ubicacion.etiqueta} className="mt-1" />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label htmlFor="lat">Latitud</label>
-              <input id="lat" name="lat" type="number" step="0.0001" defaultValue={ubicacion.lat} className="mt-1" />
-            </div>
-            <div>
-              <label htmlFor="lon">Longitud</label>
-              <input id="lon" name="lon" type="number" step="0.0001" defaultValue={ubicacion.lon} className="mt-1" />
-            </div>
-          </div>
+          <CamposUbicacion modoInicial={modoUbicacion} ubicacion={ubicacion} />
         </section>
 
         <section className="tarjeta space-y-3">

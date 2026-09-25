@@ -5,6 +5,7 @@
  * diez segundos— asi que el buscador es lo primero que se ve y los accesos
  * rapidos estan a un toque.
  */
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { FormularioRegistro } from '@/componentes/FormularioRegistro';
 import { SincronizadorOffline } from '@/componentes/SincronizadorOffline';
@@ -49,7 +50,12 @@ export default async function PaginaHoy() {
     <div className="space-y-6">
       <header className="space-y-1">
         <h1 className="titulo">Hoy estoy usando…</h1>
-        <p className="text-sm text-texto-tenue">{estacion.explicacion}</p>
+        <p className="text-sm text-texto-tenue">
+          {estacion.explicacion}{' '}
+          <Link href="/mas/configuracion" className="underline underline-offset-2">
+            Cambiar ubicación
+          </Link>
+        </p>
       </header>
 
       <SincronizadorOffline />
