@@ -24,6 +24,8 @@ describe('destinos de vuelta tras el login', () => {
     ['javascript:alert(1)', 'pseudo-protocolo'],
     ['data:text/html,<script>', 'data:'],
     ['/algo\r\nLocation: https://sitio-falso.example', 'inyeccion de cabecera'],
+    ['/\t/sitio-falso.example', 'tabulador, que el navegador quita y deja //'],
+    ['/\u0000/sitio-falso.example', 'caracter de control'],
     ['   ', 'solo espacios'],
     ['', 'vacio'],
   ])('manda al inicio %s (%s)', (entrada) => {

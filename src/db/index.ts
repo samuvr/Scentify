@@ -51,4 +51,30 @@ export function crearDb(): Db {
   cliente = nuevo as unknown as Db;
   return cliente;
 }
+/**
+ * Ejecuta varias escrituras como una sola transaccion: o entran todas o
+ * ninguna.
+ *
+ * El driver HTTP de Neon no abre transacciones interactivas, pero su `batch`
+ * manda las consultas juntas y las ejecuta dentro de una. postgres.js si las
+ * abre. Para que las dos ramas valgan, las consultas se construyen con el
+ * ejecutor que toque, y por eso llega una funcion y no la lista hecha: una
+ * consulta de Drizzle no corre hasta que se espera, asi que construirlas no
+ * escribe nada.
+ */
+export async function enUnaTransaccion(
+  construir: (ejecutor: Db) => PromiseLike<unknown>[],
+): Promise<void> {
+  const db = crearDb();
+  if (esNeonHttp()) {
+    const consultas = construir(db);
+    if (consultas.length === 0) return;
+    await (db as unknown as { batch(consultas: unknown[]): Promise<unknown> }).batch(consultas);
+    return;
+  }
+  await db.transaction(async (tx) => {
+    for (const consulta of construir(tx as unknown as Db)) await consulta;
+  });
+}
+
 export { schema };
