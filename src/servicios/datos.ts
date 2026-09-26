@@ -7,7 +7,7 @@
  */
 import 'server-only';
 import { and, asc, eq, inArray } from 'drizzle-orm';
-import { crearDb, schema } from '@/db';
+import { crearDb, enUnaTransaccion, schema, type Db } from '@/db';
 import {
   analizarCsvColeccion,
   CABECERAS_COLECCION,
@@ -382,7 +382,7 @@ export async function copiaCompleta(userId: string) {
   const conIds = <T>(consulta: () => Promise<T[]>) =>
     ids.length === 0 ? Promise.resolve([] as T[]) : consulta();
 
-  const [contextos, usos, deseos, ajustes, notas, familias, fichas, fn, ff, pc, pe, pm] =
+  const [contextos, usos, deseos, ajustes, notas, familias, fichas, fn, ff, pc, pe, pm, wn] =
     await Promise.all([
       db.select().from(schema.contexto).where(eq(schema.contexto.userId, userId)),
       db.select().from(schema.uso).where(eq(schema.uso.userId, userId)),
@@ -412,6 +412,16 @@ export async function copiaCompleta(userId: string) {
       conIds(() =>
         db.select().from(schema.perfumeMomento).where(inArray(schema.perfumeMomento.perfumeId, ids)),
       ),
+      // Las notas de fondo de mis deseos, para el aviso de solapamiento.
+      db
+        .select({
+          wishlistId: schema.wishlistNota.wishlistId,
+          notaId: schema.wishlistNota.notaId,
+          orden: schema.wishlistNota.orden,
+        })
+        .from(schema.wishlistNota)
+        .innerJoin(schema.wishlist, eq(schema.wishlist.id, schema.wishlistNota.wishlistId))
+        .where(eq(schema.wishlist.userId, userId)),
     ]);
 
   return {
@@ -430,10 +440,17 @@ export async function copiaCompleta(userId: string) {
     perfumeContexto: pc,
     perfumeEstacion: pe,
     perfumeMomento: pm,
+    wishlistNota: wn,
   };
 }
 
-export type Copia = Awaited<ReturnType<typeof copiaCompleta>>;
+/**
+ * `wishlistNota` es opcional porque las copias anteriores no la llevaban: se
+ * restauran igual, solo que sin las notas de fondo de los deseos.
+ */
+export type Copia = Omit<Awaited<ReturnType<typeof copiaCompleta>>, 'wishlistNota'> & {
+  wishlistNota?: Awaited<ReturnType<typeof copiaCompleta>>['wishlistNota'];
+};
 
 type FilaFicha = Copia['fichas'][number];
 
@@ -497,30 +514,11 @@ export function aVersion2(copia: Copia | CopiaV1): Copia {
  * se le rellena lo que le falte. Si no existe, se crea.
  */
 export async function restaurarCopia(userId: string, entrada: Copia | CopiaV1): Promise<void> {
-  const copia = aVersion2(entrada);
+  // Todo lo que puede fallar se hace ANTES de borrar nada. La copia llega de
+  // un fichero: las fechas vienen como texto y una fecha rota tiene que parar
+  // la restauracion con la cuenta intacta, no a mitad con la cuenta vacia.
+  const copia = conFechas(aVersion2(entrada));
   const db = crearDb();
-
-  // Orden inverso al de las dependencias: primero lo que apunta a otros.
-  await db.delete(schema.uso).where(eq(schema.uso.userId, userId));
-  await db.delete(schema.wishlist).where(eq(schema.wishlist.userId, userId));
-  await db
-    .delete(schema.recomendacionDescarte)
-    .where(eq(schema.recomendacionDescarte.userId, userId));
-
-  const mios = await db
-    .select({ id: schema.perfume.id })
-    .from(schema.perfume)
-    .where(eq(schema.perfume.userId, userId));
-  const ids = mios.map((p) => p.id);
-  if (ids.length > 0) {
-    await Promise.all([
-      db.delete(schema.perfumeContexto).where(inArray(schema.perfumeContexto.perfumeId, ids)),
-      db.delete(schema.perfumeEstacion).where(inArray(schema.perfumeEstacion.perfumeId, ids)),
-      db.delete(schema.perfumeMomento).where(inArray(schema.perfumeMomento.perfumeId, ids)),
-    ]);
-    await db.delete(schema.perfume).where(eq(schema.perfume.userId, userId));
-  }
-  await db.delete(schema.contexto).where(eq(schema.contexto.userId, userId));
 
   // El vocabulario es global: se completa, no se reemplaza.
   if (copia.notas.length > 0) {
@@ -532,11 +530,20 @@ export async function restaurarCopia(userId: string, entrada: Copia | CopiaV1): 
 
   // Las notas y familias de la copia se resuelven por nombre y slug, no por
   // id: en otra base la misma nota puede tener otro id.
-  const familiasBase = await db.select().from(schema.familia);
+  const [familiasBase, notasBase] = await Promise.all([
+    db.select().from(schema.familia),
+    db.select({ id: schema.nota.id, normalizado: schema.nota.nombreNormalizado }).from(schema.nota),
+  ]);
   const familiaPorSlug = new Map(familiasBase.map((f) => [f.slug, f.id]));
+  const notaPorNormalizado = new Map(notasBase.map((n) => [n.normalizado, n.id]));
   const slugDeFamilia = new Map(copia.familias.map((f) => [f.id, f.slug]));
   const nombreDeNota = new Map(copia.notas.map((n) => [n.id, n.nombre]));
+  const notaReal = new Map(
+    copia.notas.map((n) => [n.id, notaPorNormalizado.get(n.nombreNormalizado)]),
+  );
 
+  // Las fichas son de todos: resolverlas solo junta o crea, nunca quita nada,
+  // asi que tambien va antes de borrar lo propio.
   const fichaReal = new Map<string, string>();
   for (const ficha of copia.fichas) {
     const notas = copia.fichaNota
@@ -590,21 +597,74 @@ export async function restaurarCopia(userId: string, entrada: Copia | CopiaV1): 
       ? { ...d, convertidoAPerfumeId: null }
       : d,
   );
+  const deseosCopia = new Set(deseos.map((d) => d.id));
+  const wishlistNota = (copia.wishlistNota ?? [])
+    .filter((n) => deseosCopia.has(n.wishlistId))
+    .map((n) => ({ ...n, notaId: notaReal.get(n.notaId) }))
+    .filter((n): n is typeof n & { notaId: string } => Boolean(n.notaId));
 
-  if (copia.contextos.length > 0) {
-    await db.insert(schema.contexto).values(conUsuario(copia.contextos));
-  }
-  if (perfumes.length > 0) {
-    await db.insert(schema.perfume).values(conUsuario(perfumes));
-  }
-  await Promise.all([
-    perfumeContexto.length ? db.insert(schema.perfumeContexto).values(perfumeContexto) : null,
-    perfumeEstacion.length ? db.insert(schema.perfumeEstacion).values(perfumeEstacion) : null,
-    perfumeMomento.length ? db.insert(schema.perfumeMomento).values(perfumeMomento) : null,
+  // Borrar lo propio y meter lo de la copia, en una sola transaccion: si algo
+  // falla a mitad, la cuenta se queda como estaba.
+  const misPerfumes = (q: Db) =>
+    q.select({ id: schema.perfume.id }).from(schema.perfume).where(eq(schema.perfume.userId, userId));
+
+  await enUnaTransaccion((q) => [
+    // Orden inverso al de las dependencias: primero lo que apunta a otros.
+    q.delete(schema.uso).where(eq(schema.uso.userId, userId)),
+    q.delete(schema.wishlist).where(eq(schema.wishlist.userId, userId)),
+    q.delete(schema.recomendacionDescarte).where(eq(schema.recomendacionDescarte.userId, userId)),
+    q.delete(schema.perfumeContexto).where(inArray(schema.perfumeContexto.perfumeId, misPerfumes(q))),
+    q.delete(schema.perfumeEstacion).where(inArray(schema.perfumeEstacion.perfumeId, misPerfumes(q))),
+    q.delete(schema.perfumeMomento).where(inArray(schema.perfumeMomento.perfumeId, misPerfumes(q))),
+    q.delete(schema.perfume).where(eq(schema.perfume.userId, userId)),
+    q.delete(schema.contexto).where(eq(schema.contexto.userId, userId)),
+    q.delete(schema.ajuste).where(eq(schema.ajuste.userId, userId)),
+
+    ...(copia.contextos.length ? [q.insert(schema.contexto).values(conUsuario(copia.contextos))] : []),
+    ...(perfumes.length ? [q.insert(schema.perfume).values(conUsuario(perfumes))] : []),
+    ...(perfumeContexto.length ? [q.insert(schema.perfumeContexto).values(perfumeContexto)] : []),
+    ...(perfumeEstacion.length ? [q.insert(schema.perfumeEstacion).values(perfumeEstacion)] : []),
+    ...(perfumeMomento.length ? [q.insert(schema.perfumeMomento).values(perfumeMomento)] : []),
+    ...(usos.length ? [q.insert(schema.uso).values(conUsuario(usos))] : []),
+    ...(deseos.length ? [q.insert(schema.wishlist).values(conUsuario(deseos))] : []),
+    ...(wishlistNota.length ? [q.insert(schema.wishlistNota).values(wishlistNota)] : []),
+    ...(copia.ajustes.length ? [q.insert(schema.ajuste).values(conUsuario(copia.ajustes))] : []),
   ]);
-  if (usos.length > 0) await db.insert(schema.uso).values(conUsuario(usos));
-  if (deseos.length > 0) await db.insert(schema.wishlist).values(conUsuario(deseos));
-  if (copia.ajustes.length > 0) {
-    await db.insert(schema.ajuste).values(conUsuario(copia.ajustes)).onConflictDoNothing();
-  }
+}
+
+/** Campos de fecha y hora que llevan las filas de una copia. */
+const CAMPOS_FECHA = ['creadoEn', 'actualizadoEn'] as const;
+
+/**
+ * Devuelve la copia con las fechas como `Date`. `JSON.parse` las deja en
+ * texto, y Drizzle espera un `Date` en las columnas `timestamp`: sin esto, la
+ * primera insercion fallaba con «toISOString is not a function».
+ */
+function conFechas(copia: Copia): Copia {
+  const revivir = <T>(filas: T[], tabla: string): T[] =>
+    filas.map((fila) => {
+      const nueva: Record<string, unknown> = { ...(fila as Record<string, unknown>) };
+      for (const campo of CAMPOS_FECHA) {
+        const valor = nueva[campo];
+        if (valor === undefined || valor === null || valor instanceof Date) continue;
+        const fecha = new Date(valor as string);
+        if (typeof valor !== 'string' || Number.isNaN(fecha.getTime())) {
+          throw new Error(`Copia no válida: «${String(valor)}» no es una fecha (${tabla}).`);
+        }
+        nueva[campo] = fecha;
+      }
+      return nueva as T;
+    });
+
+  return {
+    ...copia,
+    perfumes: revivir(copia.perfumes, 'perfumes'),
+    fichas: revivir(copia.fichas, 'fichas'),
+    contextos: revivir(copia.contextos, 'contextos'),
+    usos: revivir(copia.usos, 'usos'),
+    wishlist: revivir(copia.wishlist, 'wishlist'),
+    ajustes: revivir(copia.ajustes, 'ajustes'),
+    notas: revivir(copia.notas, 'notas'),
+    familias: revivir(copia.familias, 'familias'),
+  };
 }

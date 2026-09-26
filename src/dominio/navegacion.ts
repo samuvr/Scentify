@@ -20,8 +20,11 @@ export function destinoSeguro(valor: unknown): string {
   // ...y no "//otro-sitio", que el navegador trata como URL con protocolo
   // heredado y sale fuera igual que una absoluta.
   if (ruta.startsWith('//') || ruta.startsWith('/\\')) return '/';
-  // Ni un salto de linea, que partiria una cabecera Location.
-  if (/[\r\n]/.test(ruta)) return '/';
+  // Ni caracteres de control. Un salto de linea partiria una cabecera
+  // Location, y el navegador quita tabuladores y saltos al resolver la URL:
+  // "/\t/otro-sitio" acaba siendo "//otro-sitio".
+  // eslint-disable-next-line no-control-regex
+  if (/[\u0000-\u001f\u007f]/.test(ruta)) return '/';
 
   return ruta;
 }

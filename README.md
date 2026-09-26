@@ -424,6 +424,31 @@ vuelve a lo compartido en vez de perderlo; el destino de vuelta se filtra en
 
 Es de Android: Safari en iOS no implementa Web Share Target para webapps.
 
+**En cualquier navegador: el botón «Enviar a Scentify».** Es un marcador que se pulsa
+con la ficha abierta en Fragrantica (se instala desde «Más → Botón de Fragrantica»).
+Corre en el navegador del usuario, que ya ha pasado Cloudflare, así que el bloqueo
+deja de importar: coge la dirección y el texto visible de la página, lo mismo que
+copiar con Ctrl+A, y abre `/importar` con los dos detrás del `#`. En el iPhone lo
+mismo se hace con un Atajo de iOS desde el menú Compartir de Safari, que cubre el
+hueco de Web Share Target.
+
+- **Por qué el `#` y no un POST.** La cookie de sesión es `SameSite=Lax`, y el
+  navegador no la manda en un POST que sale de fragrantica.com: lo compartido
+  acabaría en el login y se perdería. El fragmento no sale del navegador; `/importar`
+  lo lee, lo guarda en `sessionStorage` (por si hay que pasar por el login) y lo
+  manda a `/api/importar` desde el propio sitio, con la sesión.
+- `/api/importar` y `/compartir` comparten `destinoDeCompartido()`
+  (`src/servicios/compartido.ts`): los dos acaban en el mismo alta con la ficha
+  leída.
+- React 19 no deja poner `javascript:` en un `href`, así que el enlace del marcador
+  se escribe en el DOM después de montar.
+
+Con la ficha leída (o elegida del catálogo), el alta ya no son ocho pasos: es una
+**pantalla de revisión** con lo común resumido, las estaciones, el momento y los
+contextos a la vista, y el inventario plegado. «Marcar según Fragrantica» pone las
+casillas que se acercan a la opción más votada (`src/dominio/votos.ts`); es una
+propuesta que se ve marcada y se cambia a mano, y los votos siguen sin guardarse.
+
 **Descartado: la captura de pantalla.** Medida a 390 px, una ficha real ocupa 58.022 px
 de alto, unas 69 pantallas de móvil, y los tres datos que hacen falta están en las
 pantallas 4 (acordes), 9 (votos) y 20 (pirámide). Harían falta tres capturas apuntadas
