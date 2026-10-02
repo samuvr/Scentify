@@ -117,6 +117,43 @@ cuando('recordatorio diario (10.4)', () => {
     expect(resultado.enviados).toBe(0);
   });
 
+  /** Si ese dia quedo anotado como avisado para el usuario de pruebas. */
+  async function avisadoEl(fecha: string, ahora: Date) {
+    const { crearDb, schema } = await import('@/db');
+    const { and, eq } = await import('drizzle-orm');
+    const db = crearDb();
+    const delDia = and(
+      eq(schema.recordatorioEnviado.userId, USUARIO),
+      eq(schema.recordatorioEnviado.fecha, fecha),
+    );
+    await db.delete(schema.recordatorioEnviado).where(delDia);
+    await db
+      .delete(schema.uso)
+      .where(and(eq(schema.uso.userId, USUARIO), eq(schema.uso.fecha, fecha)));
+    await recordatorio.enviarRecordatoriosPendientes(ahora);
+    const filas = await db.select().from(schema.recordatorioEnviado).where(delDia);
+    await db.delete(schema.recordatorioEnviado).where(delDia);
+    return filas.length === 1;
+  }
+
+  it('una hora más tardía que la pasada diaria se trata como la última posible', async () => {
+    // Las 23:00 no llegaban nunca: el cron pasa a las 21:00 en invierno.
+    await ajustes.guardarAjuste(USUARIO, 'recordatorio', { activo: true, hora: 23 });
+    expect(await avisadoEl('2027-01-15', new Date('2027-01-15T20:00:00Z'))).toBe(true);
+  });
+
+  it('«su hora» y «hoy» se miden en la zona guardada con el ajuste', async () => {
+    await ajustes.guardarAjuste(USUARIO, 'recordatorio', {
+      activo: true,
+      hora: 21,
+      zona: 'America/Mexico_City',
+    });
+    // 03:30 UTC del 16: en Madrid son las 04:30 del 16, en México las 21:30 del 15.
+    expect(await avisadoEl('2027-01-15', new Date('2027-01-16T03:30:00Z'))).toBe(true);
+    await ajustes.guardarAjuste(USUARIO, 'recordatorio', { activo: true, hora: 21 });
+    expect(await avisadoEl('2027-01-16', new Date('2027-01-16T03:30:00Z'))).toBe(false);
+  });
+
   it('no repite el aviso si la tarea programada se ejecuta dos veces', async () => {
     const { crearDb, schema } = await import('@/db');
     const { and, eq } = await import('drizzle-orm');

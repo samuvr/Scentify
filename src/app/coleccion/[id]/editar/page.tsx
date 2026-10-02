@@ -4,6 +4,7 @@ import { FormularioPerfume } from '@/componentes/FormularioPerfume';
 import type { ValoresPerfume } from '@/componentes/valores-perfume';
 import { usuarioActual } from '@/servicios/auth';
 import { fichaDePerfume, listarContextos, listarFamilias, listarNotas } from '@/servicios/consultas';
+import { esUuid } from '@/dominio/navegacion';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,6 +13,7 @@ export default async function PaginaEditar({ params }: { params: Promise<{ id: s
   if (!userId) redirect('/login');
 
   const { id } = await params;
+  if (!esUuid(id)) notFound();
   const [ficha, contextos, familias, notas] = await Promise.all([
     fichaDePerfume(userId, id),
     listarContextos(userId),

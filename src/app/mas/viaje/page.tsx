@@ -12,9 +12,11 @@ import { obtenerClima } from '@/servicios/clima';
 import { calcularEstacionEfectiva } from '@/dominio/estacion';
 import { resolverViaje } from '@/dominio/viaje';
 import { hoyIso } from '@/servicios/usos';
+import { zonaDelUsuario } from '@/servicios/zona';
 import type { Momento } from '@/dominio/tipos';
 import { FormularioViaje } from './FormularioViaje';
 import { BloquePromedios } from '@/componentes/BloquePromedios';
+import { fechaOVacia } from '@/dominio/navegacion';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,12 +41,12 @@ export default async function PaginaViaje({
   const momentos = ((p.momentos ?? 'DIA,NOCHE').split(',') as Momento[]).filter((m) =>
     ['DIA', 'NOCHE'].includes(m),
   );
-  const tope = p.tope ? Number(p.tope) : undefined;
-  const fecha = p.fecha || hoyIso();
+  const tope = Number(p.tope) >= 1 ? Math.floor(Number(p.tope)) : undefined;
+  const fecha = fechaOVacia(p.fecha) ?? hoyIso(await zonaDelUsuario());
 
   // Ubicacion del destino, si se ha indicado; si no, la de casa.
   const destino =
-    p.lat && p.lon
+    p.lat && p.lon && Number.isFinite(Number(p.lat)) && Number.isFinite(Number(p.lon))
       ? { lat: Number(p.lat), lon: Number(p.lon), etiqueta: p.lugar || 'Destino' }
       : configuracion.ubicacion;
 

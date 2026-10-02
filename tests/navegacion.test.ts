@@ -4,7 +4,7 @@
  * redirector abierto si se dejan pasar.
  */
 import { describe, expect, it } from 'vitest';
-import { destinoSeguro } from '@/dominio/navegacion';
+import { destinoSeguro, esFechaIso, esUuid, fechaOVacia, uuidOVacio } from '@/dominio/navegacion';
 
 describe('destinos de vuelta tras el login', () => {
   it.each([
@@ -38,4 +38,21 @@ describe('destinos de vuelta tras el login', () => {
       expect(destinoSeguro(entrada)).toBe('/');
     },
   );
+});
+
+describe('ids y fechas que llegan por la URL', () => {
+  it('solo pasan UUIDs de verdad', () => {
+    expect(esUuid('94638098-cb12-4971-89c1-28d57cd044b2')).toBe(true);
+    expect(esUuid('no-es-un-id')).toBe(false);
+    expect(esUuid("1' OR '1'='1")).toBe(false);
+    expect(uuidOVacio(undefined)).toBeUndefined();
+  });
+
+  it('solo pasan fechas que existen', () => {
+    expect(esFechaIso('2026-10-02')).toBe(true);
+    expect(esFechaIso('2026-02-30')).toBe(false);
+    expect(esFechaIso('2026-13-01')).toBe(false);
+    expect(esFechaIso('mañana')).toBe(false);
+    expect(fechaOVacia('2024-02-29')).toBe('2024-02-29');
+  });
 });

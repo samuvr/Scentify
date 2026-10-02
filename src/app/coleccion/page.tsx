@@ -12,6 +12,7 @@ import {
 import { formatearFecha } from '@/componentes/BloquePromedios';
 import { tonoDeFamilia } from '@/componentes/tono-familia';
 import { Filtros } from './Filtros';
+import { uuidOVacio } from '@/dominio/navegacion';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,11 +31,11 @@ export default async function PaginaColeccion({
     texto: p.q,
     estado: p.estado === 'LO_TUVE' || p.estado === 'LO_TENGO' ? p.estado : undefined,
     marca: p.marca,
-    familiaId: p.familia,
-    contextoId: p.contexto,
+    familiaId: uuidOVacio(p.familia),
+    contextoId: uuidOVacio(p.contexto),
     estacion: p.estacion as FiltrosColeccion['estacion'],
     momento: p.momento as FiltrosColeccion['momento'],
-    valoracionMinima: p.valoracion ? Number(p.valoracion) : undefined,
+    valoracionMinima: Number(p.valoracion) >= 1 ? Math.min(5, Number(p.valoracion)) : undefined,
     incluirArchivados: p.archivados === '1',
     orden: (ORDENES as readonly string[]).includes(p.orden ?? '')
       ? (p.orden as FiltrosColeccion['orden'])

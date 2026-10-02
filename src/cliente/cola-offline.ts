@@ -25,7 +25,27 @@ export interface UsoPendiente {
   comentario: string | null;
 }
 
-export type ResultadoEnvio = 'guardado' | 'encolado' | 'error';
+/**
+ * `sin-sesion`: la sesion ha caducado o se ha cerrado. El uso queda en la
+ * cola igual que sin conexion, y sale en cuanto se vuelva a entrar.
+ */
+export type ResultadoEnvio = 'guardado' | 'encolado' | 'sin-sesion' | 'error';
+
+/**
+ * Lo que el aviso de pendientes escucha para volver a contar. Lleva en
+ * `detail.sinSesion` si lo ultimo encolado fue por falta de sesion.
+ */
+export const EVENTO_COLA = 'scentify:cola';
+
+/**
+ * 401 es «no hay sesion», no «datos rotos»: reintentar con sesion lo arregla.
+ * Se trata como la falta de red, y nunca se tira el registro por ello.
+ */
+const SIN_SESION = 401;
+
+function avisarCambioDeCola(sinSesion = false) {
+  window.dispatchEvent(new CustomEvent(EVENTO_COLA, { detail: { sinSesion } }));
+}
 
 function abrirBd(): Promise<IDBDatabase> {
   return new Promise((resolver, rechazar) => {
@@ -92,18 +112,25 @@ async function enviar(uso: UsoPendiente): Promise<Response> {
 }
 
 /**
- * Intenta enviar el uso; si la red falla, lo encola. Un 4xx no se encola: los
- * datos son invalidos y reintentar no los va a arreglar.
+ * Intenta enviar el uso; si la red falla o no hay sesion, lo encola. El resto
+ * de 4xx no se encola: los datos son invalidos y reintentar no los arregla.
  */
 export async function encolarUso(uso: UsoPendiente): Promise<ResultadoEnvio> {
+  let sinSesion = false;
   try {
     const respuesta = await enviar(uso);
     if (respuesta.ok) return 'guardado';
+    if (respuesta.status === SIN_SESION) {
+      sinSesion = true;
+      throw new Error('Sin sesión');
+    }
     if (respuesta.status >= 400 && respuesta.status < 500) return 'error';
     throw new Error(`Estado ${respuesta.status}`);
   } catch {
     try {
       await guardarPendiente(uso);
+      avisarCambioDeCola(sinSesion);
+      if (sinSesion) return 'sin-sesion';
       await pedirSincronizacion();
       return 'encolado';
     } catch {
@@ -112,27 +139,34 @@ export async function encolarUso(uso: UsoPendiente): Promise<ResultadoEnvio> {
   }
 }
 
-/** Reenvia todo lo pendiente. Devuelve cuantos se han sincronizado. */
 /** Saca de la cola un uso que aun no se ha enviado ("Deshacer" sin conexion). */
 export async function descartarPendiente(id: string): Promise<void> {
   await transaccion('readwrite', (almacen) => almacen.delete(id));
+  avisarCambioDeCola();
 }
 
-export async function vaciarCola(): Promise<number> {
+/**
+ * Reenvia todo lo pendiente. Devuelve cuantos se han sincronizado y si se ha
+ * parado por falta de sesion, para que el aviso pida entrar.
+ */
+export async function vaciarCola(): Promise<{ enviados: number; sinSesion: boolean }> {
   const pendientes = await usosPendientes();
   let enviados = 0;
   for (const uso of pendientes) {
+    let respuesta: Response;
     try {
-      const respuesta = await enviar(uso);
-      // Un 4xx tampoco se va a arreglar solo: se saca de la cola para no
-      // reintentar eternamente un registro roto.
-      if (respuesta.ok || (respuesta.status >= 400 && respuesta.status < 500)) {
-        await olvidarPendiente(uso.id);
-        if (respuesta.ok) enviados += 1;
-      }
+      respuesta = await enviar(uso);
     } catch {
       break; // Sigue sin haber red: se deja el resto para el proximo intento.
     }
+    // Sin sesion no sale ninguno: se paran todos, y se conservan.
+    if (respuesta.status === SIN_SESION) return { enviados, sinSesion: true };
+    // El resto de 4xx no se va a arreglar solo: se saca de la cola para no
+    // reintentar eternamente un registro roto. Un 5xx se queda para luego.
+    if (respuesta.ok || (respuesta.status >= 400 && respuesta.status < 500)) {
+      await olvidarPendiente(uso.id);
+      if (respuesta.ok) enviados += 1;
+    }
   }
-  return enviados;
+  return { enviados, sinSesion: false };
 }

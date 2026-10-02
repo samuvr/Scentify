@@ -5,11 +5,13 @@ import { usuarioActual } from '@/servicios/auth';
 import { listarContextos } from '@/servicios/consultas';
 import { calcularEstadisticas } from '@/servicios/estadisticas';
 import { hoyIso } from '@/servicios/usos';
+import { zonaDelUsuario } from '@/servicios/zona';
 import { rangoDePeriodo, rejillaHeatmap, type Periodo } from '@/dominio/estadisticas';
 import { DURACION_LEGIBLE, formatearFecha } from '@/componentes/BloquePromedios';
 import { SelectorPeriodo } from './SelectorPeriodo';
 import { Barras, Comparativa, Heatmap } from './Graficos';
 import type { Estacion, Momento } from '@/dominio/tipos';
+import { fechaOVacia, uuidOVacio } from '@/dominio/navegacion';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,14 +36,17 @@ export default async function PaginaEstadisticas({
   const periodo: Periodo = PERIODOS.includes(p.periodo as Periodo)
     ? (p.periodo as Periodo)
     : '30d';
-  const hoy = hoyIso();
-  const rango = rangoDePeriodo(periodo, hoy, { desde: p.desde, hasta: p.hasta });
+  const hoy = hoyIso(await zonaDelUsuario());
+  const rango = rangoDePeriodo(periodo, hoy, {
+    desde: fechaOVacia(p.desde),
+    hasta: fechaOVacia(p.hasta),
+  });
 
   const momento = p.momento === 'DIA' || p.momento === 'NOCHE' ? (p.momento as Momento) : undefined;
 
   const [contextos, datos] = await Promise.all([
     listarContextos(userId),
-    calcularEstadisticas(userId, rango, { momento, contextoId: p.contexto }),
+    calcularEstadisticas(userId, rango, { momento, contextoId: uuidOVacio(p.contexto) }),
   ]);
 
   const { indicadores, comparativa } = datos;

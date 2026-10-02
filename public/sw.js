@@ -27,8 +27,10 @@
  * v4: el share_target pasa a POST para admitir el texto de la pagina.
  * v5: paleta calida con acento ambar. Cambian icono.svg, los PNG y los colores
  *     del manifest.
+ * v6: la cola conserva los usos sin sesion, el cierre de sesion borra las
+ *     paginas y datos guardados, y la copia de seguridad ya no se cachea.
  */
-const VERSION = 'v5';
+const VERSION = 'v6';
 const CACHE_ARMAZON = `scentify-armazon-${VERSION}`;
 const CACHE_DATOS = `scentify-datos-${VERSION}`;
 const ETIQUETA_SYNC = 'sincronizar-usos';
@@ -100,8 +102,13 @@ self.addEventListener('fetch', (evento) => {
   if (url.origin !== self.location.origin) return;
 
   // Estos dos tienen que fallar de verdad cuando no hay red, no dar una
-  // respuesta vieja que confunda.
-  if (url.pathname.startsWith('/api/fragrantica') || url.pathname.startsWith('/api/idoneidad')) {
+  // respuesta vieja que confunda. Las exportaciones, incluida la copia
+  // completa, no se guardan: son la cuenta entera en un fichero.
+  if (
+    url.pathname.startsWith('/api/fragrantica') ||
+    url.pathname.startsWith('/api/idoneidad') ||
+    url.pathname.startsWith('/api/exportar')
+  ) {
     return;
   }
 
@@ -166,8 +173,15 @@ async function vaciarCola() {
       // Sigue sin haber red: se reintenta en el proximo sync.
       throw error;
     }
-    // Un 4xx no se arregla reintentando: se saca de la cola para no quedarse
-    // atascado en un registro roto para siempre.
+    // Sin sesion (caducada o cerrada) no se tira nada: se para aqui y se le
+    // pide a la pagina que diga que hay que volver a entrar.
+    if (respuesta.status === 401) {
+      const clientes = await self.clients.matchAll({ type: 'window' });
+      for (const cliente of clientes) cliente.postMessage({ tipo: 'sesion-caducada' });
+      return;
+    }
+    // El resto de 4xx no se arregla reintentando: se saca de la cola para no
+    // quedarse atascado en un registro roto para siempre.
     if (respuesta.ok || (respuesta.status >= 400 && respuesta.status < 500)) {
       await operar('readwrite', (almacen) => almacen.delete(uso.id));
     }
@@ -181,9 +195,29 @@ self.addEventListener('sync', (evento) => {
   if (evento.tag === ETIQUETA_SYNC) evento.waitUntil(vaciarCola());
 });
 
-// Sin Background Sync (Safari, por ejemplo) la pagina pide el vaciado a mano.
+/**
+ * Al llegar al login (tras cerrar sesion o con la sesion caducada) se borra
+ * lo que lleva datos de la cuenta: las paginas guardadas y las lecturas de la
+ * API. Las caches van por URL, no por usuario, y en un movil compartido la
+ * siguiente persona veria sin conexion la coleccion de la anterior. Los
+ * estaticos se quedan. La cola de usos pendientes, tambien: es lo que aun no
+ * ha llegado al servidor.
+ */
+async function olvidarDatos() {
+  await caches.delete(CACHE_DATOS);
+  const armazon = await caches.open(CACHE_ARMAZON);
+  for (const peticion of await armazon.keys()) {
+    const ruta = new URL(peticion.url).pathname;
+    if (!ruta.startsWith('/_next/static/') && !ruta.startsWith('/icono') && ruta !== '/manifest.webmanifest') {
+      await armazon.delete(peticion);
+    }
+  }
+}
+
 self.addEventListener('message', (evento) => {
+  // Sin Background Sync (Safari, por ejemplo) la pagina pide el vaciado a mano.
   if (evento.data?.tipo === 'vaciar-cola') evento.waitUntil(vaciarCola());
+  if (evento.data?.tipo === 'olvidar-datos') evento.waitUntil(olvidarDatos());
 });
 
 /* ------------------------------------------- recordatorio diario (10.4) */
@@ -215,12 +249,18 @@ self.addEventListener('notificationclick', (evento) => {
   const destino = evento.notification.data?.url ?? '/';
 
   evento.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientes) => {
-      // Si la app ya esta abierta, se reutiliza esa ventana.
-      for (const cliente of clientes) {
-        if (cliente.url.includes(destino) && 'focus' in cliente) return cliente.focus();
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async (clientes) => {
+      const url = new URL(destino, self.location.origin);
+      // Ya abierta en esa pantalla: basta con traerla delante.
+      const enDestino = clientes.find((c) => new URL(c.url).pathname === url.pathname);
+      if (enDestino) return enDestino.focus();
+      // Abierta en otra: se reutiliza la ventana y se lleva al destino.
+      const abierta = clientes.find((c) => 'navigate' in c);
+      if (abierta) {
+        const llevada = await abierta.navigate(url.href).catch(() => null);
+        return (llevada ?? abierta).focus();
       }
-      return self.clients.openWindow(destino);
+      return self.clients.openWindow(url.href);
     }),
   );
 });

@@ -8,9 +8,9 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { FormularioRegistro } from '@/componentes/FormularioRegistro';
-import { SincronizadorOffline } from '@/componentes/SincronizadorOffline';
 import { InsigniaIdoneidad } from '@/componentes/Idoneidad';
 import { usuarioActual } from '@/servicios/auth';
+import { zonaDelUsuario } from '@/servicios/zona';
 import {
   contextoHabitual,
   listarContextos,
@@ -28,12 +28,17 @@ import {
 
 export const dynamic = 'force-dynamic';
 
-export default async function PaginaHoy() {
+export default async function PaginaHoy({
+  searchParams,
+}: {
+  searchParams: Promise<{ registrado?: string }>;
+}) {
   const userId = await usuarioActual();
   if (!userId) redirect('/login');
 
-  const hoy = hoyIso();
-  const momento = momentoDeAhora();
+  const zona = await zonaDelUsuario();
+  const hoy = hoyIso(zona);
+  const momento = momentoDeAhora(zona);
   const finde = esFinDeSemana(hoy);
   const [contextos, recientes, ayer, registrados, estacion, habitualDia, habitualNoche] =
     await Promise.all([
@@ -58,7 +63,12 @@ export default async function PaginaHoy() {
         </p>
       </header>
 
-      <SincronizadorOffline />
+      {(await searchParams).registrado ? (
+        <p className="aviso-hecho" role="status">
+          Apuntado. Lo tienes abajo, en «Registrado hoy».
+        </p>
+      ) : null}
+
 
       {contextos.length === 0 ? (
         <p className="tarjeta text-sm text-texto-tenue">

@@ -4,8 +4,9 @@ import { usuarioActual } from '@/servicios/auth';
 import { leerConfiguracion } from '@/servicios/ajustes';
 import { accionGuardarConfiguracion, accionGuardarRecordatorio } from '@/app/acciones';
 import { CamposUbicacion } from './CamposUbicacion';
+import { MENSAJE_UMBRALES, type ErrorUmbrales } from '@/dominio/estacion';
 import { AvisosDiarios } from '@/componentes/AvisosDiarios';
-import { RECORDATORIO_POR_DEFECTO, type AjusteRecordatorio } from '@/servicios/recordatorio';
+import { HORA_MAXIMA_RECORDATORIO, leerRecordatorio } from '@/servicios/recordatorio';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,27 +20,31 @@ const UMBRALES: { clave: string; etiqueta: string; ayuda: string }[] = [
   { clave: 'bochornoIncremento', etiqueta: 'Bochorno: suma', ayuda: 'grados' },
 ];
 
-export default async function PaginaConfiguracion() {
+export default async function PaginaConfiguracion({
+  searchParams,
+}: {
+  searchParams: Promise<{ guardado?: string; error?: string }>;
+}) {
   const userId = await usuarioActual();
   if (!userId) redirect('/login');
+  const { guardado, error } = await searchParams;
 
   const { ubicacion, modoUbicacion, umbrales } = await leerConfiguracion(userId);
 
-  const { crearDb, schema } = await import('@/db');
-  const { and, eq } = await import('drizzle-orm');
-  const [fila] = await crearDb()
-    .select({ valor: schema.ajuste.valor })
-    .from(schema.ajuste)
-    .where(and(eq(schema.ajuste.userId, userId), eq(schema.ajuste.clave, 'recordatorio')))
-    .limit(1);
-  const recordatorio: AjusteRecordatorio = {
-    ...RECORDATORIO_POR_DEFECTO,
-    ...((fila?.valor as Partial<AjusteRecordatorio>) ?? {}),
-  };
+  const recordatorio = await leerRecordatorio(userId);
 
   return (
     <div className="space-y-5">
       <h1 className="titulo">Configuración</h1>
+      {error && Object.hasOwn(MENSAJE_UMBRALES, error) ? (
+        <p className="aviso-error" role="alert">
+          No se han guardado los umbrales. {MENSAJE_UMBRALES[error as ErrorUmbrales]}
+        </p>
+      ) : guardado ? (
+        <p className="aviso-hecho" role="status">
+          Configuración guardada.
+        </p>
+      ) : null}
 
       <form action={accionGuardarConfiguracion} className="space-y-5">
         <section className="tarjeta space-y-3">
@@ -67,6 +72,7 @@ export default async function PaginaConfiguracion() {
                 name={clave}
                 type="number"
                 step="0.5"
+                required
                 defaultValue={umbrales[clave as keyof typeof umbrales]}
                 className="mt-1"
               />
@@ -97,13 +103,22 @@ export default async function PaginaConfiguracion() {
           </label>
           <div>
             <label htmlFor="hora">Hora del aviso</label>
-            <select id="hora" name="hora" defaultValue={String(recordatorio.hora)} className="mt-1">
-              {Array.from({ length: 24 }, (_, h) => (
+            <select
+              id="hora"
+              name="hora"
+              defaultValue={String(Math.min(recordatorio.hora, HORA_MAXIMA_RECORDATORIO))}
+              className="mt-1"
+            >
+              {Array.from({ length: HORA_MAXIMA_RECORDATORIO + 1 }, (_, h) => (
                 <option key={h} value={h}>
                   {String(h).padStart(2, '0')}:00
                 </option>
               ))}
             </select>
+            <p className="mt-1 text-xs text-texto-tenue">
+              La comprobación se hace una vez al día, hacia las 21:00 (las 22:00 en verano): si
+              eliges una hora anterior, el aviso llega igualmente en esa pasada.
+            </p>
           </div>
           <button type="submit" className="boton-secundario w-full">
             Guardar recordatorio

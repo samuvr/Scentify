@@ -8,6 +8,7 @@ import { DesgloseIdoneidad, InsigniaIdoneidad } from '@/componentes/Idoneidad';
 import { accionArchivar, accionCambiarEstado } from '@/app/acciones';
 import { CompletarUso } from './CompletarUso';
 import type { Estacion } from '@/dominio/tipos';
+import { esUuid } from '@/dominio/navegacion';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,6 +24,7 @@ export default async function PaginaFicha({ params }: { params: Promise<{ id: st
   if (!userId) redirect('/login');
 
   const { id } = await params;
+  if (!esUuid(id)) notFound();
   const [ficha, contextos] = await Promise.all([
     fichaDePerfume(userId, id),
     listarContextos(userId),
@@ -164,6 +166,7 @@ export default async function PaginaFicha({ params }: { params: Promise<{ id: st
                   sprays={uso.sprays}
                   duracion={uso.duracionPercibida}
                   valoracion={uso.valoracionDia}
+                  comentario={uso.comentario}
                 />
               </li>
             ))}

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { Fraunces } from 'next/font/google';
 import { NavegacionInferior } from '@/componentes/NavegacionInferior';
+import { SincronizadorOffline } from '@/componentes/SincronizadorOffline';
 import './globals.css';
 
 /**
@@ -41,7 +42,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       */}
       <body className="min-h-dvh" suppressHydrationWarning>
         {/* El hueco inferior deja sitio a la barra fija. */}
-        <main className="contenedor pb-28 pt-4">{children}</main>
+        <main className="contenedor pb-28 pt-4">
+          <SincronizadorOffline />
+          {children}
+        </main>
         <NavegacionInferior />
       </body>
     </html>

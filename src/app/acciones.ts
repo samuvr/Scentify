@@ -33,6 +33,9 @@ import {
   type ResultadoImportacionFinal,
 } from '@/servicios/datos';
 import { guardarAjuste, guardarUmbrales } from '@/servicios/ajustes';
+import { validarUmbrales } from '@/dominio/estacion';
+import { HORA_MAXIMA_RECORDATORIO } from '@/servicios/recordatorio';
+import { zonaDelUsuario } from '@/servicios/zona';
 import {
   borrarUso,
   completarUso,
@@ -162,11 +165,21 @@ export async function accionRegistrarUso(_previo: unknown, datos: FormData) {
 export async function accionRegistrarDesdeRecomendacion(datos: FormData) {
   const userId = await exigirUsuario();
   const analisis = esquemaUso.safeParse(desdeFormulario(datos));
-  if (!analisis.success) return;
+  // Si falla se vuelve a la recomendacion diciendolo, con lo que se habia
+  // pedido, en vez de quedarse en la pantalla sin que pase nada.
+  const deVuelta = () => {
+    const volver = new URLSearchParams({ error: 'registro' });
+    const momento = datos.get('momento');
+    const contexto = datos.get('contextoId');
+    if (momento === 'DIA' || momento === 'NOCHE') volver.set('momento', momento);
+    if (typeof contexto === 'string' && contexto) volver.set('contexto', contexto);
+    redirect(`/recomendacion?${volver}`);
+  };
+  if (!analisis.success) return deVuelta();
   try {
     await registrarUso(userId, analisis.data as DatosUso);
   } catch (error) {
-    if (error instanceof ErrorValidacion) return;
+    if (error instanceof ErrorValidacion) return deVuelta();
     throw error;
   }
   revalidatePath('/');
@@ -178,17 +191,31 @@ export async function accionCompletarUso(datos: FormData) {
   const userId = await exigirUsuario();
   const usoId = String(datos.get('usoId') ?? '');
   const esquema = z.object({
-    sprays: z.coerce.number().int().min(0).max(100).nullable().optional(),
-    duracionPercibida: z.enum(DURACIONES).nullable().optional(),
-    valoracionDia: z.coerce.number().int().min(1).max(5).nullable().optional(),
-    comentario: z.string().max(2000).nullable().optional(),
+    sprays: z.coerce.number().int().min(0).max(100).nullable(),
+    duracionPercibida: z.enum(DURACIONES).nullable(),
+    valoracionDia: z.coerce.number().int().min(1).max(5).nullable(),
+    comentario: z.string().max(2000).nullable(),
   });
-  const analisis = esquema.safeParse(desdeFormulario(datos));
+  // Aqui un campo vacio no es «no lo toques», es «ya no lo se»: el formulario
+  // manda siempre los cuatro, y dejar uno en blanco lo vuelve a dejar en «—».
+  // `desdeFormulario` descartaba los vacios, y con todo en blanco salia un
+  // UPDATE sin columnas que Drizzle rechaza.
+  const leer = (clave: string) => {
+    const valor = datos.get(clave);
+    return typeof valor === 'string' && valor.trim() !== '' ? valor.trim() : null;
+  };
+  const analisis = esquema.safeParse({
+    sprays: leer('sprays'),
+    duracionPercibida: leer('duracionPercibida'),
+    valoracionDia: leer('valoracionDia'),
+    comentario: leer('comentario'),
+  });
   if (!usoId || !analisis.success) return;
 
   await completarUso(userId, usoId, analisis.data);
   revalidatePath('/');
-  revalidatePath(`/coleccion`);
+  revalidatePath('/coleccion', 'layout');
+  revalidatePath('/estadisticas');
 }
 
 export async function accionBorrarUso(datos: FormData) {
@@ -196,12 +223,14 @@ export async function accionBorrarUso(datos: FormData) {
   const usoId = String(datos.get('usoId') ?? '');
   if (usoId) await borrarUso(userId, usoId);
   revalidatePath('/');
+  revalidatePath('/coleccion', 'layout');
+  revalidatePath('/estadisticas');
 }
 
 export async function accionDescartarRecomendacion(datos: FormData) {
   const userId = await exigirUsuario();
   const perfumeId = String(datos.get('perfumeId') ?? '');
-  if (perfumeId) await descartarRecomendacion(userId, perfumeId, hoyIso());
+  if (perfumeId) await descartarRecomendacion(userId, perfumeId, hoyIso(await zonaDelUsuario()));
   revalidatePath('/recomendacion');
 }
 
@@ -239,22 +268,19 @@ export async function accionGuardarConfiguracion(datos: FormData) {
     await guardarAjuste(userId, 'ubicacion', { modo: 'fija', ...ubicacion.data });
   }
 
-  const umbrales = z
-    .object({
-      umbralVerano: z.coerce.number(),
-      umbralVeranoEntretiempo: z.coerce.number(),
-      umbralEntretiempo: z.coerce.number(),
-      umbralEntretiempoInvierno: z.coerce.number(),
-      bochornoHumedadPct: z.coerce.number().min(0).max(100),
-      bochornoTemperaturaMin: z.coerce.number(),
-      bochornoIncremento: z.coerce.number(),
-    })
-    .safeParse(Object.fromEntries(datos.entries()));
-  if (umbrales.success) await guardarUmbrales(userId, umbrales.data);
+  const umbrales = validarUmbrales(Object.fromEntries(datos.entries()));
+  if (umbrales.ok) await guardarUmbrales(userId, umbrales.umbrales);
 
   revalidatePath('/');
   revalidatePath('/mas/configuracion');
   revalidatePath('/recomendacion');
+  // Lo que no se guarda se dice: antes un umbral mal puesto se ignoraba sin
+  // aviso y la pantalla volvia con los valores viejos.
+  redirect(
+    umbrales.ok
+      ? '/mas/configuracion?guardado=1'
+      : `/mas/configuracion?error=${umbrales.error}`,
+  );
 }
 
 /* --------------------------------------------------------------- perfumes */
@@ -429,14 +455,19 @@ export async function accionRestaurarCopia(json: string): Promise<{ ok: boolean;
 export async function accionGuardarRecordatorio(datos: FormData) {
   const userId = await exigirUsuario();
   const analisis = z
-    .object({ activo: z.coerce.boolean(), hora: z.coerce.number().int().min(0).max(23) })
+    .object({
+      activo: z.coerce.boolean(),
+      hora: z.coerce.number().int().min(0).max(HORA_MAXIMA_RECORDATORIO),
+    })
     .safeParse({
       activo: datos.get('activo') === 'on' || datos.get('activo') === 'true',
       hora: datos.get('hora') ?? 21,
     });
   if (!analisis.success) return;
 
-  await guardarAjuste(userId, 'recordatorio', analisis.data);
+  // El cron no tiene peticion de la que sacar la zona: se guarda con el
+  // ajuste, y «su hora» y «hoy» se miden en la del usuario.
+  await guardarAjuste(userId, 'recordatorio', { ...analisis.data, zona: await zonaDelUsuario() });
   revalidatePath('/mas/configuracion');
 }
 

@@ -12,6 +12,7 @@ import { usuarioActual } from '@/servicios/auth';
 import { ErrorValidacion } from '@/servicios/perfumes';
 import { registrarUso } from '@/servicios/usos';
 import { yaRegistradoEse } from '@/servicios/consultas';
+import { esFechaIso, esUuid } from '@/dominio/navegacion';
 
 const esquema = z.object({
   id: z.string().uuid(),
@@ -60,7 +61,7 @@ export async function GET(peticion: Request) {
   const parametros = new URL(peticion.url).searchParams;
   const perfumeId = parametros.get('perfumeId') ?? '';
   const fecha = parametros.get('fecha') ?? '';
-  if (!perfumeId || !fecha) return NextResponse.json({ duplicado: false });
+  if (!esUuid(perfumeId) || !esFechaIso(fecha)) return NextResponse.json({ duplicado: false });
 
   return NextResponse.json({ duplicado: await yaRegistradoEse(userId, perfumeId, fecha) });
 }

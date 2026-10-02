@@ -19,17 +19,21 @@ import { leerConfiguracion } from './ajustes';
 import { obtenerClima } from './clima';
 import { marcasParaIdoneidad } from './consultas';
 import { ErrorValidacion } from './perfumes';
+import { fechaEnZona, ZONA_POR_DEFECTO } from '@/dominio/zona';
 
-/** Fecha de hoy en 'YYYY-MM-DD', en la zona horaria de la ubicacion del usuario. */
-export function hoyIso(zona = 'Europe/Madrid'): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: zona }).format(new Date());
+/**
+ * Fecha de hoy en 'YYYY-MM-DD', en la zona horaria del usuario. Las pantallas
+ * la pasan con `zonaDelUsuario()`; sin zona, la de la app.
+ */
+export function hoyIso(zona = ZONA_POR_DEFECTO): string {
+  return fechaEnZona(zona);
 }
 
 /**
  * Momento del dia que toca ahora mismo, como valor por defecto del registro:
  * a partir de las 18:00 (y de madrugada) es de noche.
  */
-export function momentoDeAhora(zona = 'Europe/Madrid'): Momento {
+export function momentoDeAhora(zona = ZONA_POR_DEFECTO): Momento {
   const hora = Number(
     new Intl.DateTimeFormat('en-GB', { timeZone: zona, hour: '2-digit', hourCycle: 'h23' }).format(
       new Date(),
@@ -201,6 +205,8 @@ export async function completarUso(
     comentario?: string | null;
   },
 ): Promise<void> {
+  // Un UPDATE sin columnas no es nada que hacer, y Drizzle lo rechaza.
+  if (Object.values(campos).every((valor) => valor === undefined)) return;
   const db = crearDb();
   await db
     .update(schema.uso)

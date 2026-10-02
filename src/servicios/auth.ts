@@ -8,7 +8,8 @@
  * tabla de sesiones ni una consulta extra en cada peticion.
  */
 import 'server-only';
-import { createHash, createHmac, scryptSync, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, randomBytes, scrypt, timingSafeEqual } from 'node:crypto';
+import { promisify } from 'node:util';
 import { cookies } from 'next/headers';
 import { eq, sql } from 'drizzle-orm';
 import { crearDb, schema } from '@/db';
@@ -33,19 +34,33 @@ function firmaValida(carga: string, firma: string): boolean {
   return esperada.length === recibida.length && timingSafeEqual(esperada, recibida);
 }
 
+/**
+ * scrypt asincrono: la version sincrona bloqueaba el proceso entero mientras
+ * calculaba, y con ella cualquier otra peticion que estuviera atendiendo.
+ */
+const derivar = promisify(scrypt) as (clave: string, sal: Buffer, longitud: number) => Promise<Buffer>;
+
 /** Formato del hash almacenado: scrypt$<sal hex>$<derivada hex>. */
-export function hashearPassword(clave: string): string {
+export async function hashearPassword(clave: string): Promise<string> {
   const sal = randomBytes(16);
-  return `scrypt$${sal.toString('hex')}$${scryptSync(clave, sal, 64).toString('hex')}`;
+  return `scrypt$${sal.toString('hex')}$${(await derivar(clave, sal, 64)).toString('hex')}`;
 }
 
-export function passwordCorrecta(clave: string, hash: string): boolean {
+export async function passwordCorrecta(clave: string, hash: string): Promise<boolean> {
   const [algoritmo, salHex, derivadaHex] = hash.split('$');
   if (algoritmo !== 'scrypt' || !salHex || !derivadaHex) return false;
   const esperada = Buffer.from(derivadaHex, 'hex');
-  const recibida = scryptSync(clave, Buffer.from(salHex, 'hex'), esperada.length);
+  if (esperada.length === 0) return false;
+  const recibida = await derivar(clave, Buffer.from(salHex, 'hex'), esperada.length);
   return esperada.length === recibida.length && timingSafeEqual(esperada, recibida);
 }
+
+/**
+ * Hash de relleno para cuando el correo no existe. Sin el, esa respuesta
+ * llegaba al instante y la de un correo con cuenta tardaba lo que tarda
+ * scrypt: midiendo el tiempo se podia saber quien tiene cuenta.
+ */
+let hashDeRelleno: Promise<string> | undefined;
 
 export async function iniciarSesion(email: string, clave: string): Promise<boolean> {
   const db = crearDb();
@@ -55,7 +70,12 @@ export async function iniciarSesion(email: string, clave: string): Promise<boole
     .where(eq(schema.usuario.email, email.trim().toLowerCase()))
     .limit(1);
 
-  if (!usuario || !passwordCorrecta(clave, usuario.passwordHash)) return false;
+  if (!usuario) {
+    hashDeRelleno ??= hashearPassword(randomBytes(16).toString('hex'));
+    await passwordCorrecta(clave, await hashDeRelleno);
+    return false;
+  }
+  if (!(await passwordCorrecta(clave, usuario.passwordHash))) return false;
 
   await abrirSesion(usuario.id);
   return true;
@@ -114,7 +134,7 @@ export async function registrarUsuario(
   const db = crearDb();
   const [creado] = await db
     .insert(schema.usuario)
-    .values({ email: email.trim().toLowerCase(), passwordHash: hashearPassword(clave) })
+    .values({ email: email.trim().toLowerCase(), passwordHash: await hashearPassword(clave) })
     .onConflictDoNothing({ target: schema.usuario.email })
     .returning({ id: schema.usuario.id });
   if (!creado) return { ok: false, motivo: 'EXISTE' };
