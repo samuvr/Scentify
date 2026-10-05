@@ -13,16 +13,41 @@ import 'server-only';
 import { and, eq, sql } from 'drizzle-orm';
 import webpush from 'web-push';
 import { crearDb, schema } from '@/db';
+import { elegirZona, ZONA_POR_DEFECTO } from '@/dominio/zona';
 
 export interface AjusteRecordatorio {
   activo: boolean;
   /** Hora local, 0-23. */
   hora: number;
+  /** Zona horaria del usuario al guardarlo; las filas antiguas no la tienen. */
+  zona?: string;
 }
 
 export const RECORDATORIO_POR_DEFECTO: AjusteRecordatorio = { activo: false, hora: 21 };
 
-export const ZONA_POR_DEFECTO = 'Europe/Madrid';
+/**
+ * La hora mas tardia que la pasada diaria alcanza todo el año.
+ *
+ * El cron de `vercel.json` corre una vez al dia a las 20:00 UTC (el plan
+ * Hobby no admite mas): las 21:00 en invierno y las 22:00 en verano en la
+ * España peninsular, que es para la que esta pensada la app. El aviso
+ * sale si la hora local ya ha pasado la configurada, asi que una hora mas
+ * tardia que la de esa pasada no saldria nunca. Si se cambia el cron, hay que
+ * cambiar esto.
+ */
+export const HORA_MAXIMA_RECORDATORIO = 21;
+
+export { ZONA_POR_DEFECTO };
+
+/** El ajuste del recordatorio de un usuario, con los valores por defecto. */
+export async function leerRecordatorio(userId: string): Promise<AjusteRecordatorio> {
+  const [fila] = await crearDb()
+    .select({ valor: schema.ajuste.valor })
+    .from(schema.ajuste)
+    .where(and(eq(schema.ajuste.userId, userId), eq(schema.ajuste.clave, 'recordatorio')))
+    .limit(1);
+  return { ...RECORDATORIO_POR_DEFECTO, ...((fila?.valor as Partial<AjusteRecordatorio>) ?? {}) };
+}
 
 /** Hora local actual en una zona, 0-23. */
 export function horaLocal(zona = ZONA_POR_DEFECTO, ahora = new Date()): number {
@@ -105,10 +130,16 @@ export async function enviarRecordatoriosPendientes(
     if (!ajuste?.activo) continue;
     resultado.revisados += 1;
 
-    const hora = typeof ajuste.hora === 'number' ? ajuste.hora : RECORDATORIO_POR_DEFECTO.hora;
-    if (horaLocal(ZONA_POR_DEFECTO, ahora) < hora) continue;
+    // Una hora guardada antes de existir el tope (22, 23) se trata como la
+    // ultima posible: mejor el aviso un poco antes que ninguno.
+    const hora = Math.min(
+      typeof ajuste.hora === 'number' ? ajuste.hora : RECORDATORIO_POR_DEFECTO.hora,
+      HORA_MAXIMA_RECORDATORIO,
+    );
+    const zona = elegirZona(ajuste.zona);
+    if (horaLocal(zona, ahora) < hora) continue;
 
-    const hoy = fechaLocal(ZONA_POR_DEFECTO, ahora);
+    const hoy = fechaLocal(zona, ahora);
 
     const [yaRegistrado] = await db
       .select({ id: schema.uso.id })

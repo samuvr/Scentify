@@ -355,11 +355,30 @@ manda si la hora local ya ha pasado la configurada, y queda anotado en
 22:00 en verano, o sea nunca antes de las 21:00, que es la hora por defecto. Cambiar
 `schedule` es cuestión de editar `vercel.json`, recordando que va en UTC.
 
-El límite real está en configurar una hora **más tardía** que el cron: ese día no
-saldrá, porque no habrá otra pasada. Para que la hora se respete de verdad hace falta
-una pasada por hora, y la alternativa gratuita es un ping horario desde un servicio
+El límite real está en una hora **más tardía** que el cron: ese día no saldría,
+porque no hay otra pasada. Por eso la pantalla solo ofrece hasta las 21:00
+(`HORA_MAXIMA_RECORDATORIO`), la última que la pasada alcanza todo el año, y una
+hora más tardía guardada antes se trata como las 21:00. La hora y el «hoy» se miden
+en la zona horaria del usuario, que se guarda con el ajuste. Para que la hora se
+respete de verdad hace falta una pasada por hora, y la alternativa gratuita es un ping horario desde un servicio
 externo (cron-job.org o similar) a esa misma URL con la cabecera
 `Authorization: Bearer <CRON_SECRET>`; en ese caso se quita `crons` de `vercel.json`.
+
+### Zona horaria, cola offline y caché
+
+- **«Hoy» es el del usuario.** El navegador deja su zona horaria en la cookie
+  `scentify_zona` y el servidor calcula con ella la fecha y si es de día o de noche
+  (`src/servicios/zona.ts`); sin cookie usa `x-vercel-ip-timezone` y, si no, Madrid.
+  El registro rápido toma además la fecha del reloj del móvil al pulsar, así que una
+  PWA abierta desde anoche no apunta el uso en el día anterior.
+- **La cola offline nunca tira un uso por falta de sesión.** Un 401 se trata como la
+  falta de red: el uso se queda en el móvil, el aviso pide volver a entrar y se envía
+  solo al hacerlo. El service worker se registra desde el layout, en cualquier
+  pantalla, y al abrir la app con conexión se vacía lo que quedara.
+- **Las cachés del service worker no distinguen cuentas**, así que al llegar al login
+  (tras cerrar sesión o con la sesión caducada) se borran las páginas y los datos
+  guardados; los estáticos y la cola se quedan. Las exportaciones, copia completa
+  incluida, no se cachean nunca.
 
 ### Sobre el parser de Fragrantica
 

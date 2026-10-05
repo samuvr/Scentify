@@ -10,11 +10,12 @@
  * contexto. "Otro" descarta la sugerencia durante el resto del dia y deja que
  * entre la siguiente de la lista.
  */
+import { BotonEnviar } from '@/componentes/BotonEnviar';
 import { PromediosEnLinea } from '@/componentes/BloquePromedios';
 import { InsigniaIdoneidad } from '@/componentes/Idoneidad';
 import { accionDescartarRecomendacion, accionRegistrarDesdeRecomendacion } from '../acciones';
 import type { Recomendacion } from '@/dominio/recomendacion';
-import type { Momento } from '@/dominio/tipos';
+import type { Estacion, Momento } from '@/dominio/tipos';
 
 const NOMBRE_EJE: Record<string, string> = {
   momento: 'momento',
@@ -26,6 +27,12 @@ interface Peticion {
   momento: Momento;
   contextoId: string;
   fecha: string;
+  /**
+   * Las estaciones elegidas a mano en la pantalla, si se han cambiado. Viajan
+   * con el registro para que la idoneidad que se guarda sea la que se ha
+   * visto; sin ellas, el servidor la calcula con el tiempo, como la pantalla.
+   */
+  estaciones?: Estacion[];
 }
 
 function MeLoPongo({
@@ -33,20 +40,29 @@ function MeLoPongo({
   momento,
   contextoId,
   fecha,
+  estaciones,
   compacto = false,
 }: Peticion & { perfumeId: string; compacto?: boolean }) {
   return (
     <form action={accionRegistrarDesdeRecomendacion} className={compacto ? '' : 'flex-1'}>
+      {/*
+        El id del uso sale con la pagina: si el formulario llega dos veces
+        (doble toque, reintento del navegador), el servidor lo guarda una.
+      */}
+      <input type="hidden" name="id" value={crypto.randomUUID()} />
       <input type="hidden" name="perfumeId" value={perfumeId} />
       <input type="hidden" name="momento" value={momento} />
       <input type="hidden" name="contextoId" value={contextoId} />
       <input type="hidden" name="fecha" value={fecha} />
-      <button
-        type="submit"
+      {estaciones?.map((e) => (
+        <input key={e} type="hidden" name="estacionesForzadas" value={e} />
+      ))}
+      <BotonEnviar
+        pendiente="Guardando…"
         className={compacto ? 'boton-secundario px-4 text-sm' : 'boton-primario w-full'}
       >
         Me lo pongo
-      </button>
+      </BotonEnviar>
     </form>
   );
 }
@@ -55,13 +71,12 @@ function Otro({ perfumeId, compacto = false }: { perfumeId: string; compacto?: b
   return (
     <form action={accionDescartarRecomendacion}>
       <input type="hidden" name="perfumeId" value={perfumeId} />
-      <button
-        type="submit"
+      <BotonEnviar
         aria-label="Otro: descartar por hoy"
         className={compacto ? 'boton-fantasma px-3 text-sm' : 'boton-secundario px-5'}
       >
         Otro
-      </button>
+      </BotonEnviar>
     </form>
   );
 }

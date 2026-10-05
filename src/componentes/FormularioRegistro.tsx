@@ -14,6 +14,7 @@
  * service worker lo encola y lo reenvia, y el mismo id evita duplicados.
  */
 import { useEffect, useRef, useState } from 'react';
+import { elegirZona, fechaEnZona } from '@/dominio/zona';
 import { useRouter } from 'next/navigation';
 import { PromediosEnLinea, formatearFecha } from './BloquePromedios';
 import { DesgloseIdoneidad, InsigniaIdoneidad } from './Idoneidad';
@@ -54,6 +55,18 @@ interface Resumen extends PromediosPerfume {
 interface Previsualizacion {
   idoneidad: { pct: number; detalle: EjesIdoneidad; explicacion: string };
   estacion: { explicacion: string; origen: string };
+}
+
+const AVISO_SIN_SESION =
+  'Tu sesión ha caducado: guardado en el móvil. Vuelve a entrar y se enviará solo.';
+
+/**
+ * Hoy segun el reloj del movil. La pantalla se pinto con el `hoy` del
+ * servidor, y una PWA abierta desde anoche lo tendria viejo: un registro de
+ * un toque por la mañana caia en el dia anterior.
+ */
+function hoySegunElMovil(): string {
+  return fechaEnZona(elegirZona(Intl.DateTimeFormat().resolvedOptions().timeZone));
 }
 
 export function FormularioRegistro({
@@ -109,6 +122,16 @@ export function FormularioRegistro({
   const [reciente, setReciente] = useState<RegistroReciente | null>(null);
 
   const cajaBusqueda = useRef<HTMLInputElement>(null);
+
+  // Al volver a la app con otro dia, se repinta: «Registrado hoy», los
+  // accesos rapidos y el «Repetir el de ayer» son del dia que era.
+  useEffect(() => {
+    const alVolver = () => {
+      if (document.visibilityState === 'visible' && hoySegunElMovil() !== hoy) router.refresh();
+    };
+    document.addEventListener('visibilitychange', alVolver);
+    return () => document.removeEventListener('visibilitychange', alVolver);
+  }, [hoy, router]);
 
   // Buscador: no molesta a la red hasta el tercer caracter.
   useEffect(() => {
@@ -214,7 +237,7 @@ export function FormularioRegistro({
     const resultado = await encolarUso({
       id: usoId,
       perfumeId: perfume.id,
-      fecha: hoy,
+      fecha: hoySegunElMovil(),
       momento: m,
       contextoId: ctx,
       sprays: perfume.spraysHabituales ?? null,
@@ -228,7 +251,8 @@ export function FormularioRegistro({
       setAviso('No se ha podido guardar. Inténtalo otra vez.');
       return;
     }
-    setReciente({ usoId, perfume, momento: m, contextoId: ctx, encolado: resultado === 'encolado' });
+    if (resultado === 'sin-sesion') setAviso(AVISO_SIN_SESION);
+    setReciente({ usoId, perfume, momento: m, contextoId: ctx, encolado: resultado !== 'guardado' });
     if (resultado === 'guardado') router.refresh();
   }
 
@@ -236,13 +260,20 @@ export function FormularioRegistro({
     const r = reciente;
     if (!r) return null;
     setReciente(null);
-    if (r.encolado) {
-      await descartarPendiente(r.usoId);
-    } else {
-      const datos = new FormData();
-      datos.set('usoId', r.usoId);
-      await accionBorrarUso(datos);
-      router.refresh();
+    try {
+      if (r.encolado) {
+        await descartarPendiente(r.usoId);
+      } else {
+        const datos = new FormData();
+        datos.set('usoId', r.usoId);
+        await accionBorrarUso(datos);
+        router.refresh();
+      }
+    } catch {
+      // Sin conexion el borrado no llega; se dice en vez de dar por hecho
+      // que se ha deshecho.
+      setAviso('No se ha podido deshacer: no hay conexión. El registro sigue guardado.');
+      return null;
     }
     return r;
   }
@@ -280,7 +311,8 @@ export function FormularioRegistro({
     const uso = {
       id: crypto.randomUUID(),
       perfumeId: elegido.id,
-      fecha,
+      // Si no se ha tocado la fecha, es «hoy», y hoy es el de ahora.
+      fecha: fecha === hoy ? hoySegunElMovil() : fecha,
       momento,
       contextoId,
       sprays: sprays === '' ? null : Number(sprays),
@@ -297,6 +329,9 @@ export function FormularioRegistro({
       router.refresh();
     } else if (resultado === 'encolado') {
       setAviso('Sin conexión: guardado en el móvil, se enviará solo al volver la cobertura.');
+      reiniciar();
+    } else if (resultado === 'sin-sesion') {
+      setAviso(AVISO_SIN_SESION);
       reiniciar();
     } else {
       setAviso('No se ha podido guardar. Inténtalo otra vez.');
@@ -329,7 +364,7 @@ export function FormularioRegistro({
           {reciente.perfume.nombre}
         </p>
         <p className="truncate text-xs text-texto-tenue">
-          {reciente.encolado ? 'Sin conexión, se enviará luego · ' : ''}
+          {reciente.encolado ? 'En el móvil, se enviará luego · ' : ''}
           {reciente.momento === 'DIA' ? 'Día' : 'Noche'} · {nombreContexto(reciente.contextoId)}
         </p>
       </div>

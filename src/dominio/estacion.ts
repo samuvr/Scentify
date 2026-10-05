@@ -40,6 +40,71 @@ export const UMBRALES_POR_DEFECTO: UmbralesEstacion = {
   bochornoIncremento: 2,
 };
 
+const CAMPOS_UMBRAL = Object.keys(UMBRALES_POR_DEFECTO) as (keyof UmbralesEstacion)[];
+
+export const MENSAJE_UMBRALES = {
+  vacio: 'Rellena todos los umbrales con un número.',
+  rango: 'Las temperaturas tienen que estar entre -30° y 50°.',
+  orden: 'Los cuatro cortes tienen que ir de más calor a menos: verano, verano + entretiempo, entretiempo e invierno.',
+  humedad: 'La humedad del bochorno es un porcentaje, de 0 a 100.',
+  incremento: 'Lo que suma el bochorno tiene que estar entre 0° y 10°.',
+} as const;
+
+export type ErrorUmbrales = keyof typeof MENSAJE_UMBRALES;
+
+export type ResultadoUmbrales =
+  | { ok: true; umbrales: UmbralesEstacion }
+  | { ok: false; error: ErrorUmbrales };
+
+/**
+ * Valida los umbrales que llegan de la pantalla de configuracion.
+ *
+ * Un campo vacio no es un cero: `Number('')` da 0, y un «solo verano a partir
+ * de 0°» dejaba todo el año en verano sin que nadie lo hubiera pedido. Y los
+ * cuatro cortes tienen que ir de mas calor a menos; si no, hay bandas que no
+ * existen y el algoritmo devuelve estaciones sin sentido.
+ */
+export function validarUmbrales(entrada: Record<string, unknown>): ResultadoUmbrales {
+  const umbrales = {} as UmbralesEstacion;
+  for (const campo of CAMPOS_UMBRAL) {
+    const crudo = entrada[campo];
+    const texto = typeof crudo === 'string' ? crudo.trim().replace(',', '.') : crudo;
+    const valor = typeof texto === 'number' ? texto : texto ? Number(texto) : Number.NaN;
+    if (!Number.isFinite(valor)) return { ok: false, error: 'vacio' };
+    umbrales[campo] = valor;
+  }
+
+  const temperaturas = [
+    umbrales.umbralVerano,
+    umbrales.umbralVeranoEntretiempo,
+    umbrales.umbralEntretiempo,
+    umbrales.umbralEntretiempoInvierno,
+    umbrales.bochornoTemperaturaMin,
+  ];
+  if (temperaturas.some((t) => t < -30 || t > 50)) {
+    return { ok: false, error: 'rango' };
+  }
+  if (
+    !(
+      umbrales.umbralVerano > umbrales.umbralVeranoEntretiempo &&
+      umbrales.umbralVeranoEntretiempo > umbrales.umbralEntretiempo &&
+      umbrales.umbralEntretiempo > umbrales.umbralEntretiempoInvierno
+    )
+  ) {
+    return {
+      ok: false,
+      error: 'orden',
+    };
+  }
+  if (umbrales.bochornoHumedadPct < 0 || umbrales.bochornoHumedadPct > 100) {
+    return { ok: false, error: 'humedad' };
+  }
+  if (umbrales.bochornoIncremento < 0 || umbrales.bochornoIncremento > 10) {
+    return { ok: false, error: 'incremento' };
+  }
+  return { ok: true, umbrales };
+}
+
 export interface ClimaDia {
   temperaturaMax: number;
   temperaturaMin: number;

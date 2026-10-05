@@ -21,25 +21,25 @@ cuando('autenticación', () => {
     db = (await import('@/db')).crearDb();
   });
 
-  it('la contraseña se verifica contra su hash y rechaza la equivocada', () => {
-    const hash = auth.hashearPassword('contraseña con ñ y espacios');
-    expect(auth.passwordCorrecta('contraseña con ñ y espacios', hash)).toBe(true);
-    expect(auth.passwordCorrecta('otra', hash)).toBe(false);
+  it('la contraseña se verifica contra su hash y rechaza la equivocada', async () => {
+    const hash = await auth.hashearPassword('contraseña con ñ y espacios');
+    expect(await auth.passwordCorrecta('contraseña con ñ y espacios', hash)).toBe(true);
+    expect(await auth.passwordCorrecta('otra', hash)).toBe(false);
   });
 
-  it('dos hashes de la misma clave son distintos: hay sal por usuario', () => {
-    const a = auth.hashearPassword('igual');
-    const b = auth.hashearPassword('igual');
+  it('dos hashes de la misma clave son distintos: hay sal por usuario', async () => {
+    const a = await auth.hashearPassword('igual');
+    const b = await auth.hashearPassword('igual');
     expect(a).not.toBe(b);
-    expect(auth.passwordCorrecta('igual', a)).toBe(true);
-    expect(auth.passwordCorrecta('igual', b)).toBe(true);
+    expect(await auth.passwordCorrecta('igual', a)).toBe(true);
+    expect(await auth.passwordCorrecta('igual', b)).toBe(true);
   });
 
-  it('un hash con formato inválido no cuela', () => {
+  it('un hash con formato inválido no cuela', async () => {
     // '!' es lo que deja la semilla cuando no se le da contraseña.
-    expect(auth.passwordCorrecta('lo que sea', '!')).toBe(false);
-    expect(auth.passwordCorrecta('lo que sea', '')).toBe(false);
-    expect(auth.passwordCorrecta('lo que sea', 'md5$abc$def')).toBe(false);
+    expect(await auth.passwordCorrecta('lo que sea', '!')).toBe(false);
+    expect(await auth.passwordCorrecta('lo que sea', '')).toBe(false);
+    expect(await auth.passwordCorrecta('lo que sea', 'md5$abc$def')).toBe(false);
   });
 
   /**

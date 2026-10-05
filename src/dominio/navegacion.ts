@@ -28,3 +28,33 @@ export function destinoSeguro(valor: unknown): string {
 
   return ruta;
 }
+
+/*
+ * Lo que llega por la URL (ids, fechas) lo puede escribir cualquiera. Pasado
+ * tal cual a PostgreSQL, un id que no es un UUID o una fecha imposible
+ * revientan la consulta con un 500; se filtran antes y se tratan como «no
+ * esta» o «sin filtro».
+ */
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function esUuid(valor: unknown): valor is string {
+  return typeof valor === 'string' && UUID.test(valor);
+}
+
+/** El valor si es un UUID; si no, undefined. */
+export function uuidOVacio(valor: unknown): string | undefined {
+  return esUuid(valor) ? valor : undefined;
+}
+
+/** 'YYYY-MM-DD' de un dia que existe: 2026-02-30 no vale. */
+export function esFechaIso(valor: unknown): valor is string {
+  if (typeof valor !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(valor)) return false;
+  const fecha = new Date(`${valor}T00:00:00Z`);
+  return !Number.isNaN(fecha.getTime()) && fecha.toISOString().slice(0, 10) === valor;
+}
+
+/** La fecha si es valida; si no, undefined. */
+export function fechaOVacia(valor: unknown): string | undefined {
+  return esFechaIso(valor) ? valor : undefined;
+}

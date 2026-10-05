@@ -13,6 +13,7 @@ import {
 } from '@/servicios/consultas';
 import { esFinDeSemana, estacionEfectivaDe, hoyIso, momentoDeAhora } from '@/servicios/usos';
 import { usuarioActual } from '@/servicios/auth';
+import { zonaDelUsuario } from '@/servicios/zona';
 import { recomendar } from '@/dominio/recomendacion';
 import type { Estacion, Momento } from '@/dominio/tipos';
 import { FilaRecomendacion, TarjetaPrincipal } from './Tarjetas';
@@ -31,19 +32,20 @@ function leerEstaciones(valor: string | undefined): Estacion[] | null {
 export default async function PaginaRecomendacion({
   searchParams,
 }: {
-  searchParams: Promise<{ momento?: string; contexto?: string; estaciones?: string }>;
+  searchParams: Promise<{ momento?: string; contexto?: string; estaciones?: string; error?: string }>;
 }) {
   const userId = await usuarioActual();
   if (!userId) redirect('/login');
 
   const parametros = await searchParams;
-  const hoy = hoyIso();
+  const zona = await zonaDelUsuario();
+  const hoy = hoyIso(zona);
   // Sin eleccion en la URL, lo que toca ahora: el momento por la hora y el
   // contexto habitual de ese momento en este tipo de dia.
   const momento: Momento =
     parametros.momento === 'NOCHE' || parametros.momento === 'DIA'
       ? parametros.momento
-      : momentoDeAhora();
+      : momentoDeAhora(zona);
 
   const [contextos, candidatos, descartados, estacionCalculada, habitual] = await Promise.all([
     listarContextos(userId),
@@ -72,7 +74,12 @@ export default async function PaginaRecomendacion({
       })
     : { recomendaciones: [] };
 
-  const peticion = { momento, contextoId: contextoElegido?.id ?? '', fecha: hoy };
+  const peticion = {
+    momento,
+    contextoId: contextoElegido?.id ?? '',
+    fecha: hoy,
+    estaciones: forzadas ?? undefined,
+  };
   const [primera, ...resto] = resultado.recomendaciones;
 
   return (
@@ -84,6 +91,12 @@ export default async function PaginaRecomendacion({
           {estacionCalculada.origen === 'CALENDARIO' && !forzadas ? ' Sin conexión con Open-Meteo.' : ''}
         </p>
       </header>
+
+      {parametros.error === 'registro' ? (
+        <p className="aviso-error">
+          No se ha podido registrar ese perfume. Vuelve a intentarlo o elige otro.
+        </p>
+      ) : null}
 
       <SelectorPeticion
         contextos={contextos.map((c) => ({ id: c.id, nombre: c.nombre }))}
