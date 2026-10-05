@@ -78,9 +78,12 @@ Cuatro puntos de la especificación admitían más de una lectura y se resolvier
 2. **Registros con fecha pasada.** La estación efectiva se calcula con el tiempo real de
    ese día, no con el de hoy, usando el histórico de Open-Meteo. Cada día consultado se
    cachea por `(lat, lon, fecha)`.
-3. **Bloque «Nunca los has usado».** Los perfumes sin ningún registro salen *solo* en su
-   bloque; la lista principal de recomendación ordena únicamente perfumes con historial,
-   por días desde el último uso. Así no se repite ninguna tarjeta en pantalla.
+3. **Sin bloque «Nunca los has usado».** Los perfumes sin ningún registro entran en la
+   lista de recomendación como los que más tiempo llevan sin usar (van primeros, como dice
+   la 7.2), con las mismas exigencias de idoneidad que el resto. La lista va de lo que hace
+   más tiempo que no te pones a lo más reciente; a igualdad de tiempo, el orden se baraja
+   con una semilla del día, así no sale siempre el primero por orden alfabético, pero
+   tampoco cambia en cada recarga ni al pulsar «Otro».
 4. **Botón «Otro».** El descarte se persiste en la tabla `recomendacion_descarte`
    (`user_id`, `perfume_id`, `fecha`), no en el navegador, para que sea coherente entre
    dispositivos y sobreviva a una recarga.
@@ -102,9 +105,6 @@ Y dos más, menores, que aparecieron al implementar:
    contexto, una estación y un momento. Un perfume a medio categorizar no sirve para el
    motor de recomendación, así que la fila se rechaza en la previsualización, con su
    número de línea y el motivo, en vez de entrar coja.
-
-**Orden del bloque «Nunca los has usado»:** la especificación no lo fija. Se ordena por
-idoneidad descendente y luego por nombre, para que la lista sea estable entre recargas.
 
 ---
 

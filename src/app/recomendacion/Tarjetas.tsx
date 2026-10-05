@@ -13,7 +13,7 @@
 import { PromediosEnLinea } from '@/componentes/BloquePromedios';
 import { InsigniaIdoneidad } from '@/componentes/Idoneidad';
 import { accionDescartarRecomendacion, accionRegistrarDesdeRecomendacion } from '../acciones';
-import type { PerfumeCandidato, Recomendacion } from '@/dominio/recomendacion';
+import type { Recomendacion } from '@/dominio/recomendacion';
 import type { Momento } from '@/dominio/tipos';
 
 const NOMBRE_EJE: Record<string, string> = {
@@ -135,32 +135,5 @@ export function FilaRecomendacion({
         <Otro perfumeId={perfume.id} compacto />
       </div>
     </li>
-  );
-}
-
-export function BloqueSinEstrenar({
-  perfumes,
-  ...peticion
-}: Peticion & { perfumes: PerfumeCandidato[] }) {
-  if (perfumes.length === 0) return null;
-
-  return (
-    <section className="space-y-1">
-      <h2 className="subtitulo">Nunca los has usado</h2>
-      <ul className="divide-y divide-borde/70">
-        {perfumes.map((p) => (
-          <li key={p.id} className="flex items-center justify-between gap-3 py-3">
-            <div className="min-w-0">
-              <p className="nombre-perfume truncate">{p.nombre}</p>
-              <p className="truncate text-sm text-texto-tenue">{p.marca}</p>
-            </div>
-            <div className="flex shrink-0 items-center gap-1">
-              <MeLoPongo perfumeId={p.id} {...peticion} compacto />
-              <Otro perfumeId={p.id} compacto />
-            </div>
-          </li>
-        ))}
-      </ul>
-    </section>
   );
 }

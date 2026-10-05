@@ -6,9 +6,10 @@
  * Filtros duros: estado = LO_TENGO y no archivado. Un perfume marcado LO_TUVE
  * desaparece de aqui pero no se toca ni un dato de las estadisticas (criterio 9).
  *
- * Decidido con el usuario: los perfumes sin ningun registro salen SOLO en el
- * bloque "Nunca los has usado"; la lista principal ordena unicamente perfumes
- * con historial, por dias desde el ultimo uso, de mas a menos.
+ * Una sola lista: de lo que hace mas tiempo que no te pones a lo mas reciente.
+ * Los perfumes sin ningun registro entran en ella como los que mas tiempo
+ * llevan sin usar (van primeros, como pide la 7.2). A igualdad de tiempo, el
+ * orden se baraja, para no recomendar siempre el primero por orden alfabetico.
  *
  * Funcion pura: recibe la coleccion ya cargada y no la muta.
  */
@@ -50,6 +51,12 @@ export interface PeticionRecomendacion {
   limite?: number;
   /** Nombre del contexto elegido, para la explicacion en texto. */
   nombreContexto?: string;
+  /**
+   * Fuente de azar para desempatar, entre 0 y 1. Por defecto, una sembrada con
+   * la fecha de hoy: el orden cambia de un dia a otro, pero no en cada recarga
+   * ni al pulsar "Otro", que debe dejar entrar la siguiente de la misma lista.
+   */
+  aleatorio?: () => number;
 }
 
 export interface Recomendacion {
@@ -71,8 +78,6 @@ export interface Recomendacion {
 
 export interface ResultadoRecomendacion {
   recomendaciones: Recomendacion[];
-  /** Hasta 3 perfumes de la coleccion con cero registros que pasan los filtros duros. */
-  nuncaUsados: PerfumeCandidato[];
 }
 
 const LIMITE_POR_DEFECTO = 3;
@@ -119,9 +124,11 @@ function motivoDeRecomendacion(
 ): string[] {
   const partes: string[] = [];
 
-  if (diasSinUsar === 0) {
+  if (diasSinUsar === null) {
+    partes.push('Aún no lo has estrenado');
+  } else if (diasSinUsar === 0) {
     partes.push('Te lo has puesto hoy');
-  } else if (diasSinUsar !== null) {
+  } else {
     partes.push(`Llevas ${diasSinUsar} ${diasSinUsar === 1 ? 'día' : 'días'} sin ponértelo`);
   }
 
@@ -152,9 +159,36 @@ function explicarRecomendacion(perfume: PerfumeCandidato, motivo: string[]): str
   return `${partes.join(' · ')}.`;
 }
 
-/** Mas tiempo sin usar primero; a igualdad, por nombre, para que el orden sea estable. */
-function porTiempoSinUsar(a: Recomendacion, b: Recomendacion): number {
-  return (b.diasSinUsar ?? 0) - (a.diasSinUsar ?? 0) || a.perfume.nombre.localeCompare(b.perfume.nombre, 'es');
+/** Generador pseudoaleatorio pequeño (mulberry32) sembrado con un texto. */
+function azarSembrado(semilla: string): () => number {
+  let h = 2166136261;
+  for (let i = 0; i < semilla.length; i++) h = Math.imul(h ^ semilla.charCodeAt(i), 16777619);
+  return () => {
+    h = (h + 0x6d2b79f5) | 0;
+    let t = Math.imul(h ^ (h >>> 15), 1 | h);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** Nunca usado cuenta como el que mas tiempo lleva sin usar. */
+const tiempoSinUsar = (r: Recomendacion) => r.diasSinUsar ?? Number.POSITIVE_INFINITY;
+
+/**
+ * Mas tiempo sin usar primero; a igualdad, al azar. Se baraja antes de ordenar
+ * (el sort es estable), asi los empates quedan en el orden barajado.
+ */
+function ordenarPorTiempoSinUsar(lista: Recomendacion[], aleatorio: () => number): Recomendacion[] {
+  // Partir de un orden fijo hace que la misma semilla de siempre el mismo resultado.
+  const barajada = [...lista].sort((a, b) => a.perfume.id.localeCompare(b.perfume.id));
+  for (let i = barajada.length - 1; i > 0; i--) {
+    const j = Math.floor(aleatorio() * (i + 1));
+    [barajada[i], barajada[j]] = [barajada[j]!, barajada[i]!];
+  }
+  return barajada.sort((a, b) => {
+    const [ta, tb] = [tiempoSinUsar(a), tiempoSinUsar(b)];
+    return ta === tb ? 0 : tb > ta ? 1 : -1;
+  });
 }
 
 export function recomendar(peticion: PeticionRecomendacion): ResultadoRecomendacion {
@@ -187,27 +221,14 @@ export function recomendar(peticion: PeticionRecomendacion): ResultadoRecomendac
     };
   };
 
-  // Manda la fecha de ultimo uso: es el dato que ordena la lista principal.
-  const conHistorial = disponibles.filter((p) => p.ultimoUso !== null).map(evaluar);
-
-  const totales = conHistorial.filter((r) => r.idoneidad.pct === 100).sort(porTiempoSinUsar);
-  const parciales = conHistorial.filter((r) => r.idoneidad.pct === 67).sort(porTiempoSinUsar);
+  const evaluados = disponibles.map(evaluar);
+  const aleatorio = peticion.aleatorio ?? azarSembrado(String(aDiaUtc(peticion.hoy)));
+  const ordenados = ordenarPorTiempoSinUsar(evaluados, aleatorio);
 
   // Las totales primero; las parciales solo completan si faltan huecos.
+  const totales = ordenados.filter((r) => r.idoneidad.pct === 100);
+  const parciales = ordenados.filter((r) => r.idoneidad.pct === 67);
   const recomendaciones = [...totales, ...parciales].slice(0, limite);
 
-  // Bloque aparte: solo filtros duros, sin exigir idoneidad. Se ordena por
-  // idoneidad y luego por nombre para que la lista sea estable.
-  const nuncaUsados = disponibles
-    .filter((p) => p.ultimoUso === null)
-    .map(evaluar)
-    .sort(
-      (a, b) =>
-        b.idoneidad.pct - a.idoneidad.pct ||
-        a.perfume.nombre.localeCompare(b.perfume.nombre, 'es'),
-    )
-    .slice(0, limite)
-    .map((r) => r.perfume);
-
-  return { recomendaciones, nuncaUsados };
+  return { recomendaciones };
 }

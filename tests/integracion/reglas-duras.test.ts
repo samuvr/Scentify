@@ -126,10 +126,7 @@ cuando('reglas duras', () => {
       estacionesCompatibles: ['OTONO'],
       hoy: '2026-09-21',
     });
-    const enRecomendaciones = [
-      ...recomendacion.recomendaciones.map((r) => r.perfume.id),
-      ...recomendacion.nuncaUsados.map((p) => p.id),
-    ];
+    const enRecomendaciones = recomendacion.recomendaciones.map((r) => r.perfume.id);
     expect(enRecomendaciones).not.toContain(perfumeId);
 
     const despues = await estadisticas.calcularEstadisticas(USUARIO, rango);
