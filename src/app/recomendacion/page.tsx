@@ -16,7 +16,7 @@ import { usuarioActual } from '@/servicios/auth';
 import { zonaDelUsuario } from '@/servicios/zona';
 import { recomendar } from '@/dominio/recomendacion';
 import type { Estacion, Momento } from '@/dominio/tipos';
-import { BloqueSinEstrenar, FilaRecomendacion, TarjetaPrincipal } from './Tarjetas';
+import { FilaRecomendacion, TarjetaPrincipal } from './Tarjetas';
 import { SelectorPeticion } from './SelectorPeticion';
 
 export const dynamic = 'force-dynamic';
@@ -72,7 +72,7 @@ export default async function PaginaRecomendacion({
         descartados,
         nombreContexto: contextoElegido.nombre,
       })
-    : { recomendaciones: [], nuncaUsados: [] };
+    : { recomendaciones: [] };
 
   const peticion = {
     momento,
@@ -124,11 +124,9 @@ export default async function PaginaRecomendacion({
       ) : (
         <p className="tarjeta text-sm text-texto-tenue">
           No hay ningún perfume que encaje del todo ni a medias con esta combinación. Prueba con
-          otro contexto, u ojea el bloque de abajo.
+          otro contexto.
         </p>
       )}
-
-      <BloqueSinEstrenar perfumes={resultado.nuncaUsados} {...peticion} />
     </div>
   );
 }

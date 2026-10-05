@@ -7,11 +7,9 @@
  *   3. Los tres primeros.
  *   4. Si hay menos de tres, se completa con idoneidad 67 marcados como parciales,
  *      indicando que eje falla.
- * Debajo, bloque aparte de hasta 3 "Nunca los has usado".
  *
- * Decidido con el usuario: los perfumes sin ningun registro salen SOLO en su
- * bloque; la lista principal ordena unicamente perfumes con historial. Asi no se
- * repite ninguna tarjeta en pantalla.
+ * Decidido con el usuario: una sola lista. Los nunca usados entran en ella como
+ * los que mas tiempo llevan sin usar, y los empates de tiempo se barajan.
  */
 import { describe, expect, it } from 'vitest';
 import { recomendar } from '@/dominio/recomendacion';
@@ -84,11 +82,11 @@ describe('filtros duros', () => {
     expect(nombres(resultado.recomendaciones)).toEqual(['Khamrah']);
   });
 
-  it('el filtro de archivado tambien se aplica al bloque de nunca usados', () => {
+  it('el filtro de archivado tambien se aplica a los nunca usados', () => {
     const resultado = recomendar(
       peticion([candidato('Nuevo'), candidato('Guardado', { archivado: true })]),
     );
-    expect(resultado.nuncaUsados.map((p) => p.nombre)).toEqual(['Nuevo']);
+    expect(nombres(resultado.recomendaciones)).toEqual(['Nuevo']);
   });
 });
 
@@ -128,46 +126,77 @@ describe('orden por dias desde el ultimo uso, de mas a menos', () => {
     expect(resultado.recomendaciones[1]?.explicacion).not.toContain('0 días');
   });
 
-  it('a igualdad de dias desempata por nombre, para que el orden sea estable', () => {
+  it('a igualdad de dias el orden se baraja, no va por nombre', () => {
+    const empatados = ['Asad', 'Khamrah', 'Yara', 'Hawas', 'Bade'].map((n) => usadoHace(n, 30));
+    const vistos = new Set<string>();
+    for (let semilla = 0; semilla < 40; semilla++) {
+      let x = semilla;
+      const aleatorio = () => ((x = (x * 9301 + 49297) % 233280) / 233280);
+      const r = recomendar(peticion(empatados, { aleatorio }));
+      vistos.add(nombres(r.recomendaciones)[0]!);
+    }
+    expect(vistos.size).toBeGreaterThan(1);
+  });
+
+  it('el barajado no rompe el orden por tiempo sin usar', () => {
     const resultado = recomendar(
-      peticion([usadoHace('Yara', 30), usadoHace('Asad', 30), usadoHace('Khamrah', 30)]),
+      peticion([usadoHace('Viejo', 90), usadoHace('A', 30), usadoHace('B', 30)], {
+        aleatorio: Math.random,
+      }),
     );
-    expect(nombres(resultado.recomendaciones)).toEqual(['Asad', 'Khamrah', 'Yara']);
+    expect(nombres(resultado.recomendaciones)[0]).toBe('Viejo');
+    expect(nombres(resultado.recomendaciones).slice(1).sort()).toEqual(['A', 'B']);
+  });
+
+  it('sin fuente de azar el orden es el mismo durante todo el dia', () => {
+    const coleccion = ['Asad', 'Khamrah', 'Yara', 'Hawas', 'Bade'].map((n) => usadoHace(n, 30));
+    const una = nombres(recomendar(peticion(coleccion)).recomendaciones);
+    const otra = nombres(recomendar(peticion([...coleccion].reverse())).recomendaciones);
+    expect(otra).toEqual(una);
+  });
+
+  it('"Otro" deja entrar la siguiente de la misma lista barajada', () => {
+    const coleccion = ['Asad', 'Khamrah', 'Yara', 'Hawas', 'Bade'].map((n) => usadoHace(n, 30));
+    const [primera, segunda, tercera] = nombres(recomendar(peticion(coleccion)).recomendaciones);
+    const tras = recomendar(
+      peticion(coleccion, { descartados: [`id-${primera!.toLowerCase()}`] }),
+    );
+    expect(nombres(tras.recomendaciones).slice(0, 2)).toEqual([segunda, tercera]);
   });
 });
 
-describe('los nunca usados van solo en su bloque', () => {
-  it('no aparecen en la lista principal aunque tengan idoneidad total', () => {
-    const resultado = recomendar(peticion([usadoHace('Khamrah', 5), candidato('Sin estrenar')]));
-    expect(nombres(resultado.recomendaciones)).toEqual(['Khamrah']);
-    expect(resultado.nuncaUsados.map((p) => p.nombre)).toEqual(['Sin estrenar']);
+describe('los nunca usados van en la misma lista', () => {
+  it('van primeros, como los que mas tiempo llevan sin usar', () => {
+    const resultado = recomendar(peticion([usadoHace('Khamrah', 500), candidato('Sin estrenar')]));
+    expect(nombres(resultado.recomendaciones)).toEqual(['Sin estrenar', 'Khamrah']);
+    expect(resultado.recomendaciones[0]?.diasSinUsar).toBeNull();
+    expect(resultado.recomendaciones[0]?.motivo).toMatch(/^Aún no lo has estrenado/);
   });
 
-  it('ninguna tarjeta se repite entre los dos bloques', () => {
+  it('tambien tienen que encajar: una total usada va antes que una parcial sin estrenar', () => {
     const resultado = recomendar(
-      peticion([usadoHace('A', 10), candidato('B'), candidato('C'), usadoHace('D', 90)]),
+      peticion([candidato('Nocturno', { momentos: ['NOCHE'] }), usadoHace('Khamrah', 3)]),
     );
-    const arriba = new Set(resultado.recomendaciones.map((r) => r.perfume.id));
-    for (const p of resultado.nuncaUsados) expect(arriba.has(p.id)).toBe(false);
+    expect(nombres(resultado.recomendaciones)).toEqual(['Khamrah', 'Nocturno']);
+    expect(resultado.recomendaciones[1]?.parcial).toBe(true);
   });
 
-  it('el bloque de nunca usados se corta en tres', () => {
+  it('una idoneidad de 33 no entra aunque no se haya estrenado', () => {
     const resultado = recomendar(
-      peticion([candidato('A'), candidato('B'), candidato('C'), candidato('D')]),
+      peticion([candidato('Malo', { momentos: ['NOCHE'], contextos: [CASA] })]),
     );
-    expect(resultado.nuncaUsados).toHaveLength(3);
+    expect(resultado.recomendaciones).toEqual([]);
   });
 
-  it('el bloque solo exige los filtros duros, no idoneidad total', () => {
-    // Marcado solo para noche: idoneidad 67 pidiendo de dia. Sigue siendo un
-    // perfume sin estrenar de la coleccion, que es lo que el bloque enseña.
-    const resultado = recomendar(peticion([candidato('Nocturno', { momentos: ['NOCHE'] })]));
-    expect(resultado.nuncaUsados.map((p) => p.nombre)).toEqual(['Nocturno']);
-  });
-
-  it('con la coleccion entera estrenada el bloque queda vacio', () => {
-    const resultado = recomendar(peticion([usadoHace('A', 10), usadoHace('B', 20)]));
-    expect(resultado.nuncaUsados).toEqual([]);
+  it('entre varios nunca usados el orden se baraja', () => {
+    const nuevos = ['A', 'B', 'C', 'D', 'E'].map((n) => candidato(n));
+    const vistos = new Set<string>();
+    for (let semilla = 1; semilla < 40; semilla++) {
+      let x = semilla;
+      const aleatorio = () => ((x = (x * 9301 + 49297) % 233280) / 233280);
+      vistos.add(nombres(recomendar(peticion(nuevos, { aleatorio })).recomendaciones)[0]!);
+    }
+    expect(vistos.size).toBeGreaterThan(1);
   });
 });
 
@@ -249,11 +278,11 @@ describe('boton "Otro": descarta y muestra la siguiente (criterio 8)', () => {
     expect(nombres(resultado.recomendaciones)).toEqual(['C', 'D']);
   });
 
-  it('descartar tambien saca del bloque de nunca usados', () => {
+  it('descartar tambien saca a los nunca usados', () => {
     const resultado = recomendar(
       peticion([candidato('Nuevo'), candidato('Otro nuevo')], { descartados: ['id-nuevo'] }),
     );
-    expect(resultado.nuncaUsados.map((p) => p.nombre)).toEqual(['Otro nuevo']);
+    expect(nombres(resultado.recomendaciones)).toEqual(['Otro nuevo']);
   });
 });
 
@@ -310,7 +339,6 @@ describe('casos limite', () => {
   it('una coleccion vacia no revienta', () => {
     const resultado = recomendar(peticion([]));
     expect(resultado.recomendaciones).toEqual([]);
-    expect(resultado.nuncaUsados).toEqual([]);
   });
 
   it('no muta la coleccion que recibe', () => {
@@ -333,6 +361,6 @@ describe('casos limite', () => {
     // Incoherencia defensiva: manda la fecha, que es el dato que ordena.
     const resultado = recomendar(peticion([candidato('Raro', { ultimoUso: '2026-01-01' })]));
     expect(nombres(resultado.recomendaciones)).toEqual(['Raro']);
-    expect(resultado.nuncaUsados).toEqual([]);
+    expect(resultado.recomendaciones[0]?.diasSinUsar).not.toBeNull();
   });
 });
