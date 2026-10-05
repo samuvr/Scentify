@@ -131,3 +131,34 @@ export async function obtenerClima(
 
   return clima;
 }
+
+/**
+ * Prevision de un dia sin pasar por la cache, para el asistente. La cache es
+ * para dias cerrados: guardar la prevision de un sabado que aun no ha llegado
+ * dejaria fijo un dato que cambia cada dia.
+ */
+export async function previsionSinCache(ubicacion: Ubicacion, iso: string) {
+  return consultarOpenMeteo(ubicacion, iso);
+}
+
+interface RespuestaGeocodificacion {
+  results?: { name: string; latitude: number; longitude: number; admin1?: string; country?: string }[];
+}
+
+/** Coordenadas de un lugar por su nombre, con el geocodificador de Open-Meteo. */
+export async function geocodificar(nombre: string): Promise<Ubicacion | null> {
+  try {
+    const parametros = new URLSearchParams({ name: nombre, count: '1', language: 'es', format: 'json' });
+    const respuesta = await fetch(`https://geocoding-api.open-meteo.com/v1/search?${parametros}`, {
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+      headers: { accept: 'application/json' },
+    });
+    if (!respuesta.ok) return null;
+    const lugar = ((await respuesta.json()) as RespuestaGeocodificacion).results?.[0];
+    if (!lugar) return null;
+    const etiqueta = [lugar.name, lugar.admin1, lugar.country].filter(Boolean).join(', ');
+    return { lat: lugar.latitude, lon: lugar.longitude, etiqueta };
+  } catch {
+    return null;
+  }
+}

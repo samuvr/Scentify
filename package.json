@@ -18,8 +18,9 @@
     "db:seed": "tsx src/db/seed.ts"
   },
   "dependencies": {
-    "@next/env": "^15.5.25",
+    "@anthropic-ai/sdk": "^0.131.0",
     "@neondatabase/serverless": "^0.10.4",
+    "@next/env": "^15.5.25",
     "drizzle-orm": "^0.36.4",
     "next": "^15.5.25",
     "postgres": "^3.4.9",
