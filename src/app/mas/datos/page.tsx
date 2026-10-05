@@ -28,6 +28,17 @@ export default async function PaginaDatos() {
         </a>
       </section>
 
+      <section className="tarjeta space-y-2">
+        <h2 className="font-semibold">Preguntar a una IA</h2>
+        <p className="text-sm text-texto-tenue">
+          Tu colección con sus notas, tus marcas y cómo la usas, en un JSON pensado para adjuntarlo
+          en Claude o cualquier otro asistente y preguntarle qué notas te faltan o qué ponerte.
+        </p>
+        <a href="/api/exportar/ia" className="boton-primario w-full text-sm" download>
+          Exportar colección para IA
+        </a>
+      </section>
+
       <PanelDatos />
     </div>
   );

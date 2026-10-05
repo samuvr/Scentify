@@ -1,6 +1,12 @@
-/** Descargas de la seccion 9: CSV de coleccion, CSV de usos y copia JSON. */
+/** Descargas de la seccion 9: CSV de coleccion, CSV de usos, copia JSON y JSON para IA. */
 import { usuarioActual } from '@/servicios/auth';
-import { copiaCompleta, exportarColeccionCsv, exportarUsosCsv } from '@/servicios/datos';
+import { leerConfiguracion } from '@/servicios/ajustes';
+import {
+  copiaCompleta,
+  exportarColeccionCsv,
+  exportarColeccionIa,
+  exportarUsosCsv,
+} from '@/servicios/datos';
 
 const HOY = () => new Date().toISOString().slice(0, 10);
 
@@ -30,6 +36,20 @@ export async function GET(_p: Request, contexto: { params: Promise<{ que: string
         `scentify-copia-${HOY()}.json`,
         'application/json',
       );
+    case 'ia': {
+      // Si la ubicacion automatica no se ha podido detectar, mejor no decir
+      // nada que mandar a la IA a mirar el tiempo de la ciudad por defecto.
+      const { ubicacion, ubicacionDetectada } = await leerConfiguracion(userId);
+      return descarga(
+        JSON.stringify(
+          await exportarColeccionIa(userId, ubicacionDetectada ? ubicacion.etiqueta : null, HOY()),
+          null,
+          2,
+        ),
+        `scentify-coleccion-ia-${HOY()}.json`,
+        'application/json',
+      );
+    }
     default:
       return new Response('No encontrado', { status: 404 });
   }

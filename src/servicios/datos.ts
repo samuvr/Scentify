@@ -6,7 +6,7 @@
  * vuelta, e importacion con previsualizacion antes de tocar nada.
  */
 import 'server-only';
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { crearDb, enUnaTransaccion, schema, type Db } from '@/db';
 import {
   analizarCsvColeccion,
@@ -18,11 +18,18 @@ import {
 } from '@/dominio/csv';
 import { claveBusqueda, normalizar } from '@/dominio/texto';
 import { crearPerfume, resolverFicha } from './perfumes';
-import type { Estacion, Momento } from '@/dominio/tipos';
+import { documentoParaIa, type PerfumeExportable } from '@/dominio/exportacion-ia';
+import type { DuracionPercibida, Estacion, Momento } from '@/dominio/tipos';
 
 /* ------------------------------------------------------------ exportacion */
 
-export async function exportarColeccionCsv(userId: string): Promise<string> {
+/**
+ * La coleccion entera, con sus listas ya agrupadas por frasco. La comparten el
+ * CSV y la exportacion para IA, que solo difieren en como lo escriben.
+ */
+async function leerColeccionDetallada(
+  userId: string,
+): Promise<(PerfumeExportable & { fragranticaUrl: string | null })[]> {
   const db = crearDb();
 
   const perfumes = await db
@@ -36,6 +43,7 @@ export async function exportarColeccionCsv(userId: string): Promise<string> {
       volumenMl: schema.perfume.volumenMl,
       fechaCompra: schema.perfume.fechaCompra,
       estado: schema.perfume.estado,
+      archivado: schema.perfume.archivado,
       valoracion: schema.perfume.valoracion,
       notasPersonales: schema.perfume.notasPersonales,
     })
@@ -45,9 +53,10 @@ export async function exportarColeccionCsv(userId: string): Promise<string> {
     .orderBy(asc(schema.ficha.marca), asc(schema.ficha.nombre));
 
   const ids = perfumes.map((p) => p.id);
-  if (ids.length === 0) return serializarCsv([[...CABECERAS_COLECCION]]);
+  if (ids.length === 0) return [];
 
-  const [notas, familias, contextos, estaciones, momentos] = await Promise.all([
+  const u = schema.uso;
+  const [notas, familias, contextos, estaciones, momentos, usos] = await Promise.all([
     // La piramide y las familias son de la ficha; se leen por el frasco para
     // seguir agrupando por perfume como el resto de columnas.
     db
@@ -76,10 +85,24 @@ export async function exportarColeccionCsv(userId: string): Promise<string> {
       .where(inArray(schema.perfumeContexto.perfumeId, ids)),
     db.select().from(schema.perfumeEstacion).where(inArray(schema.perfumeEstacion.perfumeId, ids)),
     db.select().from(schema.perfumeMomento).where(inArray(schema.perfumeMomento.perfumeId, ids)),
+    db
+      .select({
+        perfumeId: u.perfumeId,
+        vecesUsado: sql<number>`count(*)::int`,
+        ultimoUso: sql<string | null>`max(${u.fecha})::text`,
+        spraysHabituales: sql<number | null>`round(avg(${u.sprays}))::int`,
+        valoracionMedia: sql<number | null>`round(avg(${u.valoracionDia})::numeric, 1)::float8`,
+        duracionEsperada: sql<DuracionPercibida | null>`
+          mode() within group (order by ${u.duracionPercibida})
+        `,
+      })
+      .from(u)
+      .where(eq(u.userId, userId))
+      .groupBy(u.perfumeId),
   ]);
 
-  const juntar = <T>(filas: T[], id: (f: T) => string, valor: (f: T) => string) => {
-    const mapa = new Map<string, string[]>();
+  const juntar = <T, V = string>(filas: T[], id: (f: T) => string, valor: (f: T) => V) => {
+    const mapa = new Map<string, V[]>();
     for (const fila of filas) {
       const lista = mapa.get(id(fila)) ?? [];
       lista.push(valor(fila));
@@ -102,9 +125,26 @@ export async function exportarColeccionCsv(userId: string): Promise<string> {
   const porContexto = juntar(contextos, (c) => c.perfumeId, (c) => c.nombre);
   const porEstacion = juntar(estaciones, (e) => e.perfumeId, (e) => e.estacion);
   const porMomento = juntar(momentos, (m) => m.perfumeId, (m) => m.momento);
+  const porUso = new Map(usos.map((x) => [x.perfumeId, x]));
 
-  const unir = (mapa: Map<string, string[]>, id: string) =>
-    (mapa.get(id) ?? []).join(SEPARADOR_LISTA);
+  return perfumes.map((p) => ({
+    ...p,
+    notas: {
+      salida: salida.get(p.id) ?? [],
+      corazon: corazon.get(p.id) ?? [],
+      fondo: fondo.get(p.id) ?? [],
+    },
+    familias: porFamilia.get(p.id) ?? [],
+    contextos: porContexto.get(p.id) ?? [],
+    estaciones: porEstacion.get(p.id) ?? [],
+    momentos: porMomento.get(p.id) ?? [],
+    uso: porUso.get(p.id) ?? null,
+  }));
+}
+
+export async function exportarColeccionCsv(userId: string): Promise<string> {
+  const perfumes = await leerColeccionDetallada(userId);
+  const unir = (lista: string[]) => lista.join(SEPARADOR_LISTA);
 
   const filas = perfumes.map((p) => [
     p.nombre,
@@ -115,18 +155,46 @@ export async function exportarColeccionCsv(userId: string): Promise<string> {
     p.fechaCompra ?? '',
     p.estado,
     p.valoracion?.toString() ?? '',
-    unir(salida, p.id),
-    unir(corazon, p.id),
-    unir(fondo, p.id),
-    unir(porFamilia, p.id),
-    unir(porContexto, p.id),
-    unir(porEstacion, p.id),
-    unir(porMomento, p.id),
+    unir(p.notas.salida),
+    unir(p.notas.corazon),
+    unir(p.notas.fondo),
+    unir(p.familias),
+    unir(p.contextos),
+    unir(p.estaciones),
+    unir(p.momentos),
     p.fragranticaUrl ?? '',
     p.notasPersonales ?? '',
   ]);
 
   return serializarCsv([[...CABECERAS_COLECCION], ...filas]);
+}
+
+/**
+ * La coleccion en JSON legible para pegarsela a una IA y preguntarle. Ver
+ * `dominio/exportacion-ia.ts`. La ubicacion la pasa la ruta, que es quien
+ * tiene la peticion para resolverla en modo automatico.
+ */
+export async function exportarColeccionIa(
+  userId: string,
+  ubicacion: string | null,
+  hoy: string,
+) {
+  const [perfumes, deseos] = await Promise.all([
+    leerColeccionDetallada(userId),
+    crearDb()
+      .select({
+        nombre: schema.wishlist.nombre,
+        marca: schema.wishlist.marca,
+        prioridad: schema.wishlist.prioridad,
+        precioObjetivo: schema.wishlist.precioObjetivo,
+        notas: schema.wishlist.notas,
+      })
+      .from(schema.wishlist)
+      // Lo ya comprado esta en la coleccion; repetirlo como deseo confunde.
+      .where(and(eq(schema.wishlist.userId, userId), isNull(schema.wishlist.convertidoAPerfumeId)))
+      .orderBy(asc(schema.wishlist.creadoEn)),
+  ]);
+  return documentoParaIa({ perfumes, deseos, ubicacion, hoy });
 }
 
 const CABECERAS_USOS = [
