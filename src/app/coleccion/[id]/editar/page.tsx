@@ -3,6 +3,7 @@ import { notFound, redirect } from 'next/navigation';
 import { FormularioPerfume } from '@/componentes/FormularioPerfume';
 import type { ValoresPerfume } from '@/componentes/valores-perfume';
 import { usuarioActual } from '@/servicios/auth';
+import { claudeDisponible } from '@/servicios/claude';
 import { fichaDePerfume, listarContextos, listarFamilias, listarNotas } from '@/servicios/consultas';
 import { esUuid } from '@/dominio/navegacion';
 
@@ -50,6 +51,7 @@ export default async function PaginaEditar({ params }: { params: Promise<{ id: s
         contextos={contextos.map((c) => ({ id: c.id, nombre: c.nombre }))}
         familias={familias.map((f) => ({ id: f.id, slug: f.slug, nombre: f.nombre }))}
         notasConocidas={notas.map((n) => n.nombre)}
+        sugerirConIa={claudeDisponible()}
       />
     </div>
   );

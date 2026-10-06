@@ -23,20 +23,14 @@ import {
 } from '@/dominio/asistente';
 import { calcularEstacionEfectiva } from '@/dominio/estacion';
 import { leerConfiguracion } from './ajustes';
+import { claudeDisponible, MODELO, opcionesFallback } from './claude';
 import { geocodificar, previsionSinCache } from './clima';
 import { exportarColeccionIa } from './datos';
-
-const MODELO = process.env.SCENTIFY_ASISTENTE_MODELO?.trim() || 'claude-opus-5-5';
-
-/** Modelos que aceptan `fallbacks: "default"` en la API de Claude. */
-const ADMITEN_FALLBACK = new Set(['claude-opus-5-5', 'claude-opus-5', 'claude-fable-5-1', 'claude-sonnet-5-5']);
 
 /** Tope de vueltas por pregunta: con dos herramientas no deberia hacer falta mas. */
 const MAXIMO_ITERACIONES = 8;
 
-export function asistenteDisponible(): boolean {
-  return Boolean(process.env.ANTHROPIC_API_KEY?.trim());
-}
+export const asistenteDisponible = claudeDisponible;
 
 const MOMENTOS = { dia: 'DIA', noche: 'NOCHE' } as const;
 
@@ -136,12 +130,11 @@ export async function responder(
     hoy,
   );
 
-  const conFallback = ADMITEN_FALLBACK.has(MODELO);
   let runner = client.beta.messages.toolRunner({
     model: MODELO,
     max_tokens: 16000,
     output_config: { effort: 'medium' },
-    ...(conFallback ? { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' as const } : {}),
+    ...opcionesFallback(),
     system: [
       { type: 'text', text: INSTRUCCIONES },
       {
