@@ -23,7 +23,7 @@ import { familiasDeAcordes } from '@/dominio/familias';
 import type { FichaFragrantica, VotoEje } from '@/dominio/fragrantica';
 import { masVotadas } from '@/dominio/votos';
 import type { FichaParaAlta } from '@/servicios/consultas';
-import type { SugerenciaContextos } from '@/dominio/sugerencia-contextos';
+import { contextosQueEncajan, type SugerenciaContextos } from '@/dominio/sugerencia-contextos';
 import { VALORES_VACIOS, type Nivel, type ValoresPerfume } from '@/componentes/valores-perfume';
 
 const NIVELES: { clave: Nivel; titulo: string }[] = [
@@ -314,9 +314,9 @@ export function FormularioPerfume({
   }
 
   /**
-   * Pide a Claude en que contextos encaja, por las notas y las opiniones que
-   * encuentre en internet. Si no hay nada marcado, marca lo propuesto; si ya
-   * hay algo, solo lo enseña, como los votos de Fragrantica.
+   * Pide a Claude su opinion sobre cada contexto, por las notas y las
+   * opiniones que encuentre en internet. Si no hay nada marcado, marca los que
+   * encajan; si ya hay algo, solo lo enseña, como los votos de Fragrantica.
    */
   async function pedirSugerencia() {
     sugerenciaPedida.current = true;
@@ -343,7 +343,7 @@ export function FormularioPerfume({
       const nueva: SugerenciaContextos = datos.sugerencia;
       setSugerencia(nueva);
       setV((previo) =>
-        previo.contextoIds.length > 0 ? previo : { ...previo, contextoIds: nueva.contextos.map((c) => c.id) },
+        previo.contextoIds.length > 0 ? previo : { ...previo, contextoIds: contextosQueEncajan(nueva) },
       );
     } catch {
       setAvisoSugerencia('No hay conexión. Marca los contextos a mano.');
@@ -353,12 +353,13 @@ export function FormularioPerfume({
   }
 
   /**
-   * En un alta se pide sola al llegar a los contextos, con nombre y marca ya
-   * puestos y, si los hay, las notas y familias. Al editar va con boton.
+   * Se pide sola al llegar a los contextos, en un alta y al editar, con
+   * nombre y marca ya puestos y, si los hay, las notas y familias. Al editar
+   * ya hay contextos marcados, asi que solo se enseña la opinion.
    */
   const enContextos = modo === 'revision' || paso === 6;
   useEffect(() => {
-    if (!sugerirConIa || perfumeId || sugerenciaPedida.current || !enContextos) return;
+    if (!sugerirConIa || sugerenciaPedida.current || !enContextos) return;
     if (!v.nombre.trim() || !v.marca.trim()) return;
     void pedirSugerencia();
     // Solo depende de haber llegado al paso: el resto se lee al pedirla.
@@ -1019,8 +1020,9 @@ function conFicha(previo: ValoresPerfume, ficha: FichaParaAlta): ValoresPerfume 
 }
 
 /**
- * La propuesta de Claude encima de las casillas de contextos: el motivo de
- * cada uno y el boton para volver a marcar justo eso si se ha cambiado.
+ * La opinion de Claude encima de las casillas de contextos: los que encajan y
+ * los que no, cada uno con su motivo, y el boton para marcar justo los que
+ * encajan si se ha cambiado algo.
  */
 function SugerenciaDeContextos({
   sugerencia,
@@ -1040,7 +1042,7 @@ function SugerenciaDeContextos({
   if (sugiriendo) {
     return (
       <p className="text-sm text-texto-tenue" aria-live="polite">
-        Buscando opiniones y mirando las notas para sugerir contextos…
+        Buscando opiniones y mirando las notas para valorar cada contexto…
       </p>
     );
   }
@@ -1054,28 +1056,38 @@ function SugerenciaDeContextos({
       </div>
     );
   }
-  return (
-    <div className="tarjeta space-y-2 text-sm">
-      {sugerencia.resumen ? <p>{sugerencia.resumen}</p> : null}
-      {sugerencia.contextos.length > 0 ? (
+  const encajan = sugerencia.valoraciones.filter((c) => c.encaja);
+  const noEncajan = sugerencia.valoraciones.filter((c) => !c.encaja);
+  const grupo = (titulo: string, simbolo: string, lista: typeof encajan) =>
+    lista.length > 0 ? (
+      <div className="space-y-1">
+        <p className="font-semibold">{titulo}</p>
         <ul className="space-y-1">
-          {sugerencia.contextos.map((c) => (
+          {lista.map((c) => (
             <li key={c.id}>
+              <span aria-hidden="true">{simbolo} </span>
               <span className="font-medium">{c.nombre}</span>
               <span className="text-texto-tenue"> — {c.motivo}</span>
             </li>
           ))}
         </ul>
-      ) : (
+      </div>
+    ) : null;
+  return (
+    <div className="tarjeta space-y-3 text-sm">
+      {sugerencia.resumen ? <p>{sugerencia.resumen}</p> : null}
+      {encajan.length === 0 ? (
         <p className="text-texto-tenue">No encaja claro en ninguno de tus contextos.</p>
-      )}
+      ) : null}
+      {grupo('Lo recomienda para', '✓', encajan)}
+      {grupo('No lo recomienda para', '✗', noEncajan)}
       <MarcarSegunVotos
-        propuesta={sugerencia.contextos.map((c) => c.id)}
+        propuesta={encajan.map((c) => c.id)}
         actual={actual}
         aplicar={aplicar}
-        etiqueta="Marcar los sugeridos"
+        etiqueta="Marcar los recomendados"
       />
-      <p className="text-xs text-texto-tenue">Sugerido por IA: manda lo que marques tú.</p>
+      <p className="text-xs text-texto-tenue">Opinión de la IA: manda lo que marques tú.</p>
     </div>
   );
 }

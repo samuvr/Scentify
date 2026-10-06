@@ -27,7 +27,7 @@ export async function sugerirContextos(
   perfume: PeticionSugerencia,
   contextos: ContextoSugerible[],
 ): Promise<SugerenciaContextos | null> {
-  if (contextos.length === 0) return { contextos: [], resumen: '' };
+  if (contextos.length === 0) return { valoraciones: [], resumen: '' };
 
   const client = new Anthropic();
   const mensajes: Anthropic.Beta.BetaMessageParam[] = [
@@ -45,7 +45,7 @@ export async function sugerirContextos(
         { type: 'web_search_20260209', name: 'web_search', max_uses: 4 },
         {
           name: HERRAMIENTA_PROPUESTA,
-          description: 'Entrega la propuesta de contextos para el perfume. Llámala una vez, al final.',
+          description: 'Entrega la valoración de cada contexto para el perfume. Llámala una vez, al final.',
           input_schema: esquemaPropuesta(contextos),
           strict: true,
         },
