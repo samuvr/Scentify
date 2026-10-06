@@ -1,4 +1,7 @@
-/** Descargas de la seccion 9: CSV de coleccion, CSV de usos, copia JSON y JSON para IA. */
+/**
+ * Descargas de la seccion 9: CSV de coleccion, CSV de usos, copia JSON, JSON
+ * para IA y la hoja Excel para actualizar la coleccion.
+ */
 import { usuarioActual } from '@/servicios/auth';
 import { leerConfiguracion } from '@/servicios/ajustes';
 import {
@@ -7,6 +10,7 @@ import {
   exportarColeccionIa,
   exportarUsosCsv,
 } from '@/servicios/datos';
+import { exportarHojaActualizacion } from '@/servicios/hoja-actualizacion';
 
 const HOY = () => new Date().toISOString().slice(0, 10);
 
@@ -16,10 +20,10 @@ export async function GET(_p: Request, contexto: { params: Promise<{ que: string
 
   const { que } = await contexto.params;
 
-  const descarga = (cuerpo: string, nombre: string, tipo: string) =>
+  const descarga = (cuerpo: string | Blob, nombre: string, tipo: string) =>
     new Response(cuerpo, {
       headers: {
-        'content-type': `${tipo}; charset=utf-8`,
+        'content-type': typeof cuerpo === 'string' ? `${tipo}; charset=utf-8` : tipo,
         'content-disposition': `attachment; filename="${nombre}"`,
         'cache-control': 'no-store',
       },
@@ -28,6 +32,12 @@ export async function GET(_p: Request, contexto: { params: Promise<{ que: string
   switch (que) {
     case 'coleccion':
       return descarga(await exportarColeccionCsv(userId), `scentify-coleccion-${HOY()}.csv`, 'text/csv');
+    case 'hoja':
+      return descarga(
+        new Blob([new Uint8Array(await exportarHojaActualizacion(userId))]),
+        `scentify-coleccion-${HOY()}.xlsx`,
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
     case 'usos':
       return descarga(await exportarUsosCsv(userId), `scentify-usos-${HOY()}.csv`, 'text/csv');
     case 'copia':

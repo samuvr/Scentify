@@ -433,3 +433,45 @@ export async function cambiarEstado(
     .set({ estado, actualizadoEn: new Date() })
     .where(and(eq(schema.perfume.userId, userId), eq(schema.perfume.id, perfumeId)));
 }
+
+/**
+ * Cambia solo la concentracion de un frasco, como lo haria el formulario de
+ * edicion con el resto de campos intactos: si ya hay una ficha con esa
+ * concentracion, el frasco pasa a ella; si no, se corrige la suya.
+ */
+export async function cambiarConcentracion(
+  userId: string,
+  perfumeId: string,
+  concentracion: Concentracion | null,
+): Promise<void> {
+  const db = crearDb();
+  const [frasco] = await db
+    .select({
+      fichaId: schema.perfume.fichaId,
+      nombre: schema.ficha.nombre,
+      marca: schema.ficha.marca,
+      concentracion: schema.ficha.concentracion,
+      anioLanzamiento: schema.ficha.anioLanzamiento,
+      fragranticaUrl: schema.ficha.fragranticaUrl,
+    })
+    .from(schema.perfume)
+    .innerJoin(schema.ficha, eq(schema.ficha.id, schema.perfume.fichaId))
+    .where(and(eq(schema.perfume.userId, userId), eq(schema.perfume.id, perfumeId)))
+    .limit(1);
+  if (!frasco) throw new ErrorValidacion('Perfume no encontrado.');
+  if (frasco.concentracion === concentracion) return;
+
+  const { fichaId, ...ficha } = frasco;
+  const fichaFinal = await sobrescribirFicha(fichaId, {
+    ...ficha,
+    ...(await leerPiramideYFamilias(fichaId)),
+    concentracion,
+  });
+  if (fichaFinal !== fichaId) {
+    await db
+      .update(schema.perfume)
+      .set({ fichaId: fichaFinal, actualizadoEn: new Date() })
+      .where(eq(schema.perfume.id, perfumeId));
+    await borrarFichaSiHuerfana(fichaId);
+  }
+}
