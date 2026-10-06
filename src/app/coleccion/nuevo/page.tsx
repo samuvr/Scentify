@@ -5,6 +5,7 @@ import { FormularioPerfume } from '@/componentes/FormularioPerfume';
 import { VALORES_VACIOS } from '@/componentes/valores-perfume';
 import { desempaquetarFicha } from '@/dominio/ficha-compartida';
 import { usuarioActual } from '@/servicios/auth';
+import { claudeDisponible } from '@/servicios/claude';
 import {
   fichaParaAlta,
   fichaPorUrl,
@@ -73,6 +74,7 @@ export default async function PaginaNuevoPerfume({
         notasConocidas={notas.map((n) => n.nombre)}
         fichaInicial={desempaquetarFicha(previos.ficha)}
         fichaCatalogo={miFrasco ? null : fichaCatalogo}
+        sugerirConIa={claudeDisponible()}
       />
     </div>
   );

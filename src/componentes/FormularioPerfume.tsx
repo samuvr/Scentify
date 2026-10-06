@@ -23,6 +23,7 @@ import { familiasDeAcordes } from '@/dominio/familias';
 import type { FichaFragrantica, VotoEje } from '@/dominio/fragrantica';
 import { masVotadas } from '@/dominio/votos';
 import type { FichaParaAlta } from '@/servicios/consultas';
+import type { SugerenciaContextos } from '@/dominio/sugerencia-contextos';
 import { VALORES_VACIOS, type Nivel, type ValoresPerfume } from '@/componentes/valores-perfume';
 
 const NIVELES: { clave: Nivel; titulo: string }[] = [
@@ -113,17 +114,19 @@ function MarcarSegunVotos<C extends string>({
   propuesta,
   actual,
   aplicar,
+  etiqueta = 'Marcar según Fragrantica',
 }: {
   propuesta: C[];
   actual: C[];
   aplicar: (seleccion: C[]) => void;
+  etiqueta?: string;
 }) {
   const yaEsta =
     propuesta.length === actual.length && propuesta.every((clave) => actual.includes(clave));
   if (propuesta.length === 0 || yaEsta) return null;
   return (
     <button type="button" onClick={() => aplicar(propuesta)} className="boton-secundario w-full text-sm">
-      Marcar según Fragrantica
+      {etiqueta}
     </button>
   );
 }
@@ -137,6 +140,7 @@ export function FormularioPerfume({
   fichaInicial,
   fichaCatalogo,
   compartidaCon = 0,
+  sugerirConIa = false,
 }: {
   perfumeId?: string;
   iniciales?: ValoresPerfume;
@@ -147,6 +151,8 @@ export function FormularioPerfume({
   fichaCatalogo?: FichaParaAlta | null;
   /** Al editar: cuantas personas mas tienen este perfume y veran la ficha. */
   compartidaCon?: number;
+  /** Hay clave de Claude: se pueden pedir contextos sugeridos. */
+  sugerirConIa?: boolean;
   /**
    * Ficha ya leida en el servidor, cuando se comparte el texto de la pagina
    * desde el movil. Llega parseada para no tener que mandar los 17 kB de
@@ -189,6 +195,10 @@ export function FormularioPerfume({
   const [consultando, setConsultando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
+  const [sugerencia, setSugerencia] = useState<SugerenciaContextos | null>(null);
+  const [sugiriendo, setSugiriendo] = useState(false);
+  const [avisoSugerencia, setAvisoSugerencia] = useState<string | null>(null);
+  const sugerenciaPedida = useRef(false);
 
   const cambiar = (parcial: Partial<ValoresPerfume>) => setV((previo) => ({ ...previo, ...parcial }));
 
@@ -302,6 +312,58 @@ export function FormularioPerfume({
       setConsultando(false);
     }
   }
+
+  /**
+   * Pide a Claude en que contextos encaja, por las notas y las opiniones que
+   * encuentre en internet. Si no hay nada marcado, marca lo propuesto; si ya
+   * hay algo, solo lo enseña, como los votos de Fragrantica.
+   */
+  async function pedirSugerencia() {
+    sugerenciaPedida.current = true;
+    setSugiriendo(true);
+    setAvisoSugerencia(null);
+    try {
+      const familiasElegidas = familias.filter((f) => v.familiaIds.includes(f.id)).map((f) => f.nombre);
+      const r = await fetch('/api/contextos-sugeridos', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          nombre: v.nombre,
+          marca: v.marca,
+          concentracion: v.concentracion || undefined,
+          notas: v.notas,
+          familias: familiasElegidas,
+        }),
+      });
+      const datos = await r.json();
+      if (!datos.ok) {
+        setAvisoSugerencia(datos.mensaje ?? 'No se han podido sugerir contextos. Márcalos a mano.');
+        return;
+      }
+      const nueva: SugerenciaContextos = datos.sugerencia;
+      setSugerencia(nueva);
+      setV((previo) =>
+        previo.contextoIds.length > 0 ? previo : { ...previo, contextoIds: nueva.contextos.map((c) => c.id) },
+      );
+    } catch {
+      setAvisoSugerencia('No hay conexión. Marca los contextos a mano.');
+    } finally {
+      setSugiriendo(false);
+    }
+  }
+
+  /**
+   * En un alta se pide sola al llegar a los contextos, con nombre y marca ya
+   * puestos y, si los hay, las notas y familias. Al editar va con boton.
+   */
+  const enContextos = modo === 'revision' || paso === 6;
+  useEffect(() => {
+    if (!sugerirConIa || perfumeId || sugerenciaPedida.current || !enContextos) return;
+    if (!v.nombre.trim() || !v.marca.trim()) return;
+    void pedirSugerencia();
+    // Solo depende de haber llegado al paso: el resto se lee al pedirla.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enContextos]);
 
   async function guardar() {
     setGuardando(true);
@@ -609,6 +671,16 @@ export function FormularioPerfume({
   const seccionContextos = () => (
       <section className="space-y-3">
         <p className="text-sm text-texto-tenue">Mínimo uno, los que quieras.</p>
+        {sugerirConIa ? (
+          <SugerenciaDeContextos
+            sugerencia={sugerencia}
+            sugiriendo={sugiriendo}
+            aviso={avisoSugerencia}
+            actual={v.contextoIds}
+            pedir={pedirSugerencia}
+            aplicar={(contextoIds) => cambiar({ contextoIds })}
+          />
+        ) : null}
         <div className="flex flex-wrap gap-2">
           {contextos.map((c) => (
             <button
@@ -944,4 +1016,66 @@ function conFicha(previo: ValoresPerfume, ficha: FichaParaAlta): ValoresPerfume 
     estaciones: previo.estaciones.length > 0 ? previo.estaciones : ficha.estaciones,
     momentos: previo.momentos.length > 0 ? previo.momentos : ficha.momentos,
   };
+}
+
+/**
+ * La propuesta de Claude encima de las casillas de contextos: el motivo de
+ * cada uno y el boton para volver a marcar justo eso si se ha cambiado.
+ */
+function SugerenciaDeContextos({
+  sugerencia,
+  sugiriendo,
+  aviso,
+  actual,
+  pedir,
+  aplicar,
+}: {
+  sugerencia: SugerenciaContextos | null;
+  sugiriendo: boolean;
+  aviso: string | null;
+  actual: string[];
+  pedir: () => void;
+  aplicar: (contextoIds: string[]) => void;
+}) {
+  if (sugiriendo) {
+    return (
+      <p className="text-sm text-texto-tenue" aria-live="polite">
+        Buscando opiniones y mirando las notas para sugerir contextos…
+      </p>
+    );
+  }
+  if (!sugerencia) {
+    return (
+      <div className="space-y-2">
+        {aviso ? <p className="aviso-atencion">{aviso}</p> : null}
+        <button type="button" onClick={pedir} className="boton-secundario w-full text-sm">
+          Sugerir contextos con IA
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div className="tarjeta space-y-2 text-sm">
+      {sugerencia.resumen ? <p>{sugerencia.resumen}</p> : null}
+      {sugerencia.contextos.length > 0 ? (
+        <ul className="space-y-1">
+          {sugerencia.contextos.map((c) => (
+            <li key={c.id}>
+              <span className="font-medium">{c.nombre}</span>
+              <span className="text-texto-tenue"> — {c.motivo}</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-texto-tenue">No encaja claro en ninguno de tus contextos.</p>
+      )}
+      <MarcarSegunVotos
+        propuesta={sugerencia.contextos.map((c) => c.id)}
+        actual={actual}
+        aplicar={aplicar}
+        etiqueta="Marcar los sugeridos"
+      />
+      <p className="text-xs text-texto-tenue">Sugerido por IA: manda lo que marques tú.</p>
+    </div>
+  );
 }
