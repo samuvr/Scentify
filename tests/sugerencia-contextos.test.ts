@@ -1,6 +1,7 @@
 /** Sugerencia de contextos: mensaje, esquema de la herramienta y traduccion a ids. */
 import { describe, expect, it } from 'vitest';
 import {
+  contextosQueEncajan,
   esquemaPeticionSugerencia,
   esquemaPropuesta,
   interpretarPropuesta,
@@ -39,35 +40,40 @@ describe('sugerencia de contextos', () => {
     expect(mensajeSugerencia(perfume, CONTEXTOS)).toContain('sin indicar; búscalas');
   });
 
-  it('el esquema solo admite las claves de los contextos', () => {
+  it('el esquema pide una valoración por contexto, con su clave, si encaja y el motivo', () => {
     const esquema = esquemaPropuesta(CONTEXTOS);
-    expect(esquema.properties.contextos.items.properties.clave.enum).toEqual(['oficina', 'gym', 'cita']);
+    const item = esquema.properties.valoraciones.items;
+    expect(item.properties.clave.enum).toEqual(['oficina', 'gym', 'cita']);
+    expect(item.required).toEqual(['clave', 'encaja', 'motivo']);
     expect(esquema.additionalProperties).toBe(false);
   });
 
-  it('traduce claves a ids y descarta las desconocidas y repetidas', () => {
+  it('traduce a ids en el orden de los contextos y descarta desconocidas y repetidas', () => {
     const sugerencia = interpretarPropuesta(
       {
-        contextos: [
-          { clave: 'cita', motivo: ' Dulce y envolvente. ' },
-          { clave: 'playa', motivo: 'No existe.' },
-          { clave: 'cita', motivo: 'Repetido.' },
-          { clave: 'oficina', motivo: 'Proyección moderada.' },
+        valoraciones: [
+          { clave: 'cita', encaja: true, motivo: ' Dulce y envolvente. ' },
+          { clave: 'playa', encaja: true, motivo: 'No existe.' },
+          { clave: 'cita', encaja: false, motivo: 'Repetido.' },
+          { clave: 'gym', encaja: false, motivo: 'Demasiado denso para sudar.' },
+          { clave: 'oficina', encaja: true, motivo: 'Proyección moderada.' },
         ],
         resumen: 'Gourmand especiado.',
       },
       CONTEXTOS,
     );
     expect(sugerencia).toEqual({
-      contextos: [
-        { id: 'id-cita', nombre: 'Cita', motivo: 'Dulce y envolvente.' },
-        { id: 'id-oficina', nombre: 'Oficina', motivo: 'Proyección moderada.' },
+      valoraciones: [
+        { id: 'id-oficina', nombre: 'Oficina', encaja: true, motivo: 'Proyección moderada.' },
+        { id: 'id-gym', nombre: 'Gym', encaja: false, motivo: 'Demasiado denso para sudar.' },
+        { id: 'id-cita', nombre: 'Cita', encaja: true, motivo: 'Dulce y envolvente.' },
       ],
       resumen: 'Gourmand especiado.',
     });
+    expect(contextosQueEncajan(sugerencia!)).toEqual(['id-oficina', 'id-cita']);
   });
 
   it('una entrada sin forma no es una propuesta', () => {
-    expect(interpretarPropuesta({ contextos: 'oficina' }, CONTEXTOS)).toBeNull();
+    expect(interpretarPropuesta({ valoraciones: 'oficina' }, CONTEXTOS)).toBeNull();
   });
 });

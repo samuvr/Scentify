@@ -2,8 +2,9 @@
  * Sugerencia de contextos al dar de alta un perfume.
  *
  * Claude mira las notas y busca en internet que dice la gente del perfume, y
- * propone en cuales de MIS contextos encaja. Es una propuesta, como los votos
- * de Fragrantica: se ve marcada y se cambia a mano; no se guarda nada aparte.
+ * opina de CADA uno de mis contextos: si encaja o no, y por que. Es una
+ * propuesta, como los votos de Fragrantica: lo que encaja se ve marcado y se
+ * cambia a mano; no se guarda nada aparte.
  *
  * Aqui va lo que no depende de la red: lo que manda el navegador, el texto de
  * las instrucciones, el esquema de la respuesta y como se traduce a ids. La
@@ -30,9 +31,22 @@ export interface ContextoSugerible {
   nombre: string;
 }
 
+export interface ValoracionContexto {
+  id: string;
+  nombre: string;
+  encaja: boolean;
+  motivo: string;
+}
+
 export interface SugerenciaContextos {
-  contextos: { id: string; nombre: string; motivo: string }[];
+  /** Una por contexto, en el orden de los contextos de la persona. */
+  valoraciones: ValoracionContexto[];
   resumen: string;
+}
+
+/** Los contextos que la propuesta marcaria. */
+export function contextosQueEncajan(sugerencia: SugerenciaContextos): string[] {
+  return sugerencia.valoraciones.filter((v) => v.encaja).map((v) => v.id);
 }
 
 /** Nombre de la herramienta con la que Claude entrega la propuesta. */
@@ -40,16 +54,16 @@ export const HERRAMIENTA_PROPUESTA = 'proponer_contextos';
 
 export const INSTRUCCIONES_SUGERENCIA = `Eres un experto en perfumería que ayuda a clasificar perfumes en una colección personal.
 
-Te dan un perfume (nombre, marca, notas y familias) y la lista de contextos de uso que tiene definidos la persona. Tu trabajo es decidir en cuáles de esos contextos encaja el perfume.
+Te dan un perfume (nombre, marca, notas y familias) y la lista de contextos de uso que tiene definidos la persona. Tu trabajo es opinar de cada uno de esos contextos: si el perfume encaja o no, y por qué.
 
 Antes de decidir, busca en internet opiniones de la gente sobre ese perfume concreto (Fragrantica, Parfumo, Basenotes, Reddit, reseñas en vídeo o blogs): proyección, estela, duración, si se considera seguro para la oficina, si cansa en espacios cerrados, si es de cita, si funciona con calor o haciendo deporte. Con dos o tres búsquedas basta. Si no encuentras nada fiable, decide solo por las notas y dilo en el resumen.
 
 Criterios:
 - Los contextos describen entorno social y formalidad, no la hora del día ni la estación: no los uses para decir «de noche» o «de verano».
-- Sé selectivo: marca solo los contextos donde el perfume encaja de verdad, normalmente entre uno y tres. Un perfume muy intenso o dulce rara vez es de oficina o gimnasio; uno fresco y discreto rara vez es de gala.
-- Usa solo los contextos de la lista, por su clave.
+- Valora todos los contextos de la lista, una vez cada uno y por su clave, también los que no recomiendas: la persona quiere saber por qué no.
+- Sé selectivo con los que encajan: normalmente entre uno y tres. Un perfume muy intenso o dulce rara vez es de oficina o gimnasio; uno fresco y discreto rara vez es de gala.
 
-Cuando termines, llama a la herramienta ${HERRAMIENTA_PROPUESTA} con tu propuesta. Escribe los motivos y el resumen en castellano, cada motivo en una frase corta que mencione notas u opiniones concretas.`;
+Cuando termines, llama a la herramienta ${HERRAMIENTA_PROPUESTA} con tu valoración. Escribe los motivos y el resumen en castellano, cada motivo en una frase corta que mencione notas u opiniones concretas.`;
 
 const NIVELES: Record<PeticionSugerencia['notas'][number]['nivel'], string> = {
   SALIDA: 'salida',
@@ -86,16 +100,17 @@ export function esquemaPropuesta(contextos: ContextoSugerible[]) {
   return {
     type: 'object' as const,
     properties: {
-      contextos: {
+      valoraciones: {
         type: 'array',
-        description: 'Los contextos donde encaja, del más claro al menos claro.',
+        description: 'Una valoración por cada contexto de la lista, encaje o no.',
         items: {
           type: 'object',
           properties: {
             clave: { type: 'string', enum: contextos.map((c) => c.slug) },
-            motivo: { type: 'string', description: 'Una frase: por qué encaja.' },
+            encaja: { type: 'boolean', description: 'Si lo recomiendas para este contexto.' },
+            motivo: { type: 'string', description: 'Una frase: por qué encaja o por qué no.' },
           },
-          required: ['clave', 'motivo'],
+          required: ['clave', 'encaja', 'motivo'],
           additionalProperties: false,
         },
       },
@@ -104,19 +119,20 @@ export function esquemaPropuesta(contextos: ContextoSugerible[]) {
         description: 'Dos frases como mucho: carácter del perfume y qué dice la gente.',
       },
     },
-    required: ['contextos', 'resumen'],
+    required: ['valoraciones', 'resumen'],
     additionalProperties: false,
   };
 }
 
 const esquemaEntrada = z.object({
-  contextos: z.array(z.object({ clave: z.string(), motivo: z.string() })),
+  valoraciones: z.array(z.object({ clave: z.string(), encaja: z.boolean(), motivo: z.string() })),
   resumen: z.string(),
 });
 
 /**
- * Traduce la entrada de la herramienta a ids. Descarta claves desconocidas y
- * repetidas en vez de fallar: lo que quede sigue siendo una propuesta valida.
+ * Traduce la entrada de la herramienta a ids, en el orden de los contextos.
+ * Descarta claves desconocidas y se queda con la primera de las repetidas en
+ * vez de fallar; un contexto sin valorar simplemente no aparece.
  */
 export function interpretarPropuesta(
   entrada: unknown,
@@ -125,14 +141,13 @@ export function interpretarPropuesta(
   const analisis = esquemaEntrada.safeParse(entrada);
   if (!analisis.success) return null;
 
-  const porSlug = new Map(contextos.map((c) => [c.slug, c]));
-  const vistos = new Set<string>();
-  const elegidos: SugerenciaContextos['contextos'] = [];
-  for (const { clave, motivo } of analisis.data.contextos) {
-    const contexto = porSlug.get(clave);
-    if (!contexto || vistos.has(contexto.id)) continue;
-    vistos.add(contexto.id);
-    elegidos.push({ id: contexto.id, nombre: contexto.nombre, motivo: motivo.trim() });
+  const porClave = new Map<string, { encaja: boolean; motivo: string }>();
+  for (const { clave, encaja, motivo } of analisis.data.valoraciones) {
+    if (!porClave.has(clave)) porClave.set(clave, { encaja, motivo: motivo.trim() });
   }
-  return { contextos: elegidos, resumen: analisis.data.resumen.trim() };
+  const valoraciones = contextos.flatMap((c) => {
+    const valoracion = porClave.get(c.slug);
+    return valoracion ? [{ id: c.id, nombre: c.nombre, ...valoracion }] : [];
+  });
+  return { valoraciones, resumen: analisis.data.resumen.trim() };
 }

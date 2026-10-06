@@ -26,7 +26,13 @@ const RESPUESTAS = [
       { type: 'text', text: 'Listo.' },
       {
         type: 'tool_use', id: 'toolu_1', name: 'proponer_contextos',
-        input: { contextos: [{ clave: 'cita', motivo: 'Dulce y con mucha estela.' }], resumen: 'Gourmand potente.' },
+        input: {
+          valoraciones: [
+            { clave: 'oficina', encaja: false, motivo: 'Proyecta demasiado.' },
+            { clave: 'cita', encaja: true, motivo: 'Dulce y con mucha estela.' },
+          ],
+          resumen: 'Gourmand potente.',
+        },
       },
     ],
     'tool_use',
@@ -69,7 +75,10 @@ describe('sugerencia de contextos con Claude', () => {
     );
 
     expect(sugerencia).toEqual({
-      contextos: [{ id: 'id-cita', nombre: 'Cita', motivo: 'Dulce y con mucha estela.' }],
+      valoraciones: [
+        { id: 'id-oficina', nombre: 'Oficina', encaja: false, motivo: 'Proyecta demasiado.' },
+        { id: 'id-cita', nombre: 'Cita', encaja: true, motivo: 'Dulce y con mucha estela.' },
+      ],
       resumen: 'Gourmand potente.',
     });
 
