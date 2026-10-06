@@ -11,9 +11,20 @@ const DESTINOS = [
   { href: '/', etiqueta: 'Hoy', icono: 'M12 3v18M3 12h18' },
   { href: '/recomendacion', etiqueta: 'Sugerir', icono: 'M12 2l2.4 7.4H22l-6 4.4 2.3 7.2-6.3-4.6L5.7 21 8 13.8 2 9.4h7.6z' },
   { href: '/coleccion', etiqueta: 'Colección', icono: 'M4 6h16M4 12h16M4 18h16' },
-  { href: '/estadisticas', etiqueta: 'Estadísticas', icono: 'M4 20V10M10 20V4M16 20v-7M22 20H2' },
-  { href: '/mas', etiqueta: 'Más', icono: 'M5 12h.01M12 12h.01M19 12h.01' },
+  {
+    href: '/asistente',
+    etiqueta: 'Asistente',
+    icono: 'M21 12a8 8 0 0 1-11.6 7.1L4 21l1.9-5.4A8 8 0 1 1 21 12z',
+  },
+  // Estadisticas cuelga de Mas: al estar dentro, se marca Mas.
+  { href: '/mas', etiqueta: 'Más', icono: 'M5 12h.01M12 12h.01M19 12h.01', tambien: ['/estadisticas'] },
 ] as const;
+
+function estaActivo(ruta: string, destino: (typeof DESTINOS)[number]): boolean {
+  if (destino.href === '/') return ruta === '/';
+  const prefijos = ['tambien' in destino ? destino.tambien : [], [destino.href]].flat();
+  return prefijos.some((p) => ruta === p || ruta.startsWith(`${p}/`));
+}
 
 export function NavegacionInferior() {
   const ruta = usePathname();
@@ -25,8 +36,9 @@ export function NavegacionInferior() {
       aria-label="Navegación principal"
     >
       <ul className="mx-auto flex max-w-screen-sm">
-        {DESTINOS.map(({ href, etiqueta, icono }) => {
-          const activo = href === '/' ? ruta === '/' : ruta.startsWith(href);
+        {DESTINOS.map((destino) => {
+          const { href, etiqueta, icono } = destino;
+          const activo = estaActivo(ruta, destino);
           return (
             <li key={href} className="flex-1">
               <Link

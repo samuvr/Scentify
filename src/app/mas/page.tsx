@@ -6,6 +6,7 @@ import { accionCerrarSesion } from '../acciones';
 export const dynamic = 'force-dynamic';
 
 const SECCIONES = [
+  { href: '/estadisticas', titulo: 'Estadísticas', descripcion: 'Qué te pones, cuándo y cuánto aciertas' },
   { href: '/mas/wishlist', titulo: 'Wishlist', descripcion: 'Lo que quiero y a qué precio' },
   { href: '/mas/huecos', titulo: 'Huecos', descripcion: 'Qué combinaciones no cubre tu colección' },
   { href: '/mas/viaje', titulo: 'Modo viaje', descripcion: 'El set mínimo de frascos para lo que viene' },
