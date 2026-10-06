@@ -2,6 +2,7 @@
 import { redirect } from 'next/navigation';
 import { usuarioActual } from '@/servicios/auth';
 import { PanelDatos } from './PanelDatos';
+import { PanelHoja } from './PanelHoja';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,6 +28,8 @@ export default async function PaginaDatos() {
           Copia completa en JSON
         </a>
       </section>
+
+      <PanelHoja />
 
       <section className="tarjeta space-y-2">
         <h2 className="font-semibold">Preguntar a una IA</h2>

@@ -5,7 +5,11 @@
  * recargar y volver atras sin perderla.
  */
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { MINIMO_CARACTERES_BUSQUEDA } from '@/dominio/texto';
+
+/** Lo justo para no lanzar una consulta por cada tecla al escribir seguido. */
+const ESPERA_MS = 250;
 
 export function Filtros({
   marcas,
@@ -21,12 +25,31 @@ export function Filtros({
   const [abierto, setAbierto] = useState(false);
   const [texto, setTexto] = useState(parametros.get('q') ?? '');
 
-  function poner(clave: string, valor: string) {
+  function poner(clave: string, valor: string, reemplazar = false) {
     const nuevos = new URLSearchParams(parametros.toString());
     if (valor) nuevos.set(clave, valor);
     else nuevos.delete(clave);
-    router.push(`/coleccion?${nuevos}`);
+    const destino = `/coleccion?${nuevos}`;
+    // Al escribir se reemplaza la entrada del historial: volver atras no debe
+    // deshacer la busqueda letra a letra.
+    if (reemplazar) router.replace(destino, { scroll: false });
+    else router.push(destino);
   }
+
+  // Busqueda al vuelo: filtra a partir de la tercera letra y se refina con cada
+  // una que se escribe o se borra. Por debajo de tres, sin filtro de texto.
+  const ultimaBuscada = useRef(parametros.get('q') ?? '');
+  useEffect(() => {
+    const limpio = texto.trim();
+    const consulta = limpio.length >= MINIMO_CARACTERES_BUSQUEDA ? limpio : '';
+    if (consulta === ultimaBuscada.current) return;
+    const espera = setTimeout(() => {
+      ultimaBuscada.current = consulta;
+      poner('q', consulta, true);
+    }, ESPERA_MS);
+    return () => clearTimeout(espera);
+    // `poner` cambia en cada render; lo que dispara la busqueda es el texto.
+  }, [texto]);
 
   const activos = [...parametros.keys()].filter((k) => k !== 'q' && k !== 'orden').length;
 
@@ -54,7 +77,9 @@ export function Filtros({
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          poner('q', texto);
+          // Intro busca ya, aunque sean menos de tres letras.
+          ultimaBuscada.current = texto.trim();
+          poner('q', texto.trim(), true);
         }}
       >
         <input
@@ -135,7 +160,11 @@ export function Filtros({
           </label>
           <button
             type="button"
-            onClick={() => router.push('/coleccion')}
+            onClick={() => {
+              ultimaBuscada.current = '';
+              setTexto('');
+              router.push('/coleccion');
+            }}
             className="boton-fantasma w-full text-sm"
           >
             Limpiar filtros

@@ -32,6 +32,12 @@ import {
   type PrevisualizacionImportacion,
   type ResultadoImportacionFinal,
 } from '@/servicios/datos';
+import {
+  aplicarHoja,
+  previsualizarHoja,
+  type ResultadoActualizacion,
+} from '@/servicios/hoja-actualizacion';
+import type { AnalisisHoja } from '@/dominio/hoja-actualizacion';
 import { guardarAjuste, guardarUmbrales } from '@/servicios/ajustes';
 import { validarUmbrales } from '@/dominio/estacion';
 import { HORA_MAXIMA_RECORDATORIO } from '@/servicios/recordatorio';
@@ -434,6 +440,39 @@ export async function accionImportar(
   revalidatePath('/coleccion');
   revalidatePath('/estadisticas');
   return resultado;
+}
+
+/** El Excel llega como fichero en un FormData, bajo la clave `hoja`. */
+async function ficheroDeHoja(datos: FormData): Promise<ArrayBuffer> {
+  const fichero = datos.get('hoja');
+  if (!(fichero instanceof File) || fichero.size === 0) throw new Error('Elige un fichero.');
+  return fichero.arrayBuffer();
+}
+
+export async function accionPrevisualizarHoja(
+  datos: FormData,
+): Promise<{ ok: true; analisis: AnalisisHoja } | { ok: false; error: string }> {
+  const userId = await exigirUsuario();
+  try {
+    return { ok: true, analisis: await previsualizarHoja(userId, await ficheroDeHoja(datos)) };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : 'Fichero no válido.' };
+  }
+}
+
+export async function accionAplicarHoja(
+  datos: FormData,
+): Promise<{ ok: true; resultado: ResultadoActualizacion } | { ok: false; error: string }> {
+  const userId = await exigirUsuario();
+  try {
+    const resultado = await aplicarHoja(userId, await ficheroDeHoja(datos));
+    revalidatePath('/coleccion', 'layout');
+    revalidatePath('/estadisticas');
+    revalidatePath('/recomendacion');
+    return { ok: true, resultado };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : 'Fichero no válido.' };
+  }
 }
 
 export async function accionRestaurarCopia(json: string): Promise<{ ok: boolean; error?: string }> {
