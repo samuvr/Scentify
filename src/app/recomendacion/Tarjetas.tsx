@@ -27,6 +27,8 @@ interface Peticion {
   momento: Momento;
   contextoId: string;
   fecha: string;
+  /** Sugerencia para mañana: el uso se apunta con la fecha de mañana. */
+  paraManana?: boolean;
   /**
    * Las estaciones elegidas a mano en la pantalla, si se han cambiado. Viajan
    * con el registro para que la idoneidad que se guarda sea la que se ha
@@ -40,6 +42,7 @@ function MeLoPongo({
   momento,
   contextoId,
   fecha,
+  paraManana,
   estaciones,
   compacto = false,
 }: Peticion & { perfumeId: string; compacto?: boolean }) {
@@ -54,6 +57,7 @@ function MeLoPongo({
       <input type="hidden" name="momento" value={momento} />
       <input type="hidden" name="contextoId" value={contextoId} />
       <input type="hidden" name="fecha" value={fecha} />
+      {paraManana ? <input type="hidden" name="dia" value="manana" /> : null}
       {estaciones?.map((e) => (
         <input key={e} type="hidden" name="estacionesForzadas" value={e} />
       ))}
@@ -61,18 +65,29 @@ function MeLoPongo({
         pendiente="Guardando…"
         className={compacto ? 'boton-secundario px-4 text-sm' : 'boton-primario w-full'}
       >
-        Me lo pongo
+        {paraManana ? 'Me lo pondré' : 'Me lo pongo'}
       </BotonEnviar>
     </form>
   );
 }
 
-function Otro({ perfumeId, compacto = false }: { perfumeId: string; compacto?: boolean }) {
+function Otro({
+  perfumeId,
+  fecha,
+  paraManana,
+  compacto = false,
+}: {
+  perfumeId: string;
+  fecha: string;
+  paraManana?: boolean;
+  compacto?: boolean;
+}) {
   return (
     <form action={accionDescartarRecomendacion}>
       <input type="hidden" name="perfumeId" value={perfumeId} />
+      <input type="hidden" name="fecha" value={fecha} />
       <BotonEnviar
-        aria-label="Otro: descartar por hoy"
+        aria-label={paraManana ? 'Otro: descartar para mañana' : 'Otro: descartar por hoy'}
         className={compacto ? 'boton-fantasma px-3 text-sm' : 'boton-secundario px-5'}
       >
         Otro
@@ -107,7 +122,7 @@ export function TarjetaPrincipal({
     >
       <div className="space-y-1">
         <div className="flex items-start justify-between gap-3">
-          <p className="subtitulo">Hoy te pondría</p>
+          <p className="subtitulo">{peticion.paraManana ? 'Mañana te pondría' : 'Hoy te pondría'}</p>
           <InsigniaIdoneidad pct={idoneidad.pct} />
         </div>
         <h2 className="nombre-perfume text-3xl">{perfume.nombre}</h2>
@@ -120,7 +135,7 @@ export function TarjetaPrincipal({
 
       <div className="flex gap-2">
         <MeLoPongo perfumeId={perfume.id} {...peticion} />
-        <Otro perfumeId={perfume.id} />
+        <Otro perfumeId={perfume.id} fecha={peticion.fecha} paraManana={peticion.paraManana} />
       </div>
     </article>
   );
@@ -147,7 +162,12 @@ export function FilaRecomendacion({
       {perfume.promedios ? <PromediosEnLinea promedios={perfume.promedios} /> : null}
       <div className="flex items-center gap-2">
         <MeLoPongo perfumeId={perfume.id} {...peticion} compacto />
-        <Otro perfumeId={perfume.id} compacto />
+        <Otro
+          perfumeId={perfume.id}
+          fecha={peticion.fecha}
+          paraManana={peticion.paraManana}
+          compacto
+        />
       </div>
     </li>
   );

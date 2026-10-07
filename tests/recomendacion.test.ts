@@ -126,6 +126,27 @@ describe('orden por dias desde el ultimo uso, de mas a menos', () => {
     expect(resultado.recomendaciones[1]?.explicacion).not.toContain('0 días');
   });
 
+  it('para mañana cuenta los dias hasta mañana', () => {
+    const resultado = recomendar(
+      peticion([usadoHace('Hoy', 0), usadoHace('Antes', 5)], {
+        hoy: '2026-11-16',
+        paraManana: true,
+      }),
+    );
+    expect(nombres(resultado.recomendaciones)).toEqual(['Antes', 'Hoy']);
+    expect(resultado.recomendaciones[0]?.explicacion).toMatch(/^Llevas 6 días/);
+    expect(resultado.recomendaciones[1]?.explicacion).toMatch(/^Llevas 1 día sin/);
+  });
+
+  it('un uso ya apuntado para mañana no dice «te lo has puesto hoy»', () => {
+    const manana = candidato('Apuntado', { ultimoUso: '2026-11-16', vecesUsado: 1 });
+    const paraManana = recomendar(peticion([manana], { hoy: '2026-11-16', paraManana: true }));
+    expect(paraManana.recomendaciones[0]?.explicacion).toMatch(/^Ya lo tienes apuntado para mañana/);
+    // Y pidiendo para hoy tampoco sale «Llevas -1 días».
+    const paraHoy = recomendar(peticion([manana]));
+    expect(paraHoy.recomendaciones[0]?.explicacion).toMatch(/^Lo tienes apuntado para mañana/);
+  });
+
   it('a igualdad de dias el orden se baraja, no va por nombre', () => {
     const empatados = ['Asad', 'Khamrah', 'Yara', 'Hawas', 'Bade'].map((n) => usadoHace(n, 30));
     const vistos = new Set<string>();

@@ -1,8 +1,9 @@
 'use client';
 
 /**
- * Lo unico que se pregunta: momento y contexto. Mas el desplegable para
- * sobrescribir la estacion, que la 7.1 exige que sea siempre posible.
+ * Lo unico que se pregunta: para cuando (hoy o mañana), momento y contexto.
+ * Mas el desplegable para sobrescribir la estacion, que la 7.1 exige que sea
+ * siempre posible.
  */
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
@@ -17,6 +18,7 @@ const NOMBRE_ESTACION: Record<Estacion, string> = {
 
 export function SelectorPeticion({
   contextos,
+  paraManana,
   momento,
   contextoId,
   estacionesCompatibles,
@@ -24,6 +26,7 @@ export function SelectorPeticion({
   sobrescrita,
 }: {
   contextos: { id: string; nombre: string }[];
+  paraManana: boolean;
   momento: Momento;
   contextoId: string;
   estacionesCompatibles: Estacion[];
@@ -52,6 +55,25 @@ export function SelectorPeticion({
 
   return (
     <section className="space-y-3">
+      <div>
+        <span className="block text-sm font-medium text-texto-tenue">Para</span>
+        <div className="mt-1 grid grid-cols-2 gap-2">
+          {([false, true] as const).map((manana) => (
+            <button
+              key={String(manana)}
+              type="button"
+              aria-pressed={paraManana === manana}
+              // La estacion a mano se conserva: «el resto igual» incluye lo
+              // que se haya sobrescrito.
+              onClick={() => navegar({ dia: manana ? 'manana' : null })}
+              className="opcion"
+            >
+              {manana ? 'Mañana' : 'Hoy'}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div>
         <span className="block text-sm font-medium text-texto-tenue">Momento</span>
         <div className="mt-1 grid grid-cols-2 gap-2">

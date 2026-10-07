@@ -36,6 +36,7 @@ export default async function PaginaHoy({
   const userId = await usuarioActual();
   if (!userId) redirect('/login');
 
+  const { registrado } = await searchParams;
   const zona = await zonaDelUsuario();
   const hoy = hoyIso(zona);
   const momento = momentoDeAhora(zona);
@@ -63,7 +64,11 @@ export default async function PaginaHoy({
         </p>
       </header>
 
-      {(await searchParams).registrado ? (
+      {registrado === 'manana' ? (
+        <p className="aviso-hecho" role="status">
+          Apuntado para mañana.
+        </p>
+      ) : registrado ? (
         <p className="aviso-hecho" role="status">
           Apuntado. Lo tienes abajo, en «Registrado hoy».
         </p>

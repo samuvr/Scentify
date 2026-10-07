@@ -3,7 +3,8 @@
  *
  * Una llamada al dia por ubicacion, cacheada en `clima_diario`. La cache tiene
  * un segundo uso: un registro con fecha pasada se calcula con el tiempo que hizo
- * realmente ese dia, no con el de hoy.
+ * realmente ese dia, no con el de hoy. Los dias futuros (sugerir para mañana)
+ * se piden siempre a la prevision y no se cachean.
  *
  * Si la peticion falla, devuelve null. Quien llama se cae al calendario: ninguna
  * pantalla se queda bloqueada porque Open-Meteo no responda.
@@ -87,6 +88,9 @@ export async function obtenerClima(
   fecha: Date | string = new Date(),
 ): Promise<ClimaDia | null> {
   const iso = aIso(fecha);
+  // Un dia que aun no ha llegado es prevision, no historia: cambia de un dia a
+  // otro y no se guarda, igual que en `previsionSinCache`.
+  if (diasDesde(iso) < 0) return consultarOpenMeteo(ubicacion, iso);
   const db = crearDb();
   const lat = ubicacion.lat.toFixed(5);
   const lon = ubicacion.lon.toFixed(5);

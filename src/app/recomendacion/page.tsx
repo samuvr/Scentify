@@ -3,6 +3,10 @@
  *
  * Pregunta solo momento y contexto; la estacion la deduce la 7.1 del tiempo
  * real, la enseña con su explicacion y deja sobrescribirla.
+ *
+ * Con `dia=manana` se planifica el dia siguiente: la estacion sale de la
+ * prevision de mañana y lo que se elige se apunta con la fecha de mañana. El
+ * resto de la peticion (momento, contexto, estacion a mano) no cambia.
  */
 import { redirect } from 'next/navigation';
 import {
@@ -11,7 +15,13 @@ import {
   descartesDeHoy,
   listarContextos,
 } from '@/servicios/consultas';
-import { esFinDeSemana, estacionEfectivaDe, hoyIso, momentoDeAhora } from '@/servicios/usos';
+import {
+  desplazarDias,
+  esFinDeSemana,
+  estacionEfectivaDe,
+  hoyIso,
+  momentoDeAhora,
+} from '@/servicios/usos';
 import { usuarioActual } from '@/servicios/auth';
 import { zonaDelUsuario } from '@/servicios/zona';
 import { recomendar } from '@/dominio/recomendacion';
@@ -32,14 +42,21 @@ function leerEstaciones(valor: string | undefined): Estacion[] | null {
 export default async function PaginaRecomendacion({
   searchParams,
 }: {
-  searchParams: Promise<{ momento?: string; contexto?: string; estaciones?: string; error?: string }>;
+  searchParams: Promise<{
+    momento?: string;
+    contexto?: string;
+    estaciones?: string;
+    dia?: string;
+    error?: string;
+  }>;
 }) {
   const userId = await usuarioActual();
   if (!userId) redirect('/login');
 
   const parametros = await searchParams;
   const zona = await zonaDelUsuario();
-  const hoy = hoyIso(zona);
+  const paraManana = parametros.dia === 'manana';
+  const fecha = paraManana ? desplazarDias(hoyIso(zona), 1) : hoyIso(zona);
   // Sin eleccion en la URL, lo que toca ahora: el momento por la hora y el
   // contexto habitual de ese momento en este tipo de dia.
   const momento: Momento =
@@ -50,9 +67,9 @@ export default async function PaginaRecomendacion({
   const [contextos, candidatos, descartados, estacionCalculada, habitual] = await Promise.all([
     listarContextos(userId),
     candidatosParaRecomendar(userId),
-    descartesDeHoy(userId, hoy),
-    estacionEfectivaDe(userId, hoy, momento),
-    parametros.contexto ? null : contextoHabitual(userId, momento, esFinDeSemana(hoy)),
+    descartesDeHoy(userId, fecha),
+    estacionEfectivaDe(userId, fecha, momento, paraManana ? 'mañana' : 'hoy'),
+    parametros.contexto ? null : contextoHabitual(userId, momento, esFinDeSemana(fecha)),
   ]);
 
   const contextoElegido =
@@ -68,7 +85,8 @@ export default async function PaginaRecomendacion({
         momento,
         contextoId: contextoElegido.id,
         estacionesCompatibles,
-        hoy,
+        hoy: fecha,
+        paraManana,
         descartados,
         nombreContexto: contextoElegido.nombre,
       })
@@ -77,7 +95,8 @@ export default async function PaginaRecomendacion({
   const peticion = {
     momento,
     contextoId: contextoElegido?.id ?? '',
-    fecha: hoy,
+    fecha,
+    paraManana,
     estaciones: forzadas ?? undefined,
   };
   const [primera, ...resto] = resultado.recomendaciones;
@@ -85,7 +104,7 @@ export default async function PaginaRecomendacion({
   return (
     <div className="space-y-6">
       <header className="space-y-1">
-        <h1 className="titulo">Recomiéndame</h1>
+        <h1 className="titulo">{paraManana ? 'Recomiéndame para mañana' : 'Recomiéndame'}</h1>
         <p className="text-sm text-texto-tenue">
           {forzadas ? 'Estación elegida a mano.' : estacionCalculada.explicacion}
           {estacionCalculada.origen === 'CALENDARIO' && !forzadas ? ' Sin conexión con Open-Meteo.' : ''}
@@ -100,6 +119,7 @@ export default async function PaginaRecomendacion({
 
       <SelectorPeticion
         contextos={contextos.map((c) => ({ id: c.id, nombre: c.nombre }))}
+        paraManana={paraManana}
         momento={momento}
         contextoId={contextoElegido?.id ?? ''}
         estacionesCompatibles={estacionesCompatibles}

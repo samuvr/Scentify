@@ -46,6 +46,7 @@ import {
   borrarUso,
   completarUso,
   descartarRecomendacion,
+  desplazarDias,
   hoyIso,
   previsualizarIdoneidad,
   registrarUso,
@@ -179,6 +180,7 @@ export async function accionRegistrarDesdeRecomendacion(datos: FormData) {
     const contexto = datos.get('contextoId');
     if (momento === 'DIA' || momento === 'NOCHE') volver.set('momento', momento);
     if (typeof contexto === 'string' && contexto) volver.set('contexto', contexto);
+    if (datos.get('dia') === 'manana') volver.set('dia', 'manana');
     redirect(`/recomendacion?${volver}`);
   };
   if (!analisis.success) return deVuelta();
@@ -190,7 +192,8 @@ export async function accionRegistrarDesdeRecomendacion(datos: FormData) {
   }
   revalidatePath('/');
   revalidatePath('/recomendacion');
-  redirect('/?registrado=1');
+  // Lo apuntado para mañana no sale en «Registrado hoy»: el aviso lo dice.
+  redirect(datos.get('dia') === 'manana' ? '/?registrado=manana' : '/?registrado=1');
 }
 
 export async function accionCompletarUso(datos: FormData) {
@@ -236,7 +239,10 @@ export async function accionBorrarUso(datos: FormData) {
 export async function accionDescartarRecomendacion(datos: FormData) {
   const userId = await exigirUsuario();
   const perfumeId = String(datos.get('perfumeId') ?? '');
-  if (perfumeId) await descartarRecomendacion(userId, perfumeId, hoyIso(await zonaDelUsuario()));
+  // Solo hoy o mañana: es lo unico que la pantalla deja pedir.
+  const hoy = hoyIso(await zonaDelUsuario());
+  const fecha = datos.get('fecha') === desplazarDias(hoy, 1) ? desplazarDias(hoy, 1) : hoy;
+  if (perfumeId) await descartarRecomendacion(userId, perfumeId, fecha);
   revalidatePath('/recomendacion');
 }
 
