@@ -278,6 +278,16 @@ describe('explicacion visible y sobrescribible', () => {
     });
     expect(resultado.explicacion).toBe('20° hoy → otoño.');
   });
+
+  it('al sugerir para mañana nombra mañana, no hoy', () => {
+    const resultado = calcularEstacionEfectiva({
+      fecha: NOVIEMBRE,
+      momento: 'DIA',
+      clima: { temperaturaMax: 20, temperaturaMin: 12, humedadMedia: 50 },
+      nombreDia: 'mañana',
+    });
+    expect(resultado.explicacion).toBe('20° mañana → otoño.');
+  });
 });
 
 describe('los dos escenarios del criterio de aceptacion 6', () => {

@@ -56,13 +56,15 @@ export function desplazarDias(iso: string, dias: number): string {
 /**
  * Estacion efectiva de una fecha y un momento concretos.
  *
- * Para una fecha pasada se usa el tiempo que hizo ese dia, no el de hoy. Si no
+ * Para una fecha pasada se usa el tiempo que hizo ese dia, no el de hoy; para
+ * mañana, su prevision. Si no
  * hay forma de saberlo, se cae al calendario y el resultado lo dice.
  */
 export async function estacionEfectivaDe(
   userId: string,
   fecha: string,
   momento: Momento,
+  nombreDia?: string,
 ): Promise<ResultadoEstacionEfectiva> {
   const { ubicacion, umbrales } = await leerConfiguracion(userId);
   const clima = await obtenerClima(ubicacion, fecha);
@@ -72,6 +74,7 @@ export async function estacionEfectivaDe(
     clima,
     umbrales,
     etiquetaUbicacion: ubicacion.etiqueta,
+    nombreDia,
   });
 }
 
@@ -219,7 +222,7 @@ export async function borrarUso(userId: string, usoId: string): Promise<void> {
   await db.delete(schema.uso).where(and(eq(schema.uso.userId, userId), eq(schema.uso.id, usoId)));
 }
 
-/** Boton "Otro": descarta la sugerencia durante el resto del dia. */
+/** Boton "Otro": descarta la sugerencia durante el resto del dia (o para mañana). */
 export async function descartarRecomendacion(
   userId: string,
   perfumeId: string,

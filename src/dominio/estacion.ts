@@ -131,6 +131,8 @@ export interface OpcionesEstacionEfectiva {
   clima?: ClimaDia | null;
   umbrales?: UmbralesEstacion;
   etiquetaUbicacion?: string;
+  /** Como se nombra el dia en la explicacion. Por defecto, «hoy». */
+  nombreDia?: string;
 }
 
 const NOMBRE: Record<Estacion, string> = {
@@ -204,7 +206,7 @@ function enumerarEstaciones(estaciones: Estacion[], entretiempo: Estacion): stri
 export function calcularEstacionEfectiva(
   opciones: OpcionesEstacionEfectiva,
 ): ResultadoEstacionEfectiva {
-  const { fecha, momento, clima, etiquetaUbicacion } = opciones;
+  const { fecha, momento, clima, etiquetaUbicacion, nombreDia = 'hoy' } = opciones;
   const u = opciones.umbrales ?? UMBRALES_POR_DEFECTO;
 
   // Fallback obligatorio: sin datos de tiempo, calendario, y la interfaz lo dice.
@@ -244,6 +246,6 @@ export function calcularEstacionEfectiva(
     origen: 'TEMPERATURA',
     temperaturaUsada: t,
     ajusteBochorno,
-    explicacion: `${formatear(t)}° hoy${donde} → ${cierre}.${bochorno}`,
+    explicacion: `${formatear(t)}° ${nombreDia}${donde} → ${cierre}.${bochorno}`,
   };
 }

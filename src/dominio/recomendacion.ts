@@ -44,8 +44,11 @@ export interface PeticionRecomendacion {
   contextoId: string;
   /** Conjunto compatible que devuelve la seccion 7.1. */
   estacionesCompatibles: Estacion[];
+  /** El dia para el que se recomienda: hoy, o mañana si se planifica. */
   hoy: Date | string;
-  /** Ids descartados hoy con el boton "Otro". */
+  /** true cuando `hoy` es mañana: cambia como se cuentan los dias en el motivo. */
+  paraManana?: boolean;
+  /** Ids descartados ese dia con el boton "Otro". */
   descartados?: string[];
   /** Por defecto 3. */
   limite?: number;
@@ -127,7 +130,10 @@ function motivoDeRecomendacion(
   if (diasSinUsar === null) {
     partes.push('Aún no lo has estrenado');
   } else if (diasSinUsar === 0) {
-    partes.push('Te lo has puesto hoy');
+    partes.push(peticion.paraManana ? 'Ya lo tienes apuntado para mañana' : 'Te lo has puesto hoy');
+  } else if (diasSinUsar < 0) {
+    // Un uso apuntado por adelantado deja el ultimo uso en el futuro.
+    partes.push('Lo tienes apuntado para mañana');
   } else {
     partes.push(`Llevas ${diasSinUsar} ${diasSinUsar === 1 ? 'día' : 'días'} sin ponértelo`);
   }
