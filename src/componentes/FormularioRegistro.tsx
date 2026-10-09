@@ -76,6 +76,7 @@ export function FormularioRegistro({
   hoy,
   momentoInicial,
   contextoPorMomento,
+  fechaFija,
 }: {
   contextos: Contexto[];
   recientes: PerfumeBreve[];
@@ -92,6 +93,11 @@ export function FormularioRegistro({
   momentoInicial: Momento;
   /** Contexto habitual de cada momento en este tipo de dia (laborable o finde). */
   contextoPorMomento: Record<Momento, string | null>;
+  /**
+   * Registro para un dia concreto (desde el calendario): todo lo que se guarde,
+   * tambien con un toque, va a esa fecha y no a la de hoy.
+   */
+  fechaFija?: string;
 }) {
   const router = useRouter();
 
@@ -102,7 +108,8 @@ export function FormularioRegistro({
 
   const contextoPorDefecto = (m: Momento) => contextoPorMomento[m] ?? contextos[0]?.id ?? '';
 
-  const [fecha, setFecha] = useState(hoy);
+  const fechaInicial = fechaFija ?? hoy;
+  const [fecha, setFecha] = useState(fechaInicial);
   const [verFecha, setVerFecha] = useState(false);
   const [momento, setMomento] = useState<Momento>(momentoInicial);
   const [contextoId, setContextoId] = useState(contextoPorDefecto(momentoInicial));
@@ -129,9 +136,11 @@ export function FormularioRegistro({
     const alVolver = () => {
       if (document.visibilityState === 'visible' && hoySegunElMovil() !== hoy) router.refresh();
     };
+    // Con una fecha fija no hay «hoy» que se quede viejo.
+    if (fechaFija) return;
     document.addEventListener('visibilitychange', alVolver);
     return () => document.removeEventListener('visibilitychange', alVolver);
-  }, [hoy, router]);
+  }, [hoy, fechaFija, router]);
 
   // Buscador: no molesta a la red hasta el tercer caracter.
   useEffect(() => {
@@ -237,7 +246,7 @@ export function FormularioRegistro({
     const resultado = await encolarUso({
       id: usoId,
       perfumeId: perfume.id,
-      fecha: hoySegunElMovil(),
+      fecha: fechaFija ?? hoySegunElMovil(),
       momento: m,
       contextoId: ctx,
       sprays: perfume.spraysHabituales ?? null,
@@ -348,7 +357,7 @@ export function FormularioRegistro({
     setValoracion('');
     setComentario('');
     setMasCampos(false);
-    setFecha(hoy);
+    setFecha(fechaInicial);
     setVerFecha(false);
     setMomento(momentoInicial);
     setContextoId(contextoPorDefecto(momentoInicial));
@@ -530,7 +539,7 @@ export function FormularioRegistro({
                     type="date"
                     value={fecha}
                     max={hoy}
-                    onChange={(e) => setFecha(e.target.value || hoy)}
+                    onChange={(e) => setFecha(e.target.value || fechaInicial)}
                     className="mt-1"
                   />
                 </>
@@ -542,7 +551,7 @@ export function FormularioRegistro({
                     onClick={() => setVerFecha(true)}
                     className="opcion mt-1 w-full justify-between font-normal"
                   >
-                    Hoy
+                    {fecha === hoy ? 'Hoy' : formatearFecha(fecha)}
                     <span className="text-sm text-texto-tenue">Cambiar</span>
                   </button>
                 </>

@@ -7,6 +7,7 @@ export const dynamic = 'force-dynamic';
 
 const SECCIONES = [
   { href: '/estadisticas', titulo: 'Estadísticas', descripcion: 'Qué te pones, cuándo y cuánto aciertas' },
+  { href: '/mas/calendario', titulo: 'Calendario', descripcion: 'Qué te pusiste cada día y qué días no apuntaste' },
   { href: '/mas/wishlist', titulo: 'Wishlist', descripcion: 'Lo que quiero y a qué precio' },
   { href: '/mas/huecos', titulo: 'Huecos', descripcion: 'Qué combinaciones no cubre tu colección' },
   { href: '/mas/viaje', titulo: 'Modo viaje', descripcion: 'El set mínimo de frascos para lo que viene' },

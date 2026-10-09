@@ -7,7 +7,7 @@
  * historico (criterio 10).
  */
 import 'server-only';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, gte, lte, sql } from 'drizzle-orm';
 import { crearDb, schema } from '@/db';
 import { calcularIdoneidad, type Idoneidad } from '@/dominio/idoneidad';
 import {
@@ -259,4 +259,25 @@ export async function usosDelDia(userId: string, fecha: string) {
     .innerJoin(schema.contexto, eq(schema.contexto.id, schema.uso.contextoId))
     .where(and(eq(schema.uso.userId, userId), eq(schema.uso.fecha, fecha)))
     .orderBy(sql`${schema.uso.creadoEn} desc`);
+}
+
+/** Cuantos usos hay apuntados cada dia de un rango, para el calendario. */
+export async function usosPorDia(
+  userId: string,
+  desde: string,
+  hasta: string,
+): Promise<Map<string, number>> {
+  const db = crearDb();
+  const filas = await db
+    .select({ fecha: schema.uso.fecha, cuantos: sql<number>`count(*)::int` })
+    .from(schema.uso)
+    .where(
+      and(
+        eq(schema.uso.userId, userId),
+        gte(schema.uso.fecha, desde),
+        lte(schema.uso.fecha, hasta),
+      ),
+    )
+    .groupBy(schema.uso.fecha);
+  return new Map(filas.map((f) => [f.fecha, Number(f.cuantos)]));
 }
