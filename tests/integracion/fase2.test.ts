@@ -203,7 +203,8 @@ cuando('recordatorio diario (10.4)', () => {
     await recordatorio.enviarRecordatoriosPendientes(ahora);
     expect(await anotadosDeHoy()).toHaveLength(1);
 
-    // Y con un registro del día, no hay nada que recordar.
+    // Con un registro del día sin cerrar, el aviso pregunta qué tal; con el
+    // día cerrado, o sin «Pregúntame qué tal», no hay nada que recordar.
     await db
       .delete(schema.recordatorioEnviado)
       .where(
@@ -226,14 +227,37 @@ cuando('recordatorio diario (10.4)', () => {
       estaciones: ['OTONO'],
       momentos: ['DIA'],
     });
-    await usos.registrarUso(USUARIO, {
+    const registro = await usos.registrarUso(USUARIO, {
       perfumeId,
       fecha: hoy,
       momento: 'DIA',
       contextoId: contextos[0]!.id,
       estacionesForzadas: ['OTONO'],
     });
+    const quitarAnotacion = () =>
+      db
+        .delete(schema.recordatorioEnviado)
+        .where(
+          and(
+            eq(schema.recordatorioEnviado.userId, USUARIO),
+            eq(schema.recordatorioEnviado.fecha, hoy),
+          ),
+        );
 
+    await recordatorio.enviarRecordatoriosPendientes(ahora);
+    expect(await anotadosDeHoy()).toHaveLength(1);
+
+    await quitarAnotacion();
+    await ajustes.guardarAjuste(USUARIO, 'recordatorio', { activo: true, hora: 0, cierre: false });
+    await recordatorio.enviarRecordatoriosPendientes(ahora);
+    expect(await anotadosDeHoy()).toHaveLength(0);
+
+    await ajustes.guardarAjuste(USUARIO, 'recordatorio', { activo: true, hora: 0 });
+    await usos.completarUso(USUARIO, registro.id, { duracionPercibida: 'MAS_8H', valoracionDia: 4 });
+    // Puede haber usos de hoy de otros tests: se cierran todos.
+    for (const u of await usos.usosDelDia(USUARIO, hoy)) {
+      await usos.completarUso(USUARIO, u.id, { duracionPercibida: 'MAS_8H', valoracionDia: 4 });
+    }
     await recordatorio.enviarRecordatoriosPendientes(ahora);
     expect(await anotadosDeHoy()).toHaveLength(0);
 

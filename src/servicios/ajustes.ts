@@ -6,7 +6,7 @@
  * defecto del dominio como red de seguridad si falta alguna clave.
  */
 import 'server-only';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { crearDb, schema } from '@/db';
 import { headers } from 'next/headers';
 import { UMBRALES_POR_DEFECTO, type UmbralesEstacion } from '@/dominio/estacion';
@@ -85,6 +85,26 @@ export async function leerConfiguracion(userId: string): Promise<Configuracion> 
     ubicacionDetectada: detectada !== null,
     umbrales,
   };
+}
+
+/** Cuando se descargo la ultima copia completa (ISO), para el recordatorio. */
+export const CLAVE_ULTIMA_COPIA = 'ultima_copia';
+
+/** La fecha de la ultima copia completa, o null si nunca se ha descargado. */
+export async function leerUltimaCopia(userId: string): Promise<string | null> {
+  const valor = await leerAjuste(userId, CLAVE_ULTIMA_COPIA);
+  return typeof valor === 'string' ? valor : null;
+}
+
+/** El valor de una clave, o null si no esta guardada. */
+export async function leerAjuste(userId: string, clave: string): Promise<unknown> {
+  const db = crearDb();
+  const [fila] = await db
+    .select({ valor: schema.ajuste.valor })
+    .from(schema.ajuste)
+    .where(and(eq(schema.ajuste.userId, userId), eq(schema.ajuste.clave, clave)))
+    .limit(1);
+  return fila?.valor ?? null;
 }
 
 export async function guardarAjuste(

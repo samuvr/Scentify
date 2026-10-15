@@ -141,8 +141,17 @@ export function FormularioPerfume({
   fichaCatalogo,
   compartidaCon = 0,
   sugerirConIa = false,
+  consultarAlAbrir = false,
+  deseoId,
 }: {
   perfumeId?: string;
+  /** Alta desde «Convertir en colección»: al guardar, el deseo sale de la wishlist. */
+  deseoId?: string;
+  /**
+   * Al editar, «Volver a consultar Fragrantica»: abre en ese paso y lanza la
+   * consulta con la direccion guardada, en vez de dejar en el paso 1.
+   */
+  consultarAlAbrir?: boolean;
   iniciales?: ValoresPerfume;
   /**
    * Ficha del catalogo que ya encaja con lo que llega, p. ej. la misma URL de
@@ -171,7 +180,7 @@ export function FormularioPerfume({
    */
   const compartida = !perfumeId && Boolean(iniciales?.fragranticaUrl || fichaInicial);
   const [paso, setPaso] = useState(
-    fichaCatalogo ? PRIMER_PASO_PERSONAL : compartida ? 1 : 0,
+    fichaCatalogo ? PRIMER_PASO_PERSONAL : compartida || consultarAlAbrir ? 1 : 0,
   );
   /**
    * Con la ficha ya hecha —leida de Fragrantica o elegida del catalogo— ir
@@ -180,8 +189,15 @@ export function FormularioPerfume({
    * hay que decidir, y el inventario plegado. Los pasos siguen ahi para
    * corregir lo que haga falta.
    */
+  // Al editar tambien: cambiar un contexto eran siete toques de «Siguiente».
   const [modo, setModo] = useState<'pasos' | 'revision'>(
-    !perfumeId && (fichaCatalogo || fichaInicial) ? 'revision' : 'pasos',
+    perfumeId
+      ? consultarAlAbrir
+        ? 'pasos'
+        : 'revision'
+      : fichaCatalogo || fichaInicial
+        ? 'revision'
+        : 'pasos',
   );
   const [v, setV] = useState<ValoresPerfume>(() =>
     fichaCatalogo ? conFicha(iniciales ?? VALORES_VACIOS, fichaCatalogo) : (iniciales ?? VALORES_VACIOS),
@@ -195,12 +211,68 @@ export function FormularioPerfume({
   const [consultando, setConsultando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
+  /** El frasco que ya tengo de este perfume, si el servidor lo ha encontrado. */
+  const [duplicadoDe, setDuplicadoDe] = useState<string | null>(null);
   const [sugerencia, setSugerencia] = useState<SugerenciaContextos | null>(null);
   const [sugiriendo, setSugiriendo] = useState(false);
   const [avisoSugerencia, setAvisoSugerencia] = useState<string | null>(null);
   const sugerenciaPedida = useRef(false);
 
   const cambiar = (parcial: Partial<ValoresPerfume>) => setV((previo) => ({ ...previo, ...parcial }));
+
+  /** Lo escrito en cada campo de nota y aun no añadido. */
+  const [pendientes, setPendientes] = useState<Record<Nivel, string>>({
+    SALIDA: '',
+    CORAZON: '',
+    FONDO: '',
+  });
+
+  /** «Bergamota, Pimienta rosa, Oud» son tres notas, no una. */
+  const partirNotas = (texto: string) =>
+    texto
+      .split(/[,;\n]/)
+      .map((n) => n.trim())
+      .filter(Boolean);
+
+  function añadirNotas(nivel: Nivel) {
+    const nuevas = partirNotas(pendientes[nivel]);
+    setPendientes((p) => ({ ...p, [nivel]: '' }));
+    if (nuevas.length === 0) return;
+    setV((previo) => ({
+      ...previo,
+      notas: [...previo.notas, ...nuevas.map((nombre) => ({ nombre, nivel }))],
+    }));
+  }
+
+  /** Las notas con lo que quede escrito sin añadir, para guardar. */
+  function conNotasPendientes() {
+    const extra = NIVELES.flatMap(({ clave }) =>
+      partirNotas(pendientes[clave]).map((nombre) => ({ nombre, nivel: clave })),
+    );
+    if (extra.length === 0) return v.notas;
+    const todas = [...v.notas, ...extra];
+    setV((previo) => ({ ...previo, notas: todas }));
+    setPendientes({ SALIDA: '', CORAZON: '', FONDO: '' });
+    return todas;
+  }
+
+  /*
+   * Aviso al salir con cambios sin guardar. Al editar, cerrar o recargar la
+   * pestaña tiraba lo cambiado sin decir nada.
+   */
+  const inicial = useRef(JSON.stringify(v));
+  const sinCambios = useRef(true);
+  useEffect(() => {
+    sinCambios.current = JSON.stringify(v) === inicial.current;
+  }, [v]);
+  useEffect(() => {
+    const alSalir = (e: BeforeUnloadEvent) => {
+      if (sinCambios.current) return;
+      e.preventDefault();
+    };
+    window.addEventListener('beforeunload', alSalir);
+    return () => window.removeEventListener('beforeunload', alSalir);
+  }, []);
 
   /**
    * Y se intenta leer la ficha sola, que es lo que se espera al compartir. El
@@ -210,6 +282,11 @@ export function FormularioPerfume({
    */
   const yaConsultada = useRef(false);
   useEffect(() => {
+    if (consultarAlAbrir && !yaConsultada.current && iniciales?.fragranticaUrl) {
+      yaConsultada.current = true;
+      void consultarFragrantica({ url: iniciales.fragranticaUrl });
+      return;
+    }
     if (!compartida || yaConsultada.current) return;
     yaConsultada.current = true;
     // Ya estaba en el catalogo: la ficha esta hecha y no hace falta leer nada.
@@ -279,7 +356,9 @@ export function FormularioPerfume({
   /** Aplica la ficha como SUGERENCIA: no pisa nada de lo que ya haya escrito. */
   function aplicarFicha(nueva: FichaFragrantica) {
     setFicha(nueva);
-    if (!perfumeId) setModo('revision');
+    // Con la ficha leida, a la revision: alli estan los votos junto a cada
+    // casilla, tambien al volver a consultar desde la edicion.
+    setModo('revision');
     const notasNuevas = [
       ...nueva.notas.salida.map((nombre) => ({ nombre, nivel: 'SALIDA' as const })),
       ...nueva.notas.corazon.map((nombre) => ({ nombre, nivel: 'CORAZON' as const })),
@@ -357,7 +436,9 @@ export function FormularioPerfume({
    * nombre y marca ya puestos y, si los hay, las notas y familias. Al editar
    * ya hay contextos marcados, asi que solo se enseña la opinion.
    */
-  const enContextos = modo === 'revision' || paso === 6;
+  // Al editar, la revision es la pantalla de entrada: pedirla ahi la lanzaria
+  // cada vez que se abre el editor. Ahi queda el boton; sola, solo en el paso.
+  const enContextos = (modo === 'revision' && !perfumeId) || (modo === 'pasos' && paso === 6);
   useEffect(() => {
     if (!sugerirConIa || sugerenciaPedida.current || !enContextos) return;
     if (!v.nombre.trim() || !v.marca.trim()) return;
@@ -366,9 +447,12 @@ export function FormularioPerfume({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enContextos]);
 
-  async function guardar() {
+  async function guardar(confirmarDuplicado = false) {
     setGuardando(true);
     setError(null);
+    setDuplicadoDe(null);
+    // Una nota escrita sin pulsar Intro tambien cuenta.
+    const notas = conNotasPendientes();
     let respuesta: RespuestaPerfume;
     try {
       respuesta = await accionGuardarPerfume(perfumeId ?? null, {
@@ -383,11 +467,13 @@ export function FormularioPerfume({
         valoracion: v.valoracion || null,
         notasPersonales: v.notasPersonales || null,
         fragranticaUrl: v.fragranticaUrl || null,
-        notas: v.notas.map((n, orden) => ({ ...n, orden })),
+        notas: notas.map((n, orden) => ({ ...n, orden })),
         familiaIds: v.familiaIds,
         contextoIds: v.contextoIds,
         estaciones: v.estaciones,
         momentos: v.momentos,
+        confirmarDuplicado,
+        deseoId: deseoId ?? null,
       });
     } catch {
       // Sin cobertura la accion ni llega: el boton se quedaba en «Guardando…»
@@ -402,8 +488,18 @@ export function FormularioPerfume({
       setGuardando(false);
     }
 
-    if (respuesta.ok) router.push(`/coleccion/${respuesta.id}`);
-    else setError(respuesta.error);
+    if (respuesta.ok) {
+      sinCambios.current = true;
+      // Al editar se sustituye el editor en el historial: «atrás» desde la
+      // ficha volvia al formulario ya guardado.
+      const destino = `/coleccion/${respuesta.id}${
+        perfumeId ? '?guardado=1' : respuesta.deseoConvertido ? '?guardado=deseo' : ''
+      }`;
+      if (perfumeId) router.replace(destino);
+      else router.push(destino);
+    } else if (respuesta.duplicado) {
+      setDuplicadoDe(respuesta.duplicado);
+    } else setError(respuesta.error);
   }
 
   /**
@@ -595,23 +691,38 @@ export function FormularioPerfume({
                   </button>
                 ))}
             </div>
-            <input
-              type="text"
-              list="notas-conocidas"
-              placeholder={`Añadir nota de ${titulo.toLowerCase()}…`}
-              onKeyDown={(e) => {
-                if (e.key !== 'Enter') return;
-                e.preventDefault();
-                const nombre = e.currentTarget.value.trim();
-                if (!nombre) return;
-                cambiar({ notas: [...v.notas, { nombre, nivel: clave }] });
-                e.currentTarget.value = '';
-              }}
-            />
+            <div className="flex gap-2">
+              <input
+                type="text"
+                list="notas-conocidas"
+                enterKeyHint="enter"
+                aria-label={`Añadir nota de ${titulo.toLowerCase()}`}
+                placeholder={`Añadir nota de ${titulo.toLowerCase()}…`}
+                value={pendientes[clave]}
+                onChange={(e) => setPendientes((p) => ({ ...p, [clave]: e.target.value }))}
+                // Al salir del campo (p. ej. al pulsar «Siguiente») lo escrito
+                // se añade: antes se perdia si no se pulsaba Intro.
+                onBlur={() => añadirNotas(clave)}
+                onKeyDown={(e) => {
+                  if (e.key !== 'Enter') return;
+                  e.preventDefault();
+                  añadirNotas(clave);
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => añadirNotas(clave)}
+                disabled={!pendientes[clave].trim()}
+                className="boton-secundario shrink-0 px-4"
+                aria-label={`Añadir a ${titulo.toLowerCase()}`}
+              >
+                +
+              </button>
+            </div>
           </div>
         ))}
         <p className="text-xs text-texto-tenue">
-          Intro para añadir. Las notas que no existan se crean solas.
+          Varias a la vez separadas por comas. Las notas que no existan se crean solas.
         </p>
       </section>
   );
@@ -828,7 +939,7 @@ export function FormularioPerfume({
     v.contextoIds.length === 0 ? 'un contexto' : null,
   ].filter((f): f is string => f !== null);
 
-  const puedeRevisar = !perfumeId && (Boolean(ficha) || Boolean(fichaId));
+  const puedeRevisar = Boolean(perfumeId) || Boolean(ficha) || Boolean(fichaId);
 
   /** Salta a un paso para corregirlo; desde alli se vuelve a la revision. */
   const irAPaso = (n: number) => {
@@ -840,8 +951,19 @@ export function FormularioPerfume({
     const notasDe = (nivel: Nivel) =>
       v.notas.filter((n) => n.nivel === nivel).map((n) => n.nombre);
     const familiasElegidas = familias.filter((f) => v.familiaIds.includes(f.id)).map((f) => f.nombre);
+    const yaLoTengo = !perfumeId ? catalogo.find((c) => c.miPerfumeId) : undefined;
     return (
       <div className="space-y-6">
+        {yaLoTengo?.miPerfumeId ? (
+          <div className="aviso-atencion space-y-2">
+            <p>
+              Ya tienes {yaLoTengo.nombre} ({[yaLoTengo.marca, yaLoTengo.concentracion].filter(Boolean).join(' · ')}).
+            </p>
+            <a href={`/coleccion/${yaLoTengo.miPerfumeId}`} className="underline">
+              Ver el tuyo
+            </a>
+          </div>
+        ) : null}
         <section className="tarjeta space-y-3">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
@@ -882,6 +1004,11 @@ export function FormularioPerfume({
               Editar
             </button>
           </div>
+          {perfumeId ? (
+            <button type="button" onClick={() => irAPaso(1)} className="text-sm underline">
+              {v.fragranticaUrl ? 'Volver a consultar Fragrantica' : 'Consultar Fragrantica'}
+            </button>
+          ) : null}
         </section>
 
         <div className="space-y-2">
@@ -970,15 +1097,34 @@ export function FormularioPerfume({
         </p>
       ) : null}
 
+      {duplicadoDe ? (
+        <div className="aviso-atencion space-y-2" role="alert">
+          <p>Ya tienes este perfume en tu colección.</p>
+          <div className="flex flex-wrap gap-2">
+            <a href={`/coleccion/${duplicadoDe}`} className="boton-secundario px-4 text-sm">
+              Ver el que tengo
+            </a>
+            <button
+              type="button"
+              disabled={guardando}
+              onClick={() => void guardar(true)}
+              className="boton-fantasma px-3 text-sm"
+            >
+              Es otro frasco, añadirlo
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       {modo === 'revision' ? (
         <div className="space-y-2">
           <button
             type="button"
             disabled={guardando || faltan.length > 0}
-            onClick={guardar}
+            onClick={() => void guardar()}
             className="boton-primario w-full"
           >
-            {guardando ? 'Guardando…' : 'Añadir a la colección'}
+            {guardando ? 'Guardando…' : perfumeId ? 'Guardar cambios' : 'Añadir a la colección'}
           </button>
           {faltan.length > 0 ? (
             <p className="text-center text-sm text-texto-tenue">Falta marcar {faltan.join(', ')}.</p>
@@ -1015,7 +1161,7 @@ export function FormularioPerfume({
           <button
             type="button"
             disabled={guardando}
-            onClick={guardar}
+            onClick={() => void guardar()}
             className="boton-primario flex-1"
           >
             {guardando ? 'Guardando…' : perfumeId ? 'Guardar cambios' : 'Añadir a la colección'}

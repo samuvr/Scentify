@@ -12,10 +12,30 @@ import { useRouter } from 'next/navigation';
 import { accionComprobarSolapamiento, accionGuardarDeseo } from '@/app/acciones';
 import type { Solapamiento } from '@/dominio/solapamiento';
 
-export function FormularioDeseo({ notasConocidas }: { notasConocidas: string[] }) {
+export interface DeseoEditable {
+  id: string;
+  nombre: string;
+  marca: string;
+  prioridad: 'EN_EL_RADAR' | 'LO_QUIERO' | 'LO_NECESITO';
+  precioObjetivo: string | null;
+  notas: string | null;
+  fragranticaUrl: string | null;
+  notasFondo: string[];
+}
+
+export function FormularioDeseo({
+  notasConocidas,
+  deseo,
+  alCerrar,
+}: {
+  notasConocidas: string[];
+  /** Con un deseo, el formulario lo edita en vez de crear uno nuevo. */
+  deseo?: DeseoEditable;
+  alCerrar?: () => void;
+}) {
   const router = useRouter();
-  const [abierto, setAbierto] = useState(false);
-  const [notasFondo, setNotasFondo] = useState<string[]>([]);
+  const [abierto, setAbierto] = useState(Boolean(deseo));
+  const [notasFondo, setNotasFondo] = useState<string[]>(deseo?.notasFondo ?? []);
   const [solapamientos, setSolapamientos] = useState<Solapamiento[]>([]);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,14 +57,25 @@ export function FormularioDeseo({ notasConocidas }: { notasConocidas: string[] }
   async function guardar(datos: FormData) {
     setGuardando(true);
     setError(null);
-    const respuesta = await accionGuardarDeseo(null, {
-      nombre: String(datos.get('nombre') ?? ''),
-      marca: String(datos.get('marca') ?? ''),
-      prioridad: String(datos.get('prioridad') ?? 'EN_EL_RADAR'),
-      precioObjetivo: datos.get('precioObjetivo') || null,
-      notas: datos.get('notas') || null,
-      notasFondo,
-    });
+    // Lo escrito en notas de fondo sin pulsar Intro tambien cuenta.
+    const pendiente = String(datos.get('pendienteFondo') ?? '').trim();
+    const fondo = pendiente && !notasFondo.includes(pendiente) ? [...notasFondo, pendiente] : notasFondo;
+    let respuesta: Awaited<ReturnType<typeof accionGuardarDeseo>>;
+    try {
+      respuesta = await accionGuardarDeseo(deseo?.id ?? null, {
+        nombre: String(datos.get('nombre') ?? ''),
+        marca: String(datos.get('marca') ?? ''),
+        prioridad: String(datos.get('prioridad') ?? 'EN_EL_RADAR'),
+        precioObjetivo: datos.get('precioObjetivo') || null,
+        notas: datos.get('notas') || null,
+        fragranticaUrl: deseo?.fragranticaUrl ?? null,
+        notasFondo: fondo,
+      });
+    } catch {
+      setGuardando(false);
+      setError('Sin conexión: no se ha guardado. Lo escrito sigue aquí.');
+      return;
+    }
     setGuardando(false);
 
     if (!respuesta.ok) {
@@ -54,6 +85,7 @@ export function FormularioDeseo({ notasConocidas }: { notasConocidas: string[] }
     setAbierto(false);
     setNotasFondo([]);
     setSolapamientos([]);
+    alCerrar?.();
     router.refresh();
   }
 
@@ -69,15 +101,15 @@ export function FormularioDeseo({ notasConocidas }: { notasConocidas: string[] }
     <form action={guardar} className="tarjeta space-y-3">
       <div>
         <label htmlFor="d-nombre">Nombre</label>
-        <input id="d-nombre" name="nombre" required className="mt-1" />
+        <input id="d-nombre" name="nombre" required defaultValue={deseo?.nombre} className="mt-1" />
       </div>
       <div>
         <label htmlFor="d-marca">Marca</label>
-        <input id="d-marca" name="marca" required className="mt-1" />
+        <input id="d-marca" name="marca" required defaultValue={deseo?.marca} className="mt-1" />
       </div>
       <div>
         <label htmlFor="d-prioridad">Prioridad</label>
-        <select id="d-prioridad" name="prioridad" defaultValue="EN_EL_RADAR" className="mt-1">
+        <select id="d-prioridad" name="prioridad" defaultValue={deseo?.prioridad ?? 'EN_EL_RADAR'} className="mt-1">
           <option value="EN_EL_RADAR">En el radar</option>
           <option value="LO_QUIERO">Lo quiero</option>
           <option value="LO_NECESITO">Lo necesito</option>
@@ -93,6 +125,7 @@ export function FormularioDeseo({ notasConocidas }: { notasConocidas: string[] }
           inputMode="decimal"
           step="0.01"
           min="0"
+          defaultValue={deseo?.precioObjetivo ?? ''}
           className="mt-1"
         />
       </div>
@@ -120,6 +153,7 @@ export function FormularioDeseo({ notasConocidas }: { notasConocidas: string[] }
         ) : null}
         <input
           id="d-fondo"
+          name="pendienteFondo"
           type="text"
           list="notas-conocidas"
           placeholder="Añadir nota y pulsar Intro…"
@@ -151,13 +185,20 @@ export function FormularioDeseo({ notasConocidas }: { notasConocidas: string[] }
 
       <div>
         <label htmlFor="d-notas">Notas personales</label>
-        <textarea id="d-notas" name="notas" rows={2} className="mt-1" />
+        <textarea id="d-notas" name="notas" rows={2} defaultValue={deseo?.notas ?? ''} className="mt-1" />
       </div>
 
       {error ? <p className="aviso-error">{error}</p> : null}
 
       <div className="flex gap-2">
-        <button type="button" onClick={() => setAbierto(false)} className="boton-secundario flex-1">
+        <button
+          type="button"
+          onClick={() => {
+            setAbierto(false);
+            alCerrar?.();
+          }}
+          className="boton-secundario flex-1"
+        >
           Cancelar
         </button>
         <button type="submit" disabled={guardando} className="boton-primario flex-1">

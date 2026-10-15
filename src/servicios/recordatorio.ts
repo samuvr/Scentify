@@ -14,6 +14,12 @@ import { and, eq, sql } from 'drizzle-orm';
 import webpush from 'web-push';
 import { crearDb, schema } from '@/db';
 import { elegirZona, ZONA_POR_DEFECTO } from '@/dominio/zona';
+import { decidirAviso } from '@/dominio/aviso-diario';
+import { perfumeHabitual, usoDeAyer } from './consultas';
+import { desplazarDias, usosDelDia } from './usos';
+
+/** «Lo de siempre» se mira en este ultimo tramo, no en todo el historial. */
+const DIAS_HABITUAL = 30;
 
 export interface AjusteRecordatorio {
   activo: boolean;
@@ -21,9 +27,14 @@ export interface AjusteRecordatorio {
   hora: number;
   /** Zona horaria del usuario al guardarlo; las filas antiguas no la tienen. */
   zona?: string;
+  /**
+   * «Pregúntame qué tal»: si ya hay algo registrado sin duracion o sin
+   * valorar, el aviso lo pregunta. Sin el campo (ajustes de antes), si.
+   */
+  cierre?: boolean;
 }
 
-export const RECORDATORIO_POR_DEFECTO: AjusteRecordatorio = { activo: false, hora: 21 };
+export const RECORDATORIO_POR_DEFECTO: AjusteRecordatorio = { activo: false, hora: 21, cierre: true };
 
 /**
  * La hora mas tardia que la pasada diaria alcanza todo el año.
@@ -107,8 +118,9 @@ export interface ResultadoRecordatorios {
 }
 
 /**
- * Recorre los usuarios con recordatorio activo y avisa a los que no tienen
- * ningun registro hoy y ya han pasado su hora.
+ * Recorre los usuarios con recordatorio activo y, pasada su hora, decide UN
+ * aviso: registrar el dia (si no hay nada) o cerrarlo (si falta duracion o
+ * valoracion). Si no queda nada pendiente, no se avisa.
  */
 export async function enviarRecordatoriosPendientes(
   ahora = new Date(),
@@ -141,12 +153,19 @@ export async function enviarRecordatoriosPendientes(
 
     const hoy = fechaLocal(zona, ahora);
 
-    const [yaRegistrado] = await db
-      .select({ id: schema.uso.id })
-      .from(schema.uso)
-      .where(and(eq(schema.uso.userId, userId), eq(schema.uso.fecha, hoy)))
-      .limit(1);
-    if (yaRegistrado) continue;
+    const [usosDeHoy, ayer, habitual] = await Promise.all([
+      usosDelDia(userId, hoy),
+      usoDeAyer(userId, desplazarDias(hoy, -1)),
+      perfumeHabitual(userId, desplazarDias(hoy, -DIAS_HABITUAL)),
+    ]);
+    const aviso = decidirAviso({
+      hoy,
+      usosDeHoy,
+      ayer,
+      habitual,
+      preguntarCierre: ajuste.cierre !== false,
+    });
+    if (!aviso) continue;
 
     // Anotar antes de enviar: si el envio falla a medias, no se repite el aviso
     // a las suscripciones que si lo recibieron.
@@ -167,9 +186,11 @@ export async function enviarRecordatoriosPendientes(
         await webpush.sendNotification(
           { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
           JSON.stringify({
-            titulo: '¿Qué te has puesto hoy?',
-            cuerpo: 'Todavía no has registrado ningún perfume.',
-            url: '/',
+            titulo: aviso.titulo,
+            cuerpo: aviso.cuerpo,
+            url: aviso.url,
+            urlSinAcciones: aviso.urlSinAcciones,
+            acciones: aviso.acciones,
           }),
         );
         resultado.enviados += 1;

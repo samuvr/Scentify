@@ -1,13 +1,17 @@
 /** Seccion 9 — Datos: exportar, importar y copia de seguridad. */
 import { redirect } from 'next/navigation';
 import { usuarioActual } from '@/servicios/auth';
+import { leerUltimaCopia } from '@/servicios/ajustes';
+import { diasDesdeCopia, textoUltimaCopia, tocaCopia } from '@/dominio/copias';
 import { PanelDatos } from './PanelDatos';
 import { PanelHoja } from './PanelHoja';
 
 export const dynamic = 'force-dynamic';
 
 export default async function PaginaDatos() {
-  if (!(await usuarioActual())) redirect('/login');
+  const userId = await usuarioActual();
+  if (!userId) redirect('/login');
+  const dias = diasDesdeCopia(await leerUltimaCopia(userId));
 
   return (
     <div className="space-y-5">
@@ -24,9 +28,17 @@ export default async function PaginaDatos() {
         <a href="/api/exportar/usos" className="boton-secundario w-full text-sm" download>
           Histórico de usos en CSV
         </a>
-        <a href="/api/exportar/copia" className="boton-secundario w-full text-sm" download>
+        <a
+          href="/api/exportar/copia"
+          className={`${tocaCopia(dias) ? 'boton-primario' : 'boton-secundario'} w-full text-sm`}
+          download
+        >
           Copia completa en JSON
         </a>
+        <p className={tocaCopia(dias) ? 'aviso-atencion' : 'text-xs text-texto-tenue'}>
+          {textoUltimaCopia(dias)}
+          {tocaCopia(dias) ? ' Descárgala y guárdala fuera del móvil.' : ''}
+        </p>
       </section>
 
       <PanelHoja />

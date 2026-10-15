@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { usuarioActual } from '@/servicios/auth';
+import { leerUltimaCopia } from '@/servicios/ajustes';
+import { diasDesdeCopia, textoUltimaCopia, tocaCopia } from '@/dominio/copias';
 import { accionCerrarSesion } from '../acciones';
 
 export const dynamic = 'force-dynamic';
@@ -17,11 +19,19 @@ const SECCIONES = [
 ];
 
 export default async function PaginaMas() {
-  if (!(await usuarioActual())) redirect('/login');
+  const userId = await usuarioActual();
+  if (!userId) redirect('/login');
+  const dias = diasDesdeCopia(await leerUltimaCopia(userId));
 
   return (
     <div className="space-y-6">
       <h1 className="titulo">Más</h1>
+      {/* Todo lo de la cuenta vive en una base: sin copia, un error la perderia. */}
+      {tocaCopia(dias) ? (
+        <Link href="/mas/datos" className="aviso-atencion block">
+          {textoUltimaCopia(dias)} <span className="underline">Hacer una copia</span>
+        </Link>
+      ) : null}
       <ul className="space-y-2">
         {SECCIONES.map((s) => (
           <li key={s.href}>

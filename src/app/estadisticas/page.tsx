@@ -12,6 +12,8 @@ import { SelectorPeriodo } from './SelectorPeriodo';
 import { Barras, Comparativa, Heatmap } from './Graficos';
 import type { Estacion, Momento } from '@/dominio/tipos';
 import { fechaOVacia, uuidOVacio } from '@/dominio/navegacion';
+import { PropuestasMarcas } from '@/componentes/PropuestasMarcas';
+import { propuestasDeLaColeccion } from '@/servicios/recategorizacion';
 
 export const dynamic = 'force-dynamic';
 
@@ -44,10 +46,18 @@ export default async function PaginaEstadisticas({
 
   const momento = p.momento === 'DIA' || p.momento === 'NOCHE' ? (p.momento as Momento) : undefined;
 
-  const [contextos, datos] = await Promise.all([
+  const contextoId = uuidOVacio(p.contexto);
+  const [contextos, datos, propuestas] = await Promise.all([
     listarContextos(userId),
-    calcularEstadisticas(userId, rango, { momento, contextoId: uuidOVacio(p.contexto) }),
+    calcularEstadisticas(userId, rango, { momento, contextoId }),
+    propuestasDeLaColeccion(userId, hoy),
   ]);
+  const filtroLegible = [
+    momento ? (momento === 'DIA' ? 'de día' : 'de noche') : null,
+    contextoId ? `para ${contextos.find((c) => c.id === contextoId)?.nombre ?? 'ese contexto'}` : null,
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   const { indicadores, comparativa } = datos;
 
@@ -77,6 +87,17 @@ export default async function PaginaEstadisticas({
         colección. Comparado con los {rango.desde} a {rango.hasta} del periodo anterior equivalente.
       </p>
 
+      {propuestas.length > 0 ? (
+        <section className="space-y-2">
+          <h2 className="subtitulo">Lo que haces y no tienes marcado</h2>
+          <p className="text-sm text-texto-tenue">
+            La tasa de acierto mide si cada uso encajaba con lo marcado. Estos desajustes la bajan
+            y confunden a la recomendación.
+          </p>
+          <PropuestasMarcas propuestas={propuestas.slice(0, 3)} contextos={contextos} conPerfume />
+        </section>
+      ) : null}
+
       <section className="space-y-3">
         <h2 className="subtitulo">Más usados</h2>
         {datos.ranking.length === 0 ? (
@@ -100,7 +121,9 @@ export default async function PaginaEstadisticas({
       </section>
 
       <section className="space-y-3">
-        <h2 className="subtitulo">Sin usar en el periodo ({datos.sinUsar.length})</h2>
+        <h2 className="subtitulo">
+          Sin usar {filtroLegible ? `${filtroLegible} ` : ''}en el periodo ({datos.sinUsar.length})
+        </h2>
         <ul className="space-y-1">
           {datos.sinUsar.slice(0, 20).map((fila) => (
             <li key={fila.id}>

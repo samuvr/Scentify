@@ -7,6 +7,7 @@
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { MINIMO_CARACTERES_BUSQUEDA } from '@/dominio/texto';
+import { CLAVE_ULTIMA_COLECCION } from '@/componentes/VolverAColeccion';
 
 /** Lo justo para no lanzar una consulta por cada tecla al escribir seguido. */
 const ESPERA_MS = 250;
@@ -15,15 +16,28 @@ export function Filtros({
   marcas,
   familias,
   contextos,
+  notas,
 }: {
   marcas: string[];
   familias: { id: string; nombre: string }[];
   contextos: { id: string; nombre: string }[];
+  /** Solo las notas que hay en la coleccion: las demas darian siempre 0. */
+  notas: { id: string; nombre: string }[];
 }) {
   const router = useRouter();
   const parametros = useSearchParams();
   const [abierto, setAbierto] = useState(false);
   const [texto, setTexto] = useState(parametros.get('q') ?? '');
+
+  // La ultima consulta, para que «‹ Colección» desde una ficha vuelva a ella.
+  const consultaActual = parametros.toString();
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(CLAVE_ULTIMA_COLECCION, consultaActual);
+    } catch {
+      // Sin sessionStorage, la ficha vuelve a la lista sin filtros.
+    }
+  }, [consultaActual]);
 
   function poner(clave: string, valor: string, reemplazar = false) {
     const nuevos = new URLSearchParams(parametros.toString());
@@ -39,6 +53,16 @@ export function Filtros({
   // Busqueda al vuelo: filtra a partir de la tercera letra y se refina con cada
   // una que se escribe o se borra. Por debajo de tres, sin filtro de texto.
   const ultimaBuscada = useRef(parametros.get('q') ?? '');
+
+  // Si la URL cambia por otro camino (un enlace a una nota, «atrás»), el campo
+  // de texto la sigue: antes mostraba un texto que ya no filtraba.
+  const qDeLaUrl = parametros.get('q') ?? '';
+  useEffect(() => {
+    if (qDeLaUrl === ultimaBuscada.current) return;
+    ultimaBuscada.current = qDeLaUrl;
+    setTexto(qDeLaUrl);
+  }, [qDeLaUrl]);
+
   useEffect(() => {
     const limpio = texto.trim();
     const consulta = limpio.length >= MINIMO_CARACTERES_BUSQUEDA ? limpio : '';
@@ -128,6 +152,11 @@ export function Filtros({
             'familia',
             'Familia',
             familias.map((f) => ({ valor: f.id, texto: f.nombre })),
+          )}
+          {selector(
+            'nota',
+            'Nota',
+            notas.map((n) => ({ valor: n.id, texto: n.nombre })),
           )}
           {selector(
             'contexto',

@@ -3,7 +3,7 @@
  * para IA y la hoja Excel para actualizar la coleccion.
  */
 import { usuarioActual } from '@/servicios/auth';
-import { leerConfiguracion } from '@/servicios/ajustes';
+import { CLAVE_ULTIMA_COPIA, guardarAjuste, leerConfiguracion } from '@/servicios/ajustes';
 import {
   copiaCompleta,
   exportarColeccionCsv,
@@ -40,12 +40,12 @@ export async function GET(_p: Request, contexto: { params: Promise<{ que: string
       );
     case 'usos':
       return descarga(await exportarUsosCsv(userId), `scentify-usos-${HOY()}.csv`, 'text/csv');
-    case 'copia':
-      return descarga(
-        JSON.stringify(await copiaCompleta(userId), null, 2),
-        `scentify-copia-${HOY()}.json`,
-        'application/json',
-      );
+    case 'copia': {
+      const copia = JSON.stringify(await copiaCompleta(userId), null, 2);
+      // Para «Última copia: hace N días» en Datos y el aviso de Más.
+      await guardarAjuste(userId, CLAVE_ULTIMA_COPIA, new Date().toISOString());
+      return descarga(copia, `scentify-copia-${HOY()}.json`, 'application/json');
+    }
     case 'ia': {
       // Si la ubicacion automatica no se ha podido detectar, mejor no decir
       // nada que mandar a la IA a mirar el tiempo de la ciudad por defecto.

@@ -16,7 +16,22 @@ import type {
   PerfumeIdoneidad,
   PromediosPerfume,
 } from '@/dominio/tipos';
-import { MINIMO_CARACTERES_BUSQUEDA, normalizar } from '@/dominio/texto';
+import { MINIMO_CARACTERES_BUSQUEDA, normalizar, palabrasDeBusqueda } from '@/dominio/texto';
+
+/**
+ * Condicion de busqueda por palabras sueltas: cada una tiene que estar en la
+ * clave normalizada, en cualquier orden. Antes era una subcadena literal de
+ * «nombre marca» y «lattafa khamrah» o «club nuit» no encontraban nada. Se
+ * mira tambien la clave sin espacios para que «9pm» encuentre «9 PM».
+ */
+function coincidePorPalabras(columna: typeof schema.ficha.busquedaNormalizada, texto: string) {
+  const palabras = palabrasDeBusqueda(texto).map((p) => p.replace(/[\\%_]/g, (c) => `\\${c}`));
+  return and(
+    ...palabras.map(
+      (p) => sql`(${columna} ilike ${`%${p}%`} or replace(${columna}, ' ', '') ilike ${`%${p}%`})`,
+    ),
+  );
+}
 
 /* ------------------------------------------------------------- contextos */
 
@@ -228,7 +243,7 @@ export async function buscarEnColeccion(userId: string, texto: string, limite = 
       and(
         eq(schema.perfume.userId, userId),
         eq(schema.perfume.archivado, false),
-        ilike(schema.ficha.busquedaNormalizada, `%${consulta}%`),
+        coincidePorPalabras(schema.ficha.busquedaNormalizada, consulta),
       ),
     )
     .orderBy(asc(schema.ficha.nombre))
@@ -257,6 +272,32 @@ export async function usadosRecientemente(userId: string, limite = 5) {
     .limit(limite);
 }
 
+/**
+ * La coleccion activa en version ligera, para buscar en el propio movil desde
+ * Hoy. Son de 20 a 200 filas y van dentro del HTML que guarda el service
+ * worker: sin conexion, el buscador sigue encontrando cualquier frasco, no
+ * solo los accesos rapidos.
+ */
+export async function coleccionParaRegistro(userId: string) {
+  const db = crearDb();
+  const u = schema.uso;
+  return db
+    .select({
+      id: schema.perfume.id,
+      nombre: schema.ficha.nombre,
+      marca: schema.ficha.marca,
+      clave: schema.ficha.busquedaNormalizada,
+      spraysHabituales: sql<number | null>`(
+        select round(avg(${u.sprays}))::int from ${u}
+        where ${u.perfumeId} = ${schema.perfume.id} and ${u.userId} = ${userId}
+      )`,
+    })
+    .from(schema.perfume)
+    .innerJoin(schema.ficha, eq(schema.ficha.id, schema.perfume.fichaId))
+    .where(and(eq(schema.perfume.userId, userId), eq(schema.perfume.archivado, false)))
+    .orderBy(asc(schema.ficha.nombre));
+}
+
 /** Boton "Repetir el de ayer". */
 export async function usoDeAyer(userId: string, ayer: string) {
   const db = crearDb();
@@ -267,15 +308,56 @@ export async function usoDeAyer(userId: string, ayer: string) {
       marca: schema.ficha.marca,
       momento: schema.uso.momento,
       contextoId: schema.uso.contextoId,
+      contexto: schema.contexto.nombre,
       sprays: schema.uso.sprays,
     })
     .from(schema.uso)
     .innerJoin(schema.perfume, eq(schema.perfume.id, schema.uso.perfumeId))
     .innerJoin(schema.ficha, eq(schema.ficha.id, schema.perfume.fichaId))
+    .innerJoin(schema.contexto, eq(schema.contexto.id, schema.uso.contextoId))
     .where(and(eq(schema.uso.userId, userId), eq(schema.uso.fecha, ayer)))
     .orderBy(desc(schema.uso.creadoEn))
     .limit(1);
   return fila ?? null;
+}
+
+/**
+ * «Lo de siempre» del aviso de la noche: el perfume que mas te has puesto
+ * desde `desde`, con su momento y su contexto mas frecuentes y su media de
+ * sprays. Solo entre los que sigues teniendo.
+ */
+export async function perfumeHabitual(userId: string, desde: string) {
+  const db = crearDb();
+  const u = schema.uso;
+  const [fila] = await db
+    .select({
+      perfumeId: u.perfumeId,
+      nombre: schema.ficha.nombre,
+      momento: sql<Momento>`mode() within group (order by ${u.momento})`,
+      contextoId: sql<string>`mode() within group (order by ${u.contextoId})`,
+      sprays: sql<number | null>`round(avg(${u.sprays}))::int`,
+    })
+    .from(u)
+    .innerJoin(schema.perfume, eq(schema.perfume.id, u.perfumeId))
+    .innerJoin(schema.ficha, eq(schema.ficha.id, schema.perfume.fichaId))
+    .where(
+      and(
+        eq(u.userId, userId),
+        gte(u.fecha, desde),
+        eq(schema.perfume.estado, 'LO_TENGO'),
+        eq(schema.perfume.archivado, false),
+      ),
+    )
+    .groupBy(u.perfumeId, schema.ficha.nombre)
+    .orderBy(desc(sql`count(*)`), desc(sql`max(${u.fecha})`))
+    .limit(1);
+  if (!fila) return null;
+  const [contexto] = await db
+    .select({ nombre: schema.contexto.nombre })
+    .from(schema.contexto)
+    .where(eq(schema.contexto.id, fila.contextoId))
+    .limit(1);
+  return { ...fila, contexto: contexto?.nombre ?? '' };
 }
 
 /**
@@ -358,7 +440,7 @@ export async function listarColeccion(userId: string, filtros: FiltrosColeccion 
   if (filtros.marca) condiciones.push(eq(f.marca, filtros.marca));
   if (filtros.valoracionMinima) condiciones.push(gte(p.valoracion, filtros.valoracionMinima));
   if (filtros.texto && normalizar(filtros.texto).length > 0) {
-    condiciones.push(ilike(f.busquedaNormalizada, `%${normalizar(filtros.texto)}%`));
+    condiciones.push(coincidePorPalabras(f.busquedaNormalizada, filtros.texto)!);
   }
   if (filtros.familiaId) {
     condiciones.push(
@@ -435,6 +517,19 @@ export async function marcasDeLaColeccion(userId: string): Promise<string[]> {
     .where(eq(schema.perfume.userId, userId))
     .orderBy(asc(schema.ficha.marca));
   return filas.map((f) => f.marca);
+}
+
+/** Las notas que aparecen en alguna ficha de la coleccion, para filtrar por nota. */
+export async function notasDeLaColeccion(userId: string) {
+  const db = crearDb();
+  const filas = await db
+    .selectDistinct({ id: schema.nota.id, nombre: schema.nota.nombre })
+    .from(schema.perfume)
+    .innerJoin(schema.fichaNota, eq(schema.fichaNota.fichaId, schema.perfume.fichaId))
+    .innerJoin(schema.nota, eq(schema.nota.id, schema.fichaNota.notaId))
+    .where(eq(schema.perfume.userId, userId));
+  const orden = new Intl.Collator('es', { sensitivity: 'base' });
+  return filas.sort((a, b) => orden.compare(a.nombre, b.nombre));
 }
 
 /* ------------------------------------------------------------------ ficha */
@@ -600,7 +695,7 @@ export async function buscarEnCatalogo(userId: string, texto: string, limite = 6
       )`,
     })
     .from(f)
-    .where(ilike(f.busquedaNormalizada, `%${consulta}%`))
+    .where(coincidePorPalabras(f.busquedaNormalizada, consulta))
     .orderBy(asc(f.nombre), asc(f.marca))
     .limit(limite);
 }

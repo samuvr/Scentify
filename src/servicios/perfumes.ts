@@ -49,6 +49,8 @@ export interface DatosPerfume {
   contextoIds: string[];
   estaciones: Estacion[];
   momentos: Momento[];
+  /** Dar de alta aunque ya haya un frasco propio de la misma ficha. */
+  confirmarDuplicado?: boolean;
 }
 
 /** Lo que describe el perfume, comun a todas las cuentas. */
@@ -58,6 +60,16 @@ export type DatosFicha = Pick<
 >;
 
 export class ErrorValidacion extends Error {}
+
+/**
+ * El alta seria un segundo frasco del mismo perfume. No es un error de datos:
+ * se puede querer (dos frascos), pero se pregunta antes.
+ */
+export class ErrorDuplicado extends Error {
+  constructor(readonly perfumeId: string) {
+    super('Ya tienes este perfume en tu colección.');
+  }
+}
 
 /**
  * Las cardinalidades minimas valen para todas las vias de alta, incluida la
@@ -342,9 +354,32 @@ function camposFrasco(datos: DatosPerfume) {
   };
 }
 
+/**
+ * Mi frasco de la ficha a la que iria este alta, si ya lo tengo: la elegida
+ * del catalogo o la que tenga el mismo nombre, marca y concentracion. Se mira
+ * ANTES de tocar ninguna ficha.
+ */
+async function frascoPropioIgual(userId: string, datos: DatosPerfume): Promise<string | null> {
+  const fichaId = datos.fichaId ?? (await fichaConLaMismaClave(datos));
+  if (!fichaId) return null;
+  const db = crearDb();
+  const [fila] = await db
+    .select({ id: schema.perfume.id })
+    .from(schema.perfume)
+    .where(and(eq(schema.perfume.userId, userId), eq(schema.perfume.fichaId, fichaId)))
+    .limit(1);
+  return fila?.id ?? null;
+}
+
 export async function crearPerfume(userId: string, datos: DatosPerfume): Promise<string> {
   validar(datos);
   await comprobarContextos(userId, datos.contextoIds);
+  // Compartir desde Fragrantica algo que ya tienes creaba un segundo frasco
+  // sin avisar: el aviso de «Ya lo tienes» solo existia en el paso 1.
+  if (!datos.confirmarDuplicado) {
+    const existente = await frascoPropioIgual(userId, datos);
+    if (existente) throw new ErrorDuplicado(existente);
+  }
 
   let fichaId: string;
   if (datos.fichaId) {

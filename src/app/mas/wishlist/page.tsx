@@ -4,8 +4,9 @@ import { redirect } from 'next/navigation';
 import { usuarioActual } from '@/servicios/auth';
 import { listarNotas, listarWishlist } from '@/servicios/consultas';
 import { formatearFecha } from '@/componentes/BloquePromedios';
-import { accionBorrarDeseo } from '@/app/acciones';
+import { notasFondoDeDeseo } from '@/servicios/wishlist';
 import { FormularioDeseo } from './FormularioDeseo';
+import { TarjetaDeseo } from './TarjetaDeseo';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,10 +30,15 @@ export default async function PaginaWishlist({
   if (!userId) redirect('/login');
 
   const { orden } = await searchParams;
-  const [deseos, notas] = await Promise.all([
+  const [todos, notas] = await Promise.all([
     listarWishlist(userId, orden === 'antiguedad' ? 'antiguedad' : 'prioridad'),
     listarNotas(),
   ]);
+  // Lo ya comprado sale de la lista y queda abajo, en «Conseguidos».
+  const deseos = todos.filter((d) => !d.convertidoAPerfumeId);
+  const conseguidos = todos.filter((d) => d.convertidoAPerfumeId);
+  const fondos = await Promise.all(deseos.map((d) => notasFondoDeDeseo(d.id)));
+  const notasConocidas = notas.map((n) => n.nombre);
 
   return (
     <div className="space-y-5">
@@ -56,13 +62,28 @@ export default async function PaginaWishlist({
         </div>
       </header>
 
-      <FormularioDeseo notasConocidas={notas.map((n) => n.nombre)} />
+      <FormularioDeseo notasConocidas={notasConocidas} />
 
       <ul className="space-y-2">
-        {deseos.map((d) => {
+        {deseos.map((d, i) => {
           const meses = mesesDesde(d.creadoEn.toISOString());
+          const hrefConvertir = `/coleccion/nuevo?nombre=${encodeURIComponent(d.nombre)}&marca=${encodeURIComponent(d.marca)}&deseo=${d.id}${d.fragranticaUrl ? `&url=${encodeURIComponent(d.fragranticaUrl)}` : ''}`;
           return (
-            <li key={d.id} className="tarjeta space-y-2">
+            <TarjetaDeseo
+              key={d.id}
+              deseo={{
+                id: d.id,
+                nombre: d.nombre,
+                marca: d.marca,
+                prioridad: d.prioridad,
+                precioObjetivo: d.precioObjetivo,
+                notas: d.notas,
+                fragranticaUrl: d.fragranticaUrl,
+                notasFondo: fondos[i] ?? [],
+              }}
+              notasConocidas={notasConocidas}
+              hrefConvertir={hrefConvertir}
+            >
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="nombre-perfume text-lg">{d.nombre}</p>
@@ -78,27 +99,31 @@ export default async function PaginaWishlist({
                 {meses >= 3 ? ` · lleva ${meses} meses ahí` : ''}
               </p>
               {d.notas ? <p className="text-sm">{d.notas}</p> : null}
-              <div className="flex gap-2">
-                <Link
-                  href={`/coleccion/nuevo?nombre=${encodeURIComponent(d.nombre)}&marca=${encodeURIComponent(d.marca)}${d.fragranticaUrl ? `&url=${encodeURIComponent(d.fragranticaUrl)}` : ''}`}
-                  className="boton-primario flex-1 text-sm"
-                >
-                  Convertir en colección
-                </Link>
-                <form action={accionBorrarDeseo}>
-                  <input type="hidden" name="id" value={d.id} />
-                  <button type="submit" className="boton-secundario px-4 text-sm">
-                    Quitar
-                  </button>
-                </form>
-              </div>
-            </li>
+            </TarjetaDeseo>
           );
         })}
       </ul>
 
       {deseos.length === 0 ? (
         <p className="tarjeta text-sm text-texto-tenue">La lista está vacía.</p>
+      ) : null}
+
+      {conseguidos.length > 0 ? (
+        <details className="tarjeta">
+          <summary className="cursor-pointer font-medium">
+            Conseguidos <span className="text-texto-tenue">({conseguidos.length})</span>
+          </summary>
+          <ul className="mt-3 space-y-1 text-sm">
+            {conseguidos.map((d) => (
+              <li key={d.id}>
+                <Link href={`/coleccion/${d.convertidoAPerfumeId}`} className="underline-offset-2 hover:underline">
+                  {d.nombre}
+                </Link>
+                <span className="text-texto-tenue"> · {d.marca}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
       ) : null}
     </div>
   );

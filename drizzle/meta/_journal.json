@@ -43,6 +43,13 @@
       "when": 1790400000000,
       "tag": "0005_ubicacion_por_usuario",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792067267133,
+      "tag": "0006_temperatura_y_descartes",
+      "breakpoints": true
     }
   ]
 }

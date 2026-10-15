@@ -10,6 +10,9 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { usuarioDePruebas } from './usuario';
 
 const cuando = process.env.DATABASE_URL ? describe : describe.skip;
+
+// Unico por ejecucion: un segundo frasco igual ahora pide confirmacion.
+const NOMBRE = `Reglas Duras ${crypto.randomUUID().slice(0, 8)}`;
 let USUARIO: string;
 
 cuando('reglas duras', () => {
@@ -36,7 +39,7 @@ cuando('reglas duras', () => {
     contextoId = contextos[0]!.id;
 
     perfumeId = await perfumes.crearPerfume(USUARIO, {
-      nombre: 'Reglas Duras',
+      nombre: NOMBRE,
       marca: 'Prueba',
       estado: 'LO_TENGO',
       notas: [{ nombre: 'Oud', nivel: 'FONDO' }],
@@ -88,7 +91,7 @@ cuando('reglas duras', () => {
 
     // Se le quita el contexto con el que se registró.
     await perfumes.actualizarPerfume(USUARIO, perfumeId, {
-      nombre: 'Reglas Duras',
+      nombre: NOMBRE,
       marca: 'Prueba',
       estado: 'LO_TENGO',
       notas: [],

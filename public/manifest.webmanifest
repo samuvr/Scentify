@@ -18,7 +18,9 @@
     { "src": "/icono-mascara.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ],
   "shortcuts": [
-    { "name": "Registrar uso", "short_name": "Registrar", "url": "/" },
+    { "name": "Lo sugerido de hoy", "short_name": "Sugerido", "url": "/?toque=sugerido" },
+    { "name": "Repetir el de ayer", "short_name": "Como ayer", "url": "/?toque=ayer" },
+    { "name": "Valorar hoy", "short_name": "Valorar", "url": "/?cierre=1" },
     { "name": "Recomiéndame", "short_name": "Sugerir", "url": "/recomendacion" }
   ],
   "share_target": {

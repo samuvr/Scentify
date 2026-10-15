@@ -6,10 +6,15 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { FormularioRegistro } from '@/componentes/FormularioRegistro';
-import { InsigniaIdoneidad } from '@/componentes/Idoneidad';
+import { TarjetaUso } from '@/componentes/TarjetaUso';
 import { usuarioActual } from '@/servicios/auth';
 import { zonaDelUsuario } from '@/servicios/zona';
-import { contextoHabitual, listarContextos, usadosRecientemente } from '@/servicios/consultas';
+import {
+  coleccionParaRegistro,
+  contextoHabitual,
+  listarContextos,
+  usadosRecientemente,
+} from '@/servicios/consultas';
 import { desplazarDias, esFinDeSemana, hoyIso, momentoDeAhora, usosDelDia } from '@/servicios/usos';
 import { esFechaIso } from '@/dominio/navegacion';
 import { fechaLarga, mesDe } from '@/dominio/calendario';
@@ -35,9 +40,10 @@ export default async function PaginaDiaCalendario({
   const momento = esHoy ? momentoDeAhora(zona) : 'DIA';
   const finde = esFinDeSemana(fecha);
 
-  const [registrados, contextos, recientes, habitualDia, habitualNoche] = await Promise.all([
+  const [registrados, contextos, coleccion, recientes, habitualDia, habitualNoche] = await Promise.all([
     usosDelDia(userId, fecha),
     pasado ? listarContextos(userId) : Promise.resolve([]),
+    pasado ? coleccionParaRegistro(userId) : Promise.resolve([]),
     pasado ? usadosRecientemente(userId) : Promise.resolve([]),
     pasado ? contextoHabitual(userId, 'DIA', finde) : Promise.resolve(null),
     pasado ? contextoHabitual(userId, 'NOCHE', finde) : Promise.resolve(null),
@@ -77,20 +83,11 @@ export default async function PaginaDiaCalendario({
               : 'Este día todavía no ha llegado y no tiene nada apuntado.'}
           </p>
         ) : (
+          // Aqui tambien se completa, corrige o borra lo de ese dia: antes solo
+          // se veia, y para arreglarlo habia que ir a la ficha de cada perfume.
           <ul className="space-y-2">
             {registrados.map((uso) => (
-              <li key={uso.id}>
-                <Link href={`/coleccion/${uso.perfumeId}`} className="tarjeta flex items-start justify-between gap-3">
-                  <div>
-                    <p className="nombre-perfume text-lg">{uso.nombre}</p>
-                    <p className="text-sm text-texto-tenue">
-                      {uso.marca} · {uso.momento === 'DIA' ? 'Día' : 'Noche'} · {uso.contexto}
-                      {uso.sprays !== null ? ` · ${uso.sprays} sprays` : ''}
-                    </p>
-                  </div>
-                  <InsigniaIdoneidad pct={uso.idoneidadPct} />
-                </Link>
-              </li>
+              <TarjetaUso key={uso.id} uso={uso} preguntar={!esHoy} />
             ))}
           </ul>
         )}
@@ -111,8 +108,10 @@ export default async function PaginaDiaCalendario({
               marca: p.marca,
               spraysHabituales: p.spraysHabituales,
             }))}
+            coleccion={coleccion}
             ayer={null}
             hoy={hoy}
+            registrados={registrados.map((u) => u.perfumeId)}
             momentoInicial={momento}
             contextoPorMomento={{ DIA: habitualDia, NOCHE: habitualNoche }}
             fechaFija={fecha}
