@@ -47,7 +47,6 @@ export default async function PaginaRecomendacion({
     contexto?: string;
     estaciones?: string;
     dia?: string;
-    error?: string;
   }>;
 }) {
   const userId = await usuarioActual();
@@ -110,12 +109,6 @@ export default async function PaginaRecomendacion({
           {estacionCalculada.origen === 'CALENDARIO' && !forzadas ? ' Sin conexión con Open-Meteo.' : ''}
         </p>
       </header>
-
-      {parametros.error === 'registro' ? (
-        <p className="aviso-error">
-          No se ha podido registrar ese perfume. Vuelve a intentarlo o elige otro.
-        </p>
-      ) : null}
 
       <SelectorPeticion
         contextos={contextos.map((c) => ({ id: c.id, nombre: c.nombre }))}

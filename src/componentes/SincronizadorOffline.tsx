@@ -34,8 +34,32 @@ export function SincronizadorOffline() {
    */
   useEffect(() => {
     if (!enPantallaDeAcceso) return;
+    // Al volver a entrar hay que guardar otra vez las pantallas de la cuenta.
+    try {
+      sessionStorage.removeItem('scentify-precacheado');
+    } catch {
+      // Sin sessionStorage no hay marca que quitar.
+    }
     navigator.serviceWorker?.ready
       .then((registro) => registro.active?.postMessage({ tipo: 'olvidar-datos' }))
+      .catch(() => undefined);
+  }, [enPantallaDeAcceso]);
+
+  /**
+   * Ya con sesion, una vez por sesion del navegador: el service worker se
+   * instala en la primera visita, que es el login, y entonces no pudo guardar
+   * las pantallas de la cuenta. Se las pide ahora para poder abrirlas sin red.
+   */
+  useEffect(() => {
+    if (enPantallaDeAcceso) return;
+    try {
+      if (sessionStorage.getItem('scentify-precacheado')) return;
+      sessionStorage.setItem('scentify-precacheado', '1');
+    } catch {
+      // Sin sessionStorage se pide igual; es barato.
+    }
+    navigator.serviceWorker?.ready
+      .then((registro) => registro.active?.postMessage({ tipo: 'precachear' }))
       .catch(() => undefined);
   }, [enPantallaDeAcceso]);
 

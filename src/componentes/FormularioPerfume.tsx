@@ -369,28 +369,51 @@ export function FormularioPerfume({
   async function guardar() {
     setGuardando(true);
     setError(null);
-    const respuesta: RespuestaPerfume = await accionGuardarPerfume(perfumeId ?? null, {
-      fichaId,
-      nombre: v.nombre,
-      marca: v.marca,
-      concentracion: v.concentracion || null,
-      anioLanzamiento: v.anioLanzamiento || null,
-      volumenMl: v.volumenMl || null,
-      fechaCompra: v.fechaCompra || null,
-      estado: v.estado,
-      valoracion: v.valoracion || null,
-      notasPersonales: v.notasPersonales || null,
-      fragranticaUrl: v.fragranticaUrl || null,
-      notas: v.notas.map((n, orden) => ({ ...n, orden })),
-      familiaIds: v.familiaIds,
-      contextoIds: v.contextoIds,
-      estaciones: v.estaciones,
-      momentos: v.momentos,
-    });
-    setGuardando(false);
+    let respuesta: RespuestaPerfume;
+    try {
+      respuesta = await accionGuardarPerfume(perfumeId ?? null, {
+        fichaId,
+        nombre: v.nombre,
+        marca: v.marca,
+        concentracion: v.concentracion || null,
+        anioLanzamiento: v.anioLanzamiento || null,
+        volumenMl: v.volumenMl || null,
+        fechaCompra: v.fechaCompra || null,
+        estado: v.estado,
+        valoracion: v.valoracion || null,
+        notasPersonales: v.notasPersonales || null,
+        fragranticaUrl: v.fragranticaUrl || null,
+        notas: v.notas.map((n, orden) => ({ ...n, orden })),
+        familiaIds: v.familiaIds,
+        contextoIds: v.contextoIds,
+        estaciones: v.estaciones,
+        momentos: v.momentos,
+      });
+    } catch {
+      // Sin cobertura la accion ni llega: el boton se quedaba en «Guardando…»
+      // para siempre. Lo marcado sigue en pantalla para reintentar.
+      setError(
+        navigator.onLine
+          ? 'No se ha podido guardar. Tus datos siguen aquí: inténtalo otra vez.'
+          : 'Sin conexión: no se ha guardado. Tus datos siguen aquí; vuelve a pulsar cuando tengas cobertura.',
+      );
+      return;
+    } finally {
+      setGuardando(false);
+    }
 
     if (respuesta.ok) router.push(`/coleccion/${respuesta.id}`);
     else setError(respuesta.error);
+  }
+
+  /**
+   * En un alta con una ficha del catalogo, lo comun es de todos: «Cambiar» el
+   * nombre o la marca reescribia la ficha y renombraba el perfume de las demas
+   * cuentas. Si no es este perfume, se suelta la ficha y se sigue a mano.
+   */
+  function noEsEste() {
+    setFichaId(null);
+    irAPaso(0);
   }
 
   const puedeAvanzar = [
@@ -827,9 +850,15 @@ export function FormularioPerfume({
                 {[v.marca, v.concentracion, v.anioLanzamiento].filter(Boolean).join(' · ') || 'Sin marca'}
               </p>
             </div>
-            <button type="button" onClick={() => irAPaso(0)} className="shrink-0 text-sm underline">
-              Cambiar
-            </button>
+            {fichaId && !perfumeId ? (
+              <button type="button" onClick={noEsEste} className="shrink-0 text-sm underline">
+                No es este
+              </button>
+            ) : (
+              <button type="button" onClick={() => irAPaso(0)} className="shrink-0 text-sm underline">
+                Cambiar
+              </button>
+            )}
           </div>
           <div className="flex items-start justify-between gap-3 text-sm">
             <div className="min-w-0 space-y-1">
@@ -935,7 +964,11 @@ export function FormularioPerfume({
 
       {modo === 'revision' ? revision() : null}
 
-      {error ? <p className="aviso-error">{error}</p> : null}
+      {error ? (
+        <p className="aviso-error" role="alert">
+          {error}
+        </p>
+      ) : null}
 
       {modo === 'revision' ? (
         <div className="space-y-2">

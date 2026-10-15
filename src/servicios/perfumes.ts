@@ -350,12 +350,23 @@ export async function crearPerfume(userId: string, datos: DatosPerfume): Promise
   if (datos.fichaId) {
     const db = crearDb();
     const [elegida] = await db
-      .select({ id: schema.ficha.id })
+      .select({
+        id: schema.ficha.id,
+        busquedaNormalizada: schema.ficha.busquedaNormalizada,
+        concentracion: schema.ficha.concentracion,
+      })
       .from(schema.ficha)
       .where(eq(schema.ficha.id, datos.fichaId))
       .limit(1);
     if (!elegida) throw new ErrorValidacion('Esa ficha ya no existe.');
-    fichaId = await sobrescribirFicha(elegida.id, datos);
+    const clave = camposFicha(datos);
+    const mismaFicha =
+      clave.busquedaNormalizada === elegida.busquedaNormalizada &&
+      (clave.concentracion ?? null) === (elegida.concentracion ?? null);
+    // Un alta no renombra nunca la ficha de los demas. Si el nombre, la marca
+    // o la concentracion ya no son los de la ficha elegida, es otro perfume:
+    // se busca o se crea el suyo por su clave, como en el alta a mano.
+    fichaId = mismaFicha ? await sobrescribirFicha(elegida.id, datos) : await resolverFicha(userId, datos);
   } else {
     fichaId = await resolverFicha(userId, datos);
   }

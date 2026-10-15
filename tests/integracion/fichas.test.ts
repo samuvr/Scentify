@@ -114,6 +114,21 @@ cuando('fichas compartidas', () => {
     expect(deAnaFicha?.compartidaCon).toBe(1);
   });
 
+  it('un alta desde una ficha con otro nombre no renombra la ficha de los demás', async () => {
+    const fede = await cuenta('fede');
+    const fichaId = await fichaDe(deAna);
+    // Eligió la ficha de Sauvage y, con «Cambiar», escribió otro perfume.
+    const suyo = await perfumes.crearPerfume(
+      fede.id,
+      alta(fede.contexto, { fichaId, nombre: `Fahrenheit ${RONDA}`, notas: [] }),
+    );
+
+    expect(await fichaDe(suyo)).not.toBe(fichaId);
+    const deAnaFicha = await consultas.fichaDePerfume(ana.id, deAna);
+    expect(deAnaFicha?.perfume.nombre).toBe(`Sauvage ${RONDA}`);
+    expect(deAnaFicha?.notas).toHaveLength(2);
+  });
+
   it('un alta a mano de algo que ya existe se engancha a la ficha sin pisarla', async () => {
     const carlos = await cuenta('carlos');
     // Sin elegirla de la lista y sin notas: no debe dejar a los demás sin pirámide.

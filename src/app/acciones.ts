@@ -42,6 +42,7 @@ import { guardarAjuste, guardarUmbrales } from '@/servicios/ajustes';
 import { validarUmbrales } from '@/dominio/estacion';
 import { HORA_MAXIMA_RECORDATORIO } from '@/servicios/recordatorio';
 import { zonaDelUsuario } from '@/servicios/zona';
+import { buscarLugares } from '@/servicios/clima';
 import {
   borrarUso,
   completarUso,
@@ -166,34 +167,6 @@ export async function accionRegistrarUso(_previo: unknown, datos: FormData) {
     idoneidad: resultado.idoneidad,
     estacion: resultado.estacion,
   };
-}
-
-/** "Me lo pongo" de la recomendacion: un toque, sin volver a pedir nada. */
-export async function accionRegistrarDesdeRecomendacion(datos: FormData) {
-  const userId = await exigirUsuario();
-  const analisis = esquemaUso.safeParse(desdeFormulario(datos));
-  // Si falla se vuelve a la recomendacion diciendolo, con lo que se habia
-  // pedido, en vez de quedarse en la pantalla sin que pase nada.
-  const deVuelta = () => {
-    const volver = new URLSearchParams({ error: 'registro' });
-    const momento = datos.get('momento');
-    const contexto = datos.get('contextoId');
-    if (momento === 'DIA' || momento === 'NOCHE') volver.set('momento', momento);
-    if (typeof contexto === 'string' && contexto) volver.set('contexto', contexto);
-    if (datos.get('dia') === 'manana') volver.set('dia', 'manana');
-    redirect(`/recomendacion?${volver}`);
-  };
-  if (!analisis.success) return deVuelta();
-  try {
-    await registrarUso(userId, analisis.data as DatosUso);
-  } catch (error) {
-    if (error instanceof ErrorValidacion) return deVuelta();
-    throw error;
-  }
-  revalidatePath('/');
-  revalidatePath('/recomendacion');
-  // Lo apuntado para mañana no sale en «Registrado hoy»: el aviso lo dice.
-  redirect(datos.get('dia') === 'manana' ? '/?registrado=manana' : '/?registrado=1');
 }
 
 export async function accionCompletarUso(datos: FormData) {
@@ -527,4 +500,16 @@ export async function accionSuscribirAvisos(suscripcion: {
 export async function accionCancelarAvisos(endpoint: string) {
   const userId = await exigirUsuario();
   await borrarSuscripcion(userId, endpoint);
+}
+
+/**
+ * Destinos del modo viaje por su nombre. Sin esto habia que salir de la app a
+ * buscar la latitud y la longitud. Lista vacia si no lo encuentra; null si no
+ * se ha podido buscar.
+ */
+export async function accionBuscarDestino(nombre: string) {
+  await exigirUsuario();
+  const texto = String(nombre ?? '').trim().slice(0, 100);
+  if (texto.length < 2) return [];
+  return buscarLugares(texto);
 }

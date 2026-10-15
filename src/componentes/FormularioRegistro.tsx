@@ -14,7 +14,7 @@
  * service worker lo encola y lo reenvia, y el mismo id evita duplicados.
  */
 import { useEffect, useRef, useState } from 'react';
-import { elegirZona, fechaEnZona } from '@/dominio/zona';
+import { hoySegunElMovil } from '@/cliente/fecha';
 import { useRouter } from 'next/navigation';
 import { PromediosEnLinea, formatearFecha } from './BloquePromedios';
 import { DesgloseIdoneidad, InsigniaIdoneidad } from './Idoneidad';
@@ -59,15 +59,6 @@ interface Previsualizacion {
 
 const AVISO_SIN_SESION =
   'Tu sesión ha caducado: guardado en el móvil. Vuelve a entrar y se enviará solo.';
-
-/**
- * Hoy segun el reloj del movil. La pantalla se pinto con el `hoy` del
- * servidor, y una PWA abierta desde anoche lo tendria viejo: un registro de
- * un toque por la mañana caia en el dia anterior.
- */
-function hoySegunElMovil(): string {
-  return fechaEnZona(elegirZona(Intl.DateTimeFormat().resolvedOptions().timeZone));
-}
 
 export function FormularioRegistro({
   contextos,

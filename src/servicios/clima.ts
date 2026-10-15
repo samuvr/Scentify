@@ -149,20 +149,37 @@ interface RespuestaGeocodificacion {
   results?: { name: string; latitude: number; longitude: number; admin1?: string; country?: string }[];
 }
 
-/** Coordenadas de un lugar por su nombre, con el geocodificador de Open-Meteo. */
-export async function geocodificar(nombre: string): Promise<Ubicacion | null> {
+/**
+ * Lugares que se llaman asi, con el geocodificador de Open-Meteo. Varios,
+ * porque «Valencia» o «Santiago» no dicen cual: el que elige es el usuario.
+ * Lista vacia si no existe; null si no se ha podido preguntar (sin red, fallo
+ * del servicio), que no es lo mismo y la pantalla lo dice distinto.
+ */
+export async function buscarLugares(nombre: string, cuantos = 5): Promise<Ubicacion[] | null> {
   try {
-    const parametros = new URLSearchParams({ name: nombre, count: '1', language: 'es', format: 'json' });
+    const parametros = new URLSearchParams({
+      name: nombre,
+      count: String(cuantos),
+      language: 'es',
+      format: 'json',
+    });
     const respuesta = await fetch(`https://geocoding-api.open-meteo.com/v1/search?${parametros}`, {
       signal: AbortSignal.timeout(TIMEOUT_MS),
       headers: { accept: 'application/json' },
     });
     if (!respuesta.ok) return null;
-    const lugar = ((await respuesta.json()) as RespuestaGeocodificacion).results?.[0];
-    if (!lugar) return null;
-    const etiqueta = [lugar.name, lugar.admin1, lugar.country].filter(Boolean).join(', ');
-    return { lat: lugar.latitude, lon: lugar.longitude, etiqueta };
+    const lugares = ((await respuesta.json()) as RespuestaGeocodificacion).results ?? [];
+    return lugares.map((lugar) => ({
+      lat: lugar.latitude,
+      lon: lugar.longitude,
+      etiqueta: [lugar.name, lugar.admin1, lugar.country].filter(Boolean).join(', '),
+    }));
   } catch {
     return null;
   }
+}
+
+/** Coordenadas de un lugar por su nombre: el primero que encuentre. */
+export async function geocodificar(nombre: string): Promise<Ubicacion | null> {
+  return (await buscarLugares(nombre, 1))?.[0] ?? null;
 }
