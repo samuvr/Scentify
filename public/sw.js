@@ -29,8 +29,13 @@
  *     del manifest.
  * v6: la cola conserva los usos sin sesion, el cierre de sesion borra las
  *     paginas y datos guardados, y la copia de seguridad ya no se cachea.
+ * v7: sin red, una pantalla no guardada da /sin-conexion (antes se servia Hoy
+ *     en cualquier URL); /sin-conexion sobrevive al cierre de sesion; no se
+ *     guardan las redirecciones al login; las navegaciones esperan a la red
+ *     como mucho unos segundos si hay copia; y el armazon se vuelve a guardar
+ *     ya con sesion.
  */
-const VERSION = 'v6';
+const VERSION = 'v7';
 const CACHE_ARMAZON = `scentify-armazon-${VERSION}`;
 const CACHE_DATOS = `scentify-datos-${VERSION}`;
 const ETIQUETA_SYNC = 'sincronizar-usos';
@@ -41,14 +46,36 @@ const ALMACEN = 'usos-pendientes';
 /** Lo minimo para que la app arranque estando sin conexion. */
 const ARMAZON = ['/', '/coleccion', '/recomendacion', '/sin-conexion', '/manifest.webmanifest', '/icono.svg'];
 
-self.addEventListener('install', (evento) => {
-  evento.waitUntil(
-    caches
-      .open(CACHE_ARMAZON)
-      // addAll falla entero si una sola URL falla; mejor una a una.
-      .then((cache) => Promise.allSettled(ARMAZON.map((url) => cache.add(url))))
-      .then(() => self.skipWaiting()),
+/** Lo que no lleva datos de nadie y se conserva al cerrar sesion. */
+const SIN_DATOS = ['/sin-conexion', '/manifest.webmanifest'];
+
+/**
+ * Con copia guardada, una navegacion no espera a la red mas que esto: en el
+ * portal, con una raya de cobertura, la PWA se quedaba en blanco hasta que el
+ * navegador abandonaba la peticion.
+ */
+const ESPERA_NAVEGACION_MS = 3500;
+
+/**
+ * Una respuesta que se puede guardar: correcta y sin redirecciones. La
+ * primera visita es al login, sin sesion, y '/' redirige alli: guardar esa
+ * respuesta dejaba el login en la cache como si fuera Hoy.
+ */
+const guardable = (respuesta) => respuesta.ok && !respuesta.redirected && respuesta.type === 'basic';
+
+/** Guarda el armazon una URL a una (addAll falla entero si falla una sola). */
+async function precachearArmazon() {
+  const cache = await caches.open(CACHE_ARMAZON);
+  await Promise.allSettled(
+    ARMAZON.map(async (url) => {
+      const respuesta = await fetch(url, { credentials: 'same-origin', cache: 'no-store' });
+      if (guardable(respuesta)) await cache.put(url, respuesta);
+    }),
   );
+}
+
+self.addEventListener('install', (evento) => {
+  evento.waitUntil(precachearArmazon().then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (evento) => {
@@ -68,19 +95,46 @@ self.addEventListener('activate', (evento) => {
 
 /* ------------------------------------------------------------- estrategias */
 
+/**
+ * La pagina de reserva cuando no hay red ni copia de lo pedido. Nunca otra
+ * pantalla: servir Hoy al pedir la coleccion era enseñar algo equivocado sin
+ * decirlo. Si tampoco esta guardada, una minima escrita aqui.
+ */
+async function paginaSinConexion() {
+  const guardada = await caches.match('/sin-conexion');
+  if (guardada) return guardada;
+  return new Response(
+    '<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
+      '<title>Sin conexión · Scentify</title><body style="background:#14110e;color:#f3ece3;font-family:system-ui,sans-serif;padding:4rem 1.5rem;text-align:center">' +
+      '<h1>Sin conexión</h1><p>Esta pantalla no estaba guardada en el móvil. Vuelve a intentarlo con cobertura.</p>' +
+      '<p><a href="/" style="color:#d6a45e">Volver a Hoy</a></p></body></html>',
+    { status: 503, headers: { 'content-type': 'text/html; charset=utf-8' } },
+  );
+}
+
 /** Red primero, cache como red de seguridad. Para HTML y lecturas de datos. */
-async function redPrimero(peticion, nombreCache) {
+async function redPrimero(peticion, nombreCache, esperaMaxima) {
   const cache = await caches.open(nombreCache);
-  try {
-    const respuesta = await fetch(peticion);
-    if (respuesta.ok) cache.put(peticion, respuesta.clone());
+  const guardada = await cache.match(peticion);
+
+  const desdeRed = fetch(peticion).then((respuesta) => {
+    if (guardable(respuesta)) cache.put(peticion, respuesta.clone());
     return respuesta;
-  } catch (error) {
-    const guardada = await cache.match(peticion);
-    if (guardada) return guardada;
-    if (peticion.mode === 'navigate') {
-      return (await cache.match('/sin-conexion')) ?? (await cache.match('/')) ?? Response.error();
+  });
+  // Si gana la espera y luego la red falla, que no quede un rechazo suelto.
+  desdeRed.catch(() => undefined);
+
+  try {
+    // Solo se corta la espera si hay algo que enseñar en su lugar. La
+    // peticion sigue y, si llega, deja la copia al dia para la proxima vez.
+    if (guardada && esperaMaxima) {
+      const tarde = new Promise((resolver) => setTimeout(() => resolver(null), esperaMaxima));
+      return (await Promise.race([desdeRed, tarde])) ?? guardada;
     }
+    return await desdeRed;
+  } catch (error) {
+    if (guardada) return guardada;
+    if (peticion.mode === 'navigate') return paginaSinConexion();
     throw error;
   }
 }
@@ -123,7 +177,7 @@ self.addEventListener('fetch', (evento) => {
   }
 
   if (request.mode === 'navigate') {
-    evento.respondWith(redPrimero(request, CACHE_ARMAZON));
+    evento.respondWith(redPrimero(request, CACHE_ARMAZON, ESPERA_NAVEGACION_MS));
   }
 });
 
@@ -208,7 +262,7 @@ async function olvidarDatos() {
   const armazon = await caches.open(CACHE_ARMAZON);
   for (const peticion of await armazon.keys()) {
     const ruta = new URL(peticion.url).pathname;
-    if (!ruta.startsWith('/_next/static/') && !ruta.startsWith('/icono') && ruta !== '/manifest.webmanifest') {
+    if (!ruta.startsWith('/_next/static/') && !ruta.startsWith('/icono') && !SIN_DATOS.includes(ruta)) {
       await armazon.delete(peticion);
     }
   }
@@ -218,6 +272,9 @@ self.addEventListener('message', (evento) => {
   // Sin Background Sync (Safari, por ejemplo) la pagina pide el vaciado a mano.
   if (evento.data?.tipo === 'vaciar-cola') evento.waitUntil(vaciarCola());
   if (evento.data?.tipo === 'olvidar-datos') evento.waitUntil(olvidarDatos());
+  // Ya con sesion: la instalacion se hizo en el login y no pudo guardar las
+  // pantallas de la cuenta. Se guardan ahora para poder abrirlas sin red.
+  if (evento.data?.tipo === 'precachear') evento.waitUntil(precachearArmazon());
 });
 
 /* ------------------------------------------- recordatorio diario (10.4) */

@@ -7,13 +7,12 @@
  * promedios en una linea y, solo en las parciales, que eje falla.
  *
  * "Me lo pongo" registra el uso de un toque, sin volver a pedir momento ni
- * contexto. "Otro" descarta la sugerencia durante el resto del dia y deja que
- * entre la siguiente de la lista.
+ * contexto, y sin conexion lo deja en la cola del movil. "Otro" descarta la
+ * sugerencia durante el resto del dia y deja que entre la siguiente.
  */
-import { BotonEnviar } from '@/componentes/BotonEnviar';
 import { PromediosEnLinea } from '@/componentes/BloquePromedios';
 import { InsigniaIdoneidad } from '@/componentes/Idoneidad';
-import { accionDescartarRecomendacion, accionRegistrarDesdeRecomendacion } from '../acciones';
+import { AccionesRecomendacion } from './AccionesRecomendacion';
 import type { Recomendacion } from '@/dominio/recomendacion';
 import type { Estacion, Momento } from '@/dominio/tipos';
 
@@ -35,65 +34,6 @@ interface Peticion {
    * visto; sin ellas, el servidor la calcula con el tiempo, como la pantalla.
    */
   estaciones?: Estacion[];
-}
-
-function MeLoPongo({
-  perfumeId,
-  momento,
-  contextoId,
-  fecha,
-  paraManana,
-  estaciones,
-  compacto = false,
-}: Peticion & { perfumeId: string; compacto?: boolean }) {
-  return (
-    <form action={accionRegistrarDesdeRecomendacion} className={compacto ? '' : 'flex-1'}>
-      {/*
-        El id del uso sale con la pagina: si el formulario llega dos veces
-        (doble toque, reintento del navegador), el servidor lo guarda una.
-      */}
-      <input type="hidden" name="id" value={crypto.randomUUID()} />
-      <input type="hidden" name="perfumeId" value={perfumeId} />
-      <input type="hidden" name="momento" value={momento} />
-      <input type="hidden" name="contextoId" value={contextoId} />
-      <input type="hidden" name="fecha" value={fecha} />
-      {paraManana ? <input type="hidden" name="dia" value="manana" /> : null}
-      {estaciones?.map((e) => (
-        <input key={e} type="hidden" name="estacionesForzadas" value={e} />
-      ))}
-      <BotonEnviar
-        pendiente="Guardando…"
-        className={compacto ? 'boton-secundario px-4 text-sm' : 'boton-primario w-full'}
-      >
-        {paraManana ? 'Me lo pondré' : 'Me lo pongo'}
-      </BotonEnviar>
-    </form>
-  );
-}
-
-function Otro({
-  perfumeId,
-  fecha,
-  paraManana,
-  compacto = false,
-}: {
-  perfumeId: string;
-  fecha: string;
-  paraManana?: boolean;
-  compacto?: boolean;
-}) {
-  return (
-    <form action={accionDescartarRecomendacion}>
-      <input type="hidden" name="perfumeId" value={perfumeId} />
-      <input type="hidden" name="fecha" value={fecha} />
-      <BotonEnviar
-        aria-label={paraManana ? 'Otro: descartar para mañana' : 'Otro: descartar por hoy'}
-        className={compacto ? 'boton-fantasma px-3 text-sm' : 'boton-secundario px-5'}
-      >
-        Otro
-      </BotonEnviar>
-    </form>
-  );
 }
 
 /**
@@ -133,10 +73,12 @@ export function TarjetaPrincipal({
       <p>{motivo}</p>
       {perfume.promedios ? <PromediosEnLinea promedios={perfume.promedios} /> : null}
 
-      <div className="flex gap-2">
-        <MeLoPongo perfumeId={perfume.id} {...peticion} />
-        <Otro perfumeId={perfume.id} fecha={peticion.fecha} paraManana={peticion.paraManana} />
-      </div>
+      <AccionesRecomendacion
+        perfumeId={perfume.id}
+        nombre={perfume.nombre}
+        sprays={perfume.promedios?.spraysHabituales ?? null}
+        {...peticion}
+      />
     </article>
   );
 }
@@ -160,15 +102,13 @@ export function FilaRecomendacion({
       <AvisoParcial recomendacion={recomendacion} />
       <p className="text-sm text-texto-tenue">{motivo}</p>
       {perfume.promedios ? <PromediosEnLinea promedios={perfume.promedios} /> : null}
-      <div className="flex items-center gap-2">
-        <MeLoPongo perfumeId={perfume.id} {...peticion} compacto />
-        <Otro
-          perfumeId={perfume.id}
-          fecha={peticion.fecha}
-          paraManana={peticion.paraManana}
-          compacto
-        />
-      </div>
+      <AccionesRecomendacion
+        perfumeId={perfume.id}
+        nombre={perfume.nombre}
+        sprays={perfume.promedios?.spraysHabituales ?? null}
+        {...peticion}
+        compacto
+      />
     </li>
   );
 }

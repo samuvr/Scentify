@@ -48,6 +48,7 @@ export async function POST(peticion: Request) {
     throw error;
   }
   revalidatePath('/');
+  revalidatePath('/recomendacion');
   revalidatePath('/estadisticas');
 
   return NextResponse.json(resultado, { status: resultado.yaExistia ? 200 : 201 });

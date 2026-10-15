@@ -1,8 +1,10 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useTransition } from 'react';
 import type { Momento } from '@/dominio/tipos';
+import type { Ubicacion } from '@/dominio/ubicacion';
+import { accionBuscarDestino } from '@/app/acciones';
 
 export function FormularioViaje({
   contextos,
@@ -22,6 +24,53 @@ export function FormularioViaje({
   const router = useRouter();
   const parametros = useSearchParams();
   const [otroDestino, setOtroDestino] = useState(Boolean(parametros.get('lat')));
+  const [busqueda, setBusqueda] = useState(parametros.get('lugar') ?? '');
+  const [lugares, setLugares] = useState<Ubicacion[] | null>(null);
+  const [avisoDestino, setAvisoDestino] = useState<string | null>(null);
+  const [buscando, iniciarBusqueda] = useTransition();
+
+  function buscarDestino() {
+    const texto = busqueda.trim();
+    if (texto.length < 2) return;
+    setAvisoDestino(null);
+    iniciarBusqueda(async () => {
+      try {
+        const encontrados = await accionBuscarDestino(texto);
+        setLugares(encontrados);
+        if (encontrados === null) {
+          setAvisoDestino('No se ha podido buscar ahora. Prueba más tarde o usa tu posición actual.');
+        } else if (encontrados.length === 0) {
+          setAvisoDestino('No encuentro ese sitio. Prueba con el nombre de la ciudad.');
+        }
+      } catch {
+        setLugares(null);
+        setAvisoDestino('Sin conexión: no se puede buscar el destino ahora.');
+      }
+    });
+  }
+
+  function elegirDestino(lugar: Ubicacion) {
+    setLugares(null);
+    setBusqueda(lugar.etiqueta);
+    poner({ lugar: lugar.etiqueta, lat: lugar.lat.toFixed(4), lon: lugar.lon.toFixed(4) });
+  }
+
+  /** Para cuando ya se esta alli. El permiso solo se pide al pulsar. */
+  function usarPosicionActual() {
+    if (!('geolocation' in navigator)) {
+      setAvisoDestino('Este navegador no da la ubicación.');
+      return;
+    }
+    setAvisoDestino('Buscando dónde estás…');
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        setAvisoDestino(null);
+        elegirDestino({ lat: coords.latitude, lon: coords.longitude, etiqueta: 'Donde estoy ahora' });
+      },
+      () => setAvisoDestino('No se ha podido obtener la ubicación.'),
+      { enableHighAccuracy: false, timeout: 10_000, maximumAge: 600_000 },
+    );
+  }
 
   function poner(cambios: Record<string, string>) {
     const nuevos = new URLSearchParams(parametros.toString());
@@ -116,43 +165,68 @@ export function FormularioViaje({
             <p className="text-xs text-texto-tenue">
               La estación se calcula con el tiempo de allí, no con el de casa.
             </p>
-            <div>
-              <label htmlFor="v-lugar">Nombre del destino</label>
-              <input
-                id="v-lugar"
-                defaultValue={parametros.get('lugar') ?? ''}
-                onBlur={(e) => poner({ lugar: e.target.value })}
-                className="mt-1"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label htmlFor="v-lat">Latitud</label>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                buscarDestino();
+              }}
+              className="space-y-2"
+            >
+              <label htmlFor="v-lugar">¿Adónde vas?</label>
+              <div className="flex gap-2">
                 <input
-                  id="v-lat"
-                  type="number"
-                  step="0.0001"
-                  defaultValue={parametros.get('lat') ?? ''}
-                  onBlur={(e) => poner({ lat: e.target.value })}
-                  className="mt-1"
+                  id="v-lugar"
+                  value={busqueda}
+                  onChange={(e) => setBusqueda(e.target.value)}
+                  placeholder="Sevilla, Lisboa, Dubái…"
+                  enterKeyHint="search"
+                  autoComplete="off"
+                  className="min-w-0 flex-1"
                 />
+                <button
+                  type="submit"
+                  disabled={buscando || busqueda.trim().length < 2}
+                  className="boton-secundario shrink-0 px-4"
+                >
+                  {buscando ? 'Buscando…' : 'Buscar'}
+                </button>
               </div>
-              <div>
-                <label htmlFor="v-lon">Longitud</label>
-                <input
-                  id="v-lon"
-                  type="number"
-                  step="0.0001"
-                  defaultValue={parametros.get('lon') ?? ''}
-                  onBlur={(e) => poner({ lon: e.target.value })}
-                  className="mt-1"
-                />
-              </div>
-            </div>
+            </form>
+
+            {lugares && lugares.length > 0 ? (
+              <ul className="space-y-2" aria-label="Destinos encontrados">
+                {lugares.map((lugar) => (
+                  <li key={`${lugar.lat},${lugar.lon}`}>
+                    <button
+                      type="button"
+                      onClick={() => elegirDestino(lugar)}
+                      className="tarjeta block w-full text-left text-sm"
+                    >
+                      {lugar.etiqueta}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+
+            <button type="button" onClick={usarPosicionActual} className="boton-fantasma px-1 text-sm">
+              Usar mi posición actual
+            </button>
+
+            {avisoDestino ? (
+              <p className="text-sm text-texto-tenue" role="status">
+                {avisoDestino}
+              </p>
+            ) : null}
+
             {parametros.get('lat') ? (
               <button
                 type="button"
-                onClick={() => poner({ lat: '', lon: '', lugar: '' })}
+                onClick={() => {
+                  setBusqueda('');
+                  setLugares(null);
+                  poner({ lat: '', lon: '', lugar: '' });
+                }}
                 className="boton-fantasma px-1 text-sm"
               >
                 Volver a mi ubicación

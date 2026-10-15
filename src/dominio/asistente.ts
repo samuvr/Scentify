@@ -7,9 +7,23 @@
  */
 import { z } from 'zod';
 
-/** Lo justo para que una conversacion larga no se coma el presupuesto. */
+/**
+ * Lo que se le manda a Claude de una conversacion: los ultimos mensajes y,
+ * de cada respuesta, el principio. Lo justo para que una conversacion larga
+ * no se coma el presupuesto.
+ */
 export const MAXIMO_MENSAJES = 40;
 export const MAXIMO_CARACTERES_MENSAJE = 4000;
+
+/**
+ * Lo que se acepta del navegador, holgado a proposito. Antes los dos topes de
+ * arriba se aplicaban al validar: tras una respuesta de mas de 4000
+ * caracteres, o tras 20 preguntas, cualquier repregunta se rechazaba con un
+ * 400 y el chat decia «No he podido conectar». Ahora se acepta y se recorta
+ * con `ventanaDeConversacion` antes de mandarla.
+ */
+const MAXIMO_MENSAJES_RECIBIDOS = 400;
+const MAXIMO_CARACTERES_RESPUESTA_RECIBIDA = 40_000;
 
 /**
  * El navegador guarda la conversacion como texto plano y la reenvia entera en
@@ -19,17 +33,39 @@ export const MAXIMO_CARACTERES_MENSAJE = 4000;
 export const esquemaConversacion = z.object({
   mensajes: z
     .array(
-      z.object({
-        rol: z.enum(['user', 'assistant']),
-        texto: z.string().trim().min(1).max(MAXIMO_CARACTERES_MENSAJE),
-      }),
+      z.discriminatedUnion('rol', [
+        z.object({ rol: z.literal('user'), texto: z.string().trim().min(1).max(MAXIMO_CARACTERES_MENSAJE) }),
+        z.object({
+          rol: z.literal('assistant'),
+          texto: z.string().trim().min(1).max(MAXIMO_CARACTERES_RESPUESTA_RECIBIDA),
+        }),
+      ]),
     )
     .min(1)
-    .max(MAXIMO_MENSAJES)
+    .max(MAXIMO_MENSAJES_RECIBIDOS)
     .refine((m) => m[0]?.rol === 'user' && m[m.length - 1]?.rol === 'user', {
       message: 'La conversación empieza y acaba con una pregunta.',
     }),
 });
+
+/**
+ * Los ultimos `MAXIMO_MENSAJES` mensajes, empezando siempre por una pregunta,
+ * con cada respuesta recortada a `MAXIMO_CARACTERES_MENSAJE`. Lo ultimo es lo
+ * que importa para la siguiente respuesta; lo de hace veinte preguntas, no.
+ */
+export function ventanaDeConversacion<T extends { rol: 'user' | 'assistant'; texto: string }>(
+  mensajes: T[],
+): T[] {
+  let ventana = mensajes.slice(-MAXIMO_MENSAJES);
+  const primeraPregunta = ventana.findIndex((m) => m.rol === 'user');
+  ventana = primeraPregunta > 0 ? ventana.slice(primeraPregunta) : ventana;
+  // Las preguntas ya llegan con su tope; lo que se recorta son las respuestas.
+  return ventana.map((m) =>
+    m.rol === 'assistant' && m.texto.length > MAXIMO_CARACTERES_MENSAJE
+      ? { ...m, texto: `${m.texto.slice(0, MAXIMO_CARACTERES_MENSAJE)}…` }
+      : m,
+  );
+}
 
 export type MensajeConversacion = z.infer<typeof esquemaConversacion>['mensajes'][number];
 

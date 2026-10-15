@@ -23,6 +23,8 @@ export interface UsoPendiente {
   duracionPercibida: string | null;
   valoracionDia: number | null;
   comentario: string | null;
+  /** Las estaciones elegidas a mano en Sugerir, para guardar la idoneidad que se vio. */
+  estacionesForzadas?: ('PRIMAVERA' | 'VERANO' | 'OTONO' | 'INVIERNO')[];
 }
 
 /**

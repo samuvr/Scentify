@@ -6,7 +6,19 @@
  * datos para que esto funcione.
  */
 import { useRef, useState, type ReactNode } from 'react';
-import type { EventoAsistente, MensajeConversacion } from '@/dominio/asistente';
+import {
+  ventanaDeConversacion,
+  type EventoAsistente,
+  type MensajeConversacion,
+} from '@/dominio/asistente';
+
+/** Por que no se ha podido preguntar, segun lo que haya contestado el servidor. */
+function mensajeSegunEstado(estado: number): string {
+  if (estado === 401) return 'Tu sesión ha caducado. Vuelve a entrar y pregunta otra vez.';
+  if (estado === 503) return 'El asistente no está activado en esta instalación.';
+  if (estado === 400) return 'No he podido leer esa pregunta. Prueba a acortarla o empieza una conversación nueva.';
+  return 'No he podido conectar con el asistente.';
+}
 
 const SUGERENCIAS = [
   '¿Qué notas o familias faltan en mi colección?',
@@ -83,9 +95,13 @@ export function Chat() {
       const r = await fetch('/api/asistente', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ mensajes: conversacion }),
+        // Solo lo ultimo de la conversacion: una larga ya no bloquea el chat.
+        body: JSON.stringify({ mensajes: ventanaDeConversacion(conversacion) }),
       });
-      if (!r.ok || !r.body) throw new Error(await r.text());
+      if (!r.ok || !r.body) {
+        setError(mensajeSegunEstado(r.status));
+        throw new Error(`Estado ${r.status}`);
+      }
 
       const lector = r.body.pipeThrough(new TextDecoderStream()).getReader();
       let pendiente = '';
@@ -112,7 +128,7 @@ export function Chat() {
         final.current?.scrollIntoView({ block: 'end' });
       }
     } catch {
-      setError('No he podido conectar con el asistente.');
+      setError((previo) => previo ?? 'No he podido conectar con el asistente.');
     }
 
     // Si no llego texto, la pregunta se queda sin respuesta en la conversacion

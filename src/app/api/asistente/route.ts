@@ -4,9 +4,11 @@
  * se escribe.
  */
 import Anthropic from '@anthropic-ai/sdk';
-import { esquemaConversacion, type EventoAsistente } from '@/dominio/asistente';
+import { esquemaConversacion, ventanaDeConversacion, type EventoAsistente } from '@/dominio/asistente';
 import { asistenteDisponible, responder } from '@/servicios/asistente';
 import { usuarioActual } from '@/servicios/auth';
+import { hoyIso } from '@/servicios/usos';
+import { zonaDelUsuario } from '@/servicios/zona';
 
 // Una respuesta con dos herramientas puede pasar del minuto.
 export const maxDuration = 120;
@@ -28,7 +30,9 @@ export async function POST(peticion: Request) {
   const datos = esquemaConversacion.safeParse(await peticion.json().catch(() => null));
   if (!datos.success) return new Response('Conversación no válida', { status: 400 });
 
-  const hoy = new Date().toISOString().slice(0, 10);
+  // El «hoy» del usuario, no el de UTC: de madrugada, «mañana» era hoy.
+  const hoy = hoyIso(await zonaDelUsuario());
+  const mensajes = ventanaDeConversacion(datos.data.mensajes);
   const codificador = new TextEncoder();
 
   const cuerpo = new ReadableStream<Uint8Array>({
@@ -36,7 +40,7 @@ export async function POST(peticion: Request) {
       const emitir = (evento: EventoAsistente) =>
         controlador.enqueue(codificador.encode(`${JSON.stringify(evento)}\n`));
       try {
-        await responder(userId, datos.data.mensajes, hoy, emitir);
+        await responder(userId, mensajes, hoy, emitir);
       } catch (error) {
         console.error('asistente', error);
         emitir({ tipo: 'error', mensaje: mensajeDeError(error) });
