@@ -1,8 +1,8 @@
 /**
  * Seccion 10.3 — Modo viaje.
  *
- * Dados unos contextos previstos y el destino, propone el set minimo de frascos
- * que los cubre. Es un problema de cobertura de conjuntos: NP-duro en general,
+ * Dados los contextos previstos de dia y de noche, las fechas y el destino,
+ * propone el set minimo de frascos que los cubre. Es un problema de cobertura de conjuntos: NP-duro en general,
  * pero aqui el tamaño lo hace tratable de forma EXACTA, y un resultado exacto
  * importa —"llevate tres" cuando bastaban dos es justo lo que no quieres en una
  * maleta—.
@@ -22,24 +22,48 @@ import type { Estacion, Momento } from './tipos';
 export interface RequisitoViaje {
   contextoId: string;
   momento: Momento;
+  /**
+   * Solo cuando el tiempo cambia a lo largo del viaje: el conjunto de
+   * estaciones de ese tramo. Sin el, vale `estacionesCompatibles`.
+   */
+  estaciones?: Estacion[];
 }
 
 export interface PeticionViaje {
   coleccion: PerfumeCandidato[];
-  /** Contextos previstos en el viaje. */
-  contextoIds: string[];
-  /** Momentos a cubrir. Por defecto, dia y noche. */
+  /**
+   * Contextos previstos para cada momento: los del dia no tienen por que ser
+   * los de la noche (oficina de dia, cena de noche). Si se da, manda sobre
+   * `contextoIds` y `momentos`.
+   */
+  contextosPorMomento?: Partial<Record<Momento, string[]>>;
+  /** Contextos previstos en el viaje, los mismos para todos los momentos. */
+  contextoIds?: string[];
+  /** Momentos a cubrir con `contextoIds`. Por defecto, dia y noche. */
   momentos?: Momento[];
   /** Estaciones compatibles EN EL DESTINO, no en casa (7.1). */
   estacionesCompatibles: Estacion[];
+  /**
+   * Si el viaje dura varios dias, los conjuntos de estaciones DISTINTOS que van
+   * saliendo para cada momento. Cada uno es un requisito aparte: un frasco de
+   * verano no cubre los dias frios del final de un viaje de septiembre.
+   */
+  estacionesPorMomento?: Partial<Record<Momento, Estacion[][]>>;
+  /** Frascos que quieres llevar como poco, aunque menos ya lo cubran todo. */
+  minimoFrascos?: number;
   /** Tope de frascos que caben en la maleta. Sin tope, el minimo que salga. */
   maximoFrascos?: number;
 }
 
 export interface FrascoElegido {
   perfume: PerfumeCandidato;
-  /** Requisitos que cubre este frasco y ningun otro de los elegidos antes. */
+  /**
+   * Requisitos que cubre este frasco y ningun otro de los elegidos antes. En
+   * los de refuerzo, todos los que cubre: ahi no hay nada nuevo que repartir.
+   */
   cubre: RequisitoViaje[];
+  /** Va para llegar al minimo pedido, no porque haga falta para cubrir algo. */
+  deRefuerzo?: boolean;
 }
 
 export interface ResultadoViaje {
@@ -48,6 +72,8 @@ export interface ResultadoViaje {
   sinCubrir: RequisitoViaje[];
   /** true si el resultado es el minimo demostrado, false si es una aproximacion. */
   esOptimo: boolean;
+  /** Frascos que faltan para el minimo pedido porque no hay mas que encajen. */
+  faltanParaMinimo: number;
 }
 
 /** Por encima de esto, el exacto deja de ser barato y se usa voraz. */
@@ -74,14 +100,61 @@ const contarBits = (n: number): number => {
   return total;
 };
 
-export function resolverViaje(peticion: PeticionViaje): ResultadoViaje {
-  const momentos = peticion.momentos?.length ? peticion.momentos : MOMENTOS_POR_DEFECTO;
+/** Mismo conjunto de estaciones, venga en el orden que venga. */
+const claveEstaciones = (estaciones: Estacion[]) => [...estaciones].sort().join(',');
+
+/**
+ * Los conjuntos de estaciones distintos, sin repetir. Es lo que hay que pasar
+ * en `estacionesPorMomento` a partir de la estacion efectiva de cada dia.
+ */
+export function estacionesDistintas(porDia: Estacion[][]): Estacion[][] {
+  const vistas = new Map<string, Estacion[]>();
+  for (const estaciones of porDia) {
+    if (estaciones.length === 0) continue;
+    const clave = claveEstaciones(estaciones);
+    if (!vistas.has(clave)) vistas.set(clave, estaciones);
+  }
+  return [...vistas.values()];
+}
+
+/** Dias de un viaje contando el de ida y el de vuelta. 0 si las fechas no casan. */
+export function diasDeViaje(desde: string, hasta: string): number {
+  const inicio = Date.parse(`${desde}T00:00:00Z`);
+  const fin = Date.parse(`${hasta}T00:00:00Z`);
+  if (!Number.isFinite(inicio) || !Number.isFinite(fin) || fin < inicio) return 0;
+  return Math.round((fin - inicio) / 86_400_000) + 1;
+}
+
+function construirRequisitos(peticion: PeticionViaje): RequisitoViaje[] {
+  const porMomento: Partial<Record<Momento, string[]>> =
+    peticion.contextosPorMomento ??
+    Object.fromEntries(
+      (peticion.momentos?.length ? peticion.momentos : MOMENTOS_POR_DEFECTO).map((m) => [
+        m,
+        peticion.contextoIds ?? [],
+      ]),
+    );
 
   const requisitos: RequisitoViaje[] = [];
-  for (const contextoId of peticion.contextoIds) {
-    for (const momento of momentos) requisitos.push({ contextoId, momento });
+  for (const momento of MOMENTOS_POR_DEFECTO) {
+    const contextoIds = [...new Set(porMomento[momento] ?? [])];
+    const tramos = peticion.estacionesPorMomento?.[momento]?.filter((e) => e.length > 0);
+    for (const contextoId of contextoIds) {
+      if (tramos && tramos.length > 0) {
+        for (const estaciones of tramos) requisitos.push({ contextoId, momento, estaciones });
+      } else {
+        requisitos.push({ contextoId, momento });
+      }
+    }
   }
-  if (requisitos.length === 0) return { frascos: [], sinCubrir: [], esOptimo: true };
+  return requisitos;
+}
+
+export function resolverViaje(peticion: PeticionViaje): ResultadoViaje {
+  const requisitos = construirRequisitos(peticion);
+  if (requisitos.length === 0) {
+    return { frascos: [], sinCubrir: [], esOptimo: true, faltanParaMinimo: 0 };
+  }
 
   // Mismos filtros duros que la recomendacion, y ordenados por preferencia para
   // que los desempates del algoritmo sean los que quiero.
@@ -92,7 +165,7 @@ export function resolverViaje(peticion: PeticionViaje): ResultadoViaje {
   const cubreRequisito = (p: PerfumeCandidato, r: RequisitoViaje) =>
     p.contextos.includes(r.contextoId) &&
     p.momentos.includes(r.momento) &&
-    p.estaciones.some((e) => peticion.estacionesCompatibles.includes(e));
+    p.estaciones.some((e) => (r.estaciones ?? peticion.estacionesCompatibles).includes(e));
 
   const mascaras = candidatos.map((p) =>
     requisitos.reduce((m, r, i) => (cubreRequisito(p, r) ? m | (1 << i) : m), 0),
@@ -140,10 +213,32 @@ export function resolverViaje(peticion: PeticionViaje): ResultadoViaje {
     ...requisitos.filter((r, i) => (yaCubierto & (1 << i)) === 0 && !imposibles.includes(r)),
   ];
 
+  // Minimo pedido: si con menos ya se cubre todo, se completa con los que mas
+  // cosas cubren por su cuenta —un repuesto que sirve para mucho— y, a igual
+  // cobertura, con el que prefieres. Nunca con uno que no encaja en el viaje.
+  // El tope de maleta manda sobre el minimo.
+  const minimo = Math.min(peticion.minimoFrascos ?? 0, tope ?? Number.POSITIVE_INFINITY);
+  let faltanParaMinimo = 0;
+  if (frascos.length < minimo) {
+    const refuerzos = utiles
+      .filter((c) => !finales.includes(c))
+      .sort((a, b) => contarBits(b.mascara) - contarBits(a.mascara))
+      .slice(0, minimo - frascos.length);
+    for (const { perfume, mascara } of refuerzos) {
+      frascos.push({
+        perfume,
+        cubre: requisitos.filter((_, i) => (mascara & (1 << i)) !== 0),
+        deRefuerzo: true,
+      });
+    }
+    faltanParaMinimo = minimo - frascos.length;
+  }
+
   return {
     frascos,
     sinCubrir,
     esOptimo: esOptimo && (tope === undefined || elegidos.length <= tope),
+    faltanParaMinimo,
   };
 }
 

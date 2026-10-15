@@ -500,6 +500,13 @@ sin cubrir. Importa que sea exacto porque «llévate tres» cuando bastaban dos 
 lo que no quieres al hacer la maleta. Por encima de veinte requisitos cae a voraz y lo
 dice (`esOptimo: false`).
 
+El viaje tiene fecha de ida y de vuelta, y los contextos se eligen por separado para el
+día y para la noche (oficina de día y cena de noche no piden lo mismo). La estación se
+calcula para cada día y cada momento con el tiempo del destino —previsión hasta 16 días,
+calendario después—; si cambia a lo largo del viaje, cada tramo es un requisito aparte.
+Se puede pedir un mínimo de frascos: si con menos ya se cubre todo, se completa con los
+que más cubren por su cuenta y se marcan como refuerzo. El máximo manda sobre el mínimo.
+
 ### Sobre la lógica de dominio
 
 Todo lo de `src/dominio/` son funciones puras: sin red, sin base de datos y sin reloj

@@ -12,7 +12,7 @@ import {
   explicarSolapamiento,
   notasComunes,
 } from '@/dominio/solapamiento';
-import { resolverViaje } from '@/dominio/viaje';
+import { diasDeViaje, estacionesDistintas, resolverViaje } from '@/dominio/viaje';
 import type { PerfumeCandidato } from '@/dominio/recomendacion';
 import type { Estacion, Momento } from '@/dominio/tipos';
 
@@ -407,5 +407,98 @@ describe('modo viaje', () => {
     const a = resolverViaje(peticion).frascos.map((f) => f.perfume.nombre);
     const b = resolverViaje(peticion).frascos.map((f) => f.perfume.nombre);
     expect(a).toEqual(b);
+  });
+
+  it('los contextos de día y de noche se piden por separado', () => {
+    const resultado = resolverViaje({
+      coleccion: [
+        perfume('Oficina de día', { contextos: [OFICINA], momentos: ['DIA'], estaciones: ['VERANO'] }),
+        perfume('Cita de noche', { contextos: [CITA], momentos: ['NOCHE'], estaciones: ['VERANO'] }),
+        perfume('Oficina de noche', { contextos: [OFICINA], momentos: ['NOCHE'], estaciones: ['VERANO'] }),
+      ],
+      contextosPorMomento: { DIA: [OFICINA], NOCHE: [CITA] },
+      estacionesCompatibles: estaciones,
+    });
+    expect(resultado.frascos.map((f) => f.perfume.nombre).sort()).toEqual([
+      'Cita de noche',
+      'Oficina de día',
+    ]);
+    expect(resultado.sinCubrir).toEqual([]);
+  });
+
+  it('completa hasta el mínimo con los que más cubren, marcados como refuerzo', () => {
+    const resultado = resolverViaje({
+      coleccion: [
+        perfume('Comodín', { contextos: TODOS_LOS_CONTEXTOS, estaciones: ['VERANO'] }),
+        perfume('Medio', { contextos: [OFICINA, GIMNASIO], estaciones: ['VERANO'] }),
+        perfume('Poco', { contextos: [CITA], momentos: ['NOCHE'], estaciones: ['VERANO'] }),
+        perfume('De invierno', { contextos: TODOS_LOS_CONTEXTOS, estaciones: ['INVIERNO'] }),
+      ],
+      contextoIds: TODOS_LOS_CONTEXTOS,
+      estacionesCompatibles: estaciones,
+      minimoFrascos: 3,
+    });
+    expect(resultado.frascos.map((f) => f.perfume.nombre)).toEqual(['Comodín', 'Medio', 'Poco']);
+    expect(resultado.frascos.map((f) => Boolean(f.deRefuerzo))).toEqual([false, true, true]);
+    // El refuerzo dice todo lo que cubre, no solo lo nuevo.
+    expect(resultado.frascos[1]?.cubre).toHaveLength(4);
+    expect(resultado.faltanParaMinimo).toBe(0);
+  });
+
+  it('si no hay bastantes que encajen, dice cuántos faltan para el mínimo', () => {
+    const resultado = resolverViaje({
+      coleccion: [
+        perfume('Único', { contextos: TODOS_LOS_CONTEXTOS, estaciones: ['VERANO'] }),
+        perfume('De invierno', { contextos: TODOS_LOS_CONTEXTOS, estaciones: ['INVIERNO'] }),
+      ],
+      contextoIds: TODOS_LOS_CONTEXTOS,
+      estacionesCompatibles: estaciones,
+      minimoFrascos: 3,
+    });
+    expect(resultado.frascos.map((f) => f.perfume.nombre)).toEqual(['Único']);
+    expect(resultado.faltanParaMinimo).toBe(2);
+  });
+
+  it('el tope de maleta manda sobre el mínimo', () => {
+    const resultado = resolverViaje({
+      coleccion: [
+        perfume('A', { contextos: TODOS_LOS_CONTEXTOS, estaciones: ['VERANO'] }),
+        perfume('B', { contextos: TODOS_LOS_CONTEXTOS, estaciones: ['VERANO'] }),
+        perfume('C', { contextos: TODOS_LOS_CONTEXTOS, estaciones: ['VERANO'] }),
+      ],
+      contextoIds: TODOS_LOS_CONTEXTOS,
+      estacionesCompatibles: estaciones,
+      minimoFrascos: 3,
+      maximoFrascos: 2,
+    });
+    expect(resultado.frascos).toHaveLength(2);
+    expect(resultado.faltanParaMinimo).toBe(0);
+  });
+
+  it('si el tiempo cambia durante el viaje, hay que cubrir cada tramo', () => {
+    const resultado = resolverViaje({
+      coleccion: [
+        perfume('De verano', { contextos: [OFICINA], estaciones: ['VERANO'] }),
+        perfume('De otoño', { contextos: [OFICINA], estaciones: ['OTONO'] }),
+      ],
+      contextosPorMomento: { DIA: [OFICINA] },
+      estacionesCompatibles: ['VERANO'],
+      estacionesPorMomento: { DIA: [['VERANO'], ['OTONO']] },
+    });
+    expect(resultado.frascos.map((f) => f.perfume.nombre).sort()).toEqual(['De otoño', 'De verano']);
+    expect(resultado.sinCubrir).toEqual([]);
+  });
+
+  it('cuenta los días de viaje con la ida y la vuelta', () => {
+    expect(diasDeViaje('2026-10-15', '2026-10-15')).toBe(1);
+    expect(diasDeViaje('2026-10-15', '2026-10-21')).toBe(7);
+    expect(diasDeViaje('2026-10-30', '2026-11-02')).toBe(4);
+    expect(diasDeViaje('2026-10-21', '2026-10-15')).toBe(0);
+  });
+
+  it('agrupa las estaciones de cada día en tramos distintos', () => {
+    expect(
+      estacionesDistintas([['VERANO'], ['VERANO'], ['VERANO', 'OTONO'], ['OTONO', 'VERANO'], ['OTONO']]),
+    ).toEqual([['VERANO'], ['VERANO', 'OTONO'], ['OTONO']]);
   });
 });

@@ -2,22 +2,27 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, useTransition } from 'react';
-import type { Momento } from '@/dominio/tipos';
 import type { Ubicacion } from '@/dominio/ubicacion';
 import { accionBuscarDestino } from '@/app/acciones';
 
 export function FormularioViaje({
   contextos,
-  elegidos,
-  momentos,
-  fecha,
+  contextosDia,
+  contextosNoche,
+  desde,
+  hasta,
+  dias,
+  minimo,
   tope,
   destino,
 }: {
   contextos: { id: string; nombre: string }[];
-  elegidos: string[];
-  momentos: Momento[];
-  fecha: string;
+  contextosDia: string[];
+  contextosNoche: string[];
+  desde: string;
+  hasta: string;
+  dias: number;
+  minimo: number | undefined;
   tope: number | undefined;
   destino: { lat: number; lon: number; etiqueta: string };
 }) {
@@ -81,56 +86,66 @@ export function FormularioViaje({
     router.push(`/mas/viaje?${nuevos}`);
   }
 
-  const alternar = (lista: string[], valor: string) =>
-    lista.includes(valor) ? lista.filter((v) => v !== valor) : [...lista, valor];
-
   return (
     <section className="tarjeta space-y-4">
-      <div>
-        <span className="block text-sm font-medium text-texto-tenue">Contextos previstos</span>
-        <div className="mt-1 flex flex-wrap gap-2">
-          {contextos.map((c) => (
-            <button
-              key={c.id}
-              type="button"
-              aria-pressed={elegidos.includes(c.id)}
-              onClick={() => poner({ contextos: alternar(elegidos, c.id).join(',') })}
-              className="chip"
-            >
-              {c.nombre}
-            </button>
-          ))}
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label htmlFor="v-desde">Ida</label>
+          <input
+            id="v-desde"
+            type="date"
+            defaultValue={desde}
+            onChange={(e) => {
+              const ida = e.target.value;
+              // Si la vuelta queda antes que la ida, se arrastra con ella.
+              poner(ida && hasta < ida ? { desde: ida, hasta: ida } : { desde: ida });
+            }}
+            className="mt-1"
+          />
+        </div>
+        <div>
+          <label htmlFor="v-hasta">Vuelta</label>
+          <input
+            id="v-hasta"
+            key={hasta}
+            type="date"
+            min={desde}
+            defaultValue={hasta}
+            onChange={(e) => poner({ hasta: e.target.value })}
+            className="mt-1"
+          />
         </div>
       </div>
+      <p className="text-sm text-texto-tenue" role="status">
+        {dias === 1 ? 'Un día fuera.' : `${dias} días fuera.`}
+      </p>
 
-      <div>
-        <span className="block text-sm font-medium text-texto-tenue">Momentos a cubrir</span>
-        <div className="mt-1 grid grid-cols-2 gap-2">
-          {(['DIA', 'NOCHE'] as const).map((m) => (
-            <button
-              key={m}
-              type="button"
-              aria-pressed={momentos.includes(m)}
-              onClick={() => {
-                const nuevos = alternar(momentos, m);
-                if (nuevos.length > 0) poner({ momentos: nuevos.join(',') });
-              }}
-              className="opcion"
-            >
-              {m === 'DIA' ? 'Día' : 'Noche'}
-            </button>
-          ))}
-        </div>
-      </div>
+      <SelectorContextos
+        titulo="Contextos de día"
+        contextos={contextos}
+        elegidos={contextosDia}
+        onCambiar={(ids) => poner({ dia: ids.join(',') })}
+      />
+
+      <SelectorContextos
+        titulo="Contextos de noche"
+        contextos={contextos}
+        elegidos={contextosNoche}
+        onCambiar={(ids) => poner({ noche: ids.join(',') })}
+      />
 
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label htmlFor="v-fecha">Fecha del viaje</label>
+          <label htmlFor="v-minimo">Mínimo de frascos</label>
           <input
-            id="v-fecha"
-            type="date"
-            defaultValue={fecha}
-            onChange={(e) => poner({ fecha: e.target.value })}
+            id="v-minimo"
+            type="number"
+            inputMode="numeric"
+            min={1}
+            max={tope}
+            placeholder="los justos"
+            defaultValue={minimo ?? ''}
+            onChange={(e) => poner({ minimo: e.target.value })}
             className="mt-1"
           />
         </div>
@@ -140,7 +155,7 @@ export function FormularioViaje({
             id="v-tope"
             type="number"
             inputMode="numeric"
-            min={1}
+            min={minimo ?? 1}
             placeholder="sin tope"
             defaultValue={tope ?? ''}
             onChange={(e) => poner({ tope: e.target.value })}
@@ -148,6 +163,11 @@ export function FormularioViaje({
           />
         </div>
       </div>
+      {minimo !== undefined && tope !== undefined && minimo > tope ? (
+        <p className="text-sm text-texto-tenue" role="status">
+          El mínimo pasa del máximo: manda el máximo.
+        </p>
+      ) : null}
 
       <div>
         <button
@@ -236,5 +256,39 @@ export function FormularioViaje({
         ) : null}
       </div>
     </section>
+  );
+}
+
+function SelectorContextos({
+  titulo,
+  contextos,
+  elegidos,
+  onCambiar,
+}: {
+  titulo: string;
+  contextos: { id: string; nombre: string }[];
+  elegidos: string[];
+  onCambiar: (ids: string[]) => void;
+}) {
+  const alternar = (id: string) =>
+    onCambiar(elegidos.includes(id) ? elegidos.filter((v) => v !== id) : [...elegidos, id]);
+
+  return (
+    <div role="group" aria-label={titulo}>
+      <span className="block text-sm font-medium text-texto-tenue">{titulo}</span>
+      <div className="mt-1 flex flex-wrap gap-2">
+        {contextos.map((c) => (
+          <button
+            key={c.id}
+            type="button"
+            aria-pressed={elegidos.includes(c.id)}
+            onClick={() => alternar(c.id)}
+            className="chip"
+          >
+            {c.nombre}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
