@@ -23,3 +23,21 @@ export function claveBusqueda(nombre: string, marca: string): string {
 
 /** La busqueda no arranca hasta el tercer caracter (seccion 6.1). */
 export const MINIMO_CARACTERES_BUSQUEDA = 3;
+
+/**
+ * Las palabras sueltas de una busqueda, ya normalizadas. Cada una tiene que
+ * aparecer en la clave, en cualquier orden: «lattafa khamrah» encuentra
+ * «Khamrah Lattafa», y «9 pm», «9PM».
+ */
+export function palabrasDeBusqueda(texto: string): string[] {
+  return normalizar(texto).split(' ').filter(Boolean);
+}
+
+/** Si una clave de busqueda contiene todas las palabras de la consulta. */
+export function coincideBusqueda(clave: string, consulta: string): boolean {
+  const palabras = palabrasDeBusqueda(consulta);
+  // «9 pm» busca «9» y «pm», pero «9pm» tambien tiene que encontrar «9 PM»:
+  // se compara ademas contra la clave sin espacios.
+  const compacta = clave.replace(/ /g, '');
+  return palabras.length > 0 && palabras.every((p) => clave.includes(p) || compacta.includes(p));
+}

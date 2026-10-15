@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { FormularioPerfume } from '@/componentes/FormularioPerfume';
 import { VALORES_VACIOS } from '@/componentes/valores-perfume';
 import { desempaquetarFicha } from '@/dominio/ficha-compartida';
+import { esUuid } from '@/dominio/navegacion';
 import { usuarioActual } from '@/servicios/auth';
 import { claudeDisponible } from '@/servicios/claude';
 import {
@@ -26,6 +27,7 @@ export default async function PaginaNuevoPerfume({
     url?: string;
     compartido?: string;
     ficha?: string;
+    deseo?: string;
   }>;
 }) {
   const userId = await usuarioActual();
@@ -75,6 +77,7 @@ export default async function PaginaNuevoPerfume({
         fichaInicial={desempaquetarFicha(previos.ficha)}
         fichaCatalogo={miFrasco ? null : fichaCatalogo}
         sugerirConIa={claudeDisponible()}
+        deseoId={esUuid(previos.deseo) ? previos.deseo : undefined}
       />
     </div>
   );

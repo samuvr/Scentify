@@ -92,6 +92,8 @@ export function AccionesRecomendacion({
       const datos = new FormData();
       datos.set('perfumeId', perfumeId);
       datos.set('fecha', fecha);
+      datos.set('momento', momento);
+      datos.set('contextoId', contextoId);
       try {
         await accionDescartarRecomendacion(datos);
       } catch {

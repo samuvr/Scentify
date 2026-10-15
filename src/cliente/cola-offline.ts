@@ -33,6 +33,12 @@ export interface UsoPendiente {
  */
 export type ResultadoEnvio = 'guardado' | 'encolado' | 'sin-sesion' | 'error';
 
+/** El motivo de un 4xx, para decir algo mas util que «Inténtalo otra vez». */
+let ultimoError: string | null = null;
+export function motivoDelUltimoError(): string | null {
+  return ultimoError;
+}
+
 /**
  * Lo que el aviso de pendientes escucha para volver a contar. Lleva en
  * `detail.sinSesion` si lo ultimo encolado fue por falta de sesion.
@@ -105,11 +111,19 @@ async function pedirSincronizacion(): Promise<void> {
   }
 }
 
-async function enviar(uso: UsoPendiente): Promise<Response> {
+/**
+ * Con mala cobertura, un fetch puede quedarse colgado medio minuto con la
+ * pantalla congelada. Pasado este tiempo se da por perdido y el uso va a la
+ * cola: si en realidad llego, el reenvio con el mismo id no duplica nada.
+ */
+const ESPERA_MAXIMA_MS = 4000;
+
+async function enviar(uso: UsoPendiente, espera = ESPERA_MAXIMA_MS): Promise<Response> {
   return fetch('/api/usos', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(uso),
+    signal: AbortSignal.timeout(espera),
   });
 }
 
@@ -119,6 +133,7 @@ async function enviar(uso: UsoPendiente): Promise<Response> {
  */
 export async function encolarUso(uso: UsoPendiente): Promise<ResultadoEnvio> {
   let sinSesion = false;
+  ultimoError = null;
   try {
     const respuesta = await enviar(uso);
     if (respuesta.ok) return 'guardado';
@@ -126,7 +141,11 @@ export async function encolarUso(uso: UsoPendiente): Promise<ResultadoEnvio> {
       sinSesion = true;
       throw new Error('Sin sesión');
     }
-    if (respuesta.status >= 400 && respuesta.status < 500) return 'error';
+    if (respuesta.status >= 400 && respuesta.status < 500) {
+      const cuerpo = await respuesta.json().catch(() => null);
+      ultimoError = typeof cuerpo?.error === 'string' ? cuerpo.error : null;
+      return 'error';
+    }
     throw new Error(`Estado ${respuesta.status}`);
   } catch {
     try {
@@ -157,7 +176,8 @@ export async function vaciarCola(): Promise<{ enviados: number; sinSesion: boole
   for (const uso of pendientes) {
     let respuesta: Response;
     try {
-      respuesta = await enviar(uso);
+      // Sincronizando en segundo plano no hay nadie esperando: mas margen.
+      respuesta = await enviar(uso, 15_000);
     } catch {
       break; // Sigue sin haber red: se deja el resto para el proximo intento.
     }

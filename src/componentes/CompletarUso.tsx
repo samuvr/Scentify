@@ -4,7 +4,7 @@
  * Seccion 6.1 — Duracion, valoracion y comentario se rellenan despues, por la
  * noche, desde el historial. No tocan el snapshot de idoneidad.
  */
-import { useState } from 'react';
+import { useState, useTransition } from 'react';
 import { accionBorrarUso, accionCompletarUso } from '@/app/acciones';
 import { BotonEnviar } from '@/componentes/BotonEnviar';
 import type { DuracionPercibida } from '@/dominio/tipos';
@@ -15,15 +15,33 @@ export function CompletarUso({
   duracion,
   valoracion,
   comentario,
+  etiqueta,
 }: {
   usoId: string;
   sprays: number | null;
   duracion: DuracionPercibida | null;
   valoracion: number | null;
   comentario: string | null;
+  /** Texto del boton que lo abre, si no vale el de siempre. */
+  etiqueta?: string;
 }) {
   const [abierto, setAbierto] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [borrando, iniciarBorrado] = useTransition();
   const completo = duracion !== null && valoracion !== null;
+
+  function borrar() {
+    if (!window.confirm('¿Borrar este registro? No se puede deshacer.')) return;
+    const datos = new FormData();
+    datos.set('usoId', usoId);
+    iniciarBorrado(async () => {
+      try {
+        await accionBorrarUso(datos);
+      } catch {
+        setError('No se ha podido borrar: no hay conexión.');
+      }
+    });
+  }
 
   return (
     <div>
@@ -33,14 +51,22 @@ export function CompletarUso({
         aria-expanded={abierto}
         className="boton-fantasma px-1 text-sm"
       >
-        {completo ? 'Editar detalles' : 'Completar detalles'}
+        {etiqueta ?? (completo ? 'Editar detalles' : 'Completar detalles')}
       </button>
 
       {abierto ? (
         <form
           action={async (datos) => {
-            await accionCompletarUso(datos);
-            setAbierto(false);
+            setError(null);
+            try {
+              const resultado = await accionCompletarUso(datos);
+              // Si algo no vale, el formulario sigue abierto con lo escrito:
+              // antes se cerraba sin guardar nada y sin decirlo.
+              if (resultado.ok) setAbierto(false);
+              else setError(resultado.error);
+            } catch {
+              setError('No se ha podido guardar: no hay conexión.');
+            }
           }}
           className="mt-2 space-y-3"
         >
@@ -54,6 +80,8 @@ export function CompletarUso({
                 type="number"
                 inputMode="numeric"
                 min={0}
+                max={100}
+                step={1}
                 defaultValue={sprays ?? ''}
                 className="mt-1"
               />
@@ -92,23 +120,27 @@ export function CompletarUso({
             />
           </div>
           <p className="text-xs text-texto-tenue">Deja un campo en blanco para quitarlo.</p>
+          {error ? (
+            <p role="alert" className="aviso-error">
+              {error}
+            </p>
+          ) : null}
           <BotonEnviar pendiente="Guardando…" className="boton-primario w-full text-sm">
             Guardar
           </BotonEnviar>
           {/*
             Un registro equivocado (otro perfume, otro dia) se borra desde
             aqui. El «Deshacer» de la pantalla de inicio solo dura ocho
-            segundos.
+            segundos. Va fuera del envio del formulario para que el boton de
+            guardar no diga «Guardando…» mientras se borra.
           */}
           <button
-            type="submit"
-            formAction={accionBorrarUso}
-            onClick={(e) => {
-              if (!window.confirm('¿Borrar este registro? No se puede deshacer.')) e.preventDefault();
-            }}
+            type="button"
+            onClick={borrar}
+            disabled={borrando}
             className="boton-fantasma w-full text-sm text-id-nula"
           >
-            Borrar este registro
+            {borrando ? 'Borrando…' : 'Borrar este registro'}
           </button>
         </form>
       ) : null}

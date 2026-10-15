@@ -401,6 +401,8 @@ export async function importarColeccion(
         valoracion: fila.valoracion,
         notasPersonales: fila.notasPersonales,
         fragranticaUrl: fila.fragranticaUrl,
+        // La importacion decide los duplicados con su propia casilla.
+        confirmarDuplicado: true,
         notas: [
           ...fila.notasSalida.map((nombre) => ({ nombre, nivel: 'SALIDA' as const })),
           ...fila.notasCorazon.map((nombre) => ({ nombre, nivel: 'CORAZON' as const })),

@@ -2,7 +2,7 @@
 import { redirect } from 'next/navigation';
 import { usuarioActual } from '@/servicios/auth';
 import { leerConfiguracion } from '@/servicios/ajustes';
-import { accionGuardarConfiguracion, accionGuardarRecordatorio } from '@/app/acciones';
+import { accionGuardarConfiguracion } from '@/app/acciones';
 import { CamposUbicacion } from './CamposUbicacion';
 import { MENSAJE_UMBRALES, type ErrorUmbrales } from '@/dominio/estacion';
 import { AvisosDiarios } from '@/componentes/AvisosDiarios';
@@ -86,46 +86,12 @@ export default async function PaginaConfiguracion({
       </form>
 
       <section className="tarjeta space-y-3">
-        <h2 className="font-semibold">Recordatorio diario</h2>
-        <p className="text-sm text-texto-tenue">
-          Si a esta hora no has registrado nada, te llega un aviso.
-        </p>
-
-        <form action={accionGuardarRecordatorio} className="space-y-3">
-          <label className="flex items-center gap-3 text-sm">
-            <input
-              type="checkbox"
-              name="activo"
-              defaultChecked={recordatorio.activo}
-              className="h-5 w-5"
-            />
-            Avisarme si no he registrado nada
-          </label>
-          <div>
-            <label htmlFor="hora">Hora del aviso</label>
-            <select
-              id="hora"
-              name="hora"
-              defaultValue={String(Math.min(recordatorio.hora, HORA_MAXIMA_RECORDATORIO))}
-              className="mt-1"
-            >
-              {Array.from({ length: HORA_MAXIMA_RECORDATORIO + 1 }, (_, h) => (
-                <option key={h} value={h}>
-                  {String(h).padStart(2, '0')}:00
-                </option>
-              ))}
-            </select>
-            <p className="mt-1 text-xs text-texto-tenue">
-              La comprobación se hace una vez al día, hacia las 21:00 (las 22:00 en verano): si
-              eliges una hora anterior, el aviso llega igualmente en esa pasada.
-            </p>
-          </div>
-          <button type="submit" className="boton-secundario w-full">
-            Guardar recordatorio
-          </button>
-        </form>
-
-        <AvisosDiarios clavePublica={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? ''} />
+        <h2 className="font-semibold">Aviso de la noche</h2>
+        <AvisosDiarios
+          clavePublica={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? ''}
+          ajuste={recordatorio}
+          horaMaxima={HORA_MAXIMA_RECORDATORIO}
+        />
       </section>
     </div>
   );

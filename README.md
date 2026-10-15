@@ -223,6 +223,18 @@ Neon (base) → variables en Vercel → importar el repo → sembrar el usuario
    compilar, así que cada despliegue de producción deja la base al día. Un fallo de
    conexión rompe el build en vez de publicar una app sin tablas, que es lo que se quiere.
 
+   **Copia antes de migrar.** Si el despliegue trae migraciones nuevas y están
+   `NEON_API_KEY` y `NEON_PROJECT_ID`, `src/db/migrate.ts` crea antes una rama de Neon
+   `antes-de-<migración>-<fecha>` con la base tal como estaba, y conserva las tres
+   últimas. Si la rama no se puede crear, no migra y el build falla: la versión
+   publicada sigue sirviendo. Para volver atrás, en la consola de Neon se restaura la
+   rama principal desde esa rama. Sin las variables solo lo avisa en el log.
+
+   **Región.** `vercel.json` fija las funciones en `fra1` (Frankfurt), junto a una base
+   de Neon en `eu-central-1`. Cada pantalla encadena varias consultas, y con la función
+   en EE. UU. y la base en Europa cada una cruza el Atlántico. **Si tu proyecto de Neon
+   está en otra región, cambia `regions`** a la de Vercel más cercana.
+
    **Las previews no migran.** Cada PR tiene su despliegue de preview, y si comparte
    `DATABASE_URL` con producción migraría la base real antes de fusionar, con la versión
    publicada todavía en el código viejo. `src/db/migrate.ts` solo migra cuando

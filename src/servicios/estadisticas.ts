@@ -191,13 +191,23 @@ export async function calcularEstadisticas(
 
   // Sin usar en el periodo: en coleccion y con cero registros en el rango,
   // ordenados por lo que llevan sin ponerse (los nunca usados, primero).
+  // Con filtro de momento o contexto, «sin usar» es sin usar ASI: antes se
+  // ignoraban y la lista no respondia a lo que se habia pedido.
+  const delFiltro = sql.join(
+    [
+      sql`true`,
+      ...(filtros.momento ? [sql`${u.momento} = ${filtros.momento}`] : []),
+      ...(filtros.contextoId ? [sql`${u.contextoId} = ${filtros.contextoId}`] : []),
+    ],
+    sql` and `,
+  );
   const sinUsar = await db
     .select({
       id: p.id,
       nombre: f.nombre,
       marca: f.marca,
       ultimoUso: sql<string | null>`(
-        select max(fecha)::text from ${u} where ${u.perfumeId} = ${p.id}
+        select max(fecha)::text from ${u} where ${u.perfumeId} = ${p.id} and ${delFiltro}
       )`,
     })
     .from(p)
@@ -211,10 +221,14 @@ export async function calcularEstadisticas(
           select 1 from ${u}
           where ${u.perfumeId} = ${p.id}
             and ${u.fecha} between ${rango.desde} and ${rango.hasta}
+            and ${delFiltro}
         )`,
       ),
     )
-    .orderBy(sql`(select max(fecha) from ${u} where ${u.perfumeId} = ${p.id}) asc nulls first`);
+    .orderBy(
+      sql`(select max(fecha) from ${u} where ${u.perfumeId} = ${p.id} and ${delFiltro}) asc nulls first`,
+      asc(f.nombre),
+    );
 
   return {
     indicadores,

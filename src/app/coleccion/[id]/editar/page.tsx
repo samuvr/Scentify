@@ -1,4 +1,7 @@
-/** Edicion de la ficha: los mismos pasos del alta, ya rellenos. */
+/**
+ * Edicion de la ficha: abre en la revision de una pantalla, con los pasos a
+ * mano para corregir. Con ?fragrantica=1 vuelve a leer la ficha guardada.
+ */
 import { notFound, redirect } from 'next/navigation';
 import { FormularioPerfume } from '@/componentes/FormularioPerfume';
 import type { ValoresPerfume } from '@/componentes/valores-perfume';
@@ -9,11 +12,18 @@ import { esUuid } from '@/dominio/navegacion';
 
 export const dynamic = 'force-dynamic';
 
-export default async function PaginaEditar({ params }: { params: Promise<{ id: string }> }) {
+export default async function PaginaEditar({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ fragrantica?: string }>;
+}) {
   const userId = await usuarioActual();
   if (!userId) redirect('/login');
 
   const { id } = await params;
+  const { fragrantica } = await searchParams;
   if (!esUuid(id)) notFound();
   const [ficha, contextos, familias, notas] = await Promise.all([
     fichaDePerfume(userId, id),
@@ -52,6 +62,7 @@ export default async function PaginaEditar({ params }: { params: Promise<{ id: s
         familias={familias.map((f) => ({ id: f.id, slug: f.slug, nombre: f.nombre }))}
         notasConocidas={notas.map((n) => n.nombre)}
         sugerirConIa={claudeDisponible()}
+        consultarAlAbrir={fragrantica === '1' && Boolean(iniciales.fragranticaUrl)}
       />
     </div>
   );

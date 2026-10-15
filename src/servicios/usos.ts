@@ -7,8 +7,9 @@
  * historico (criterio 10).
  */
 import 'server-only';
+import { after } from 'next/server';
 import { and, eq, gte, lte, sql } from 'drizzle-orm';
-import { crearDb, schema } from '@/db';
+import { crearDb, enUnaTransaccion, schema } from '@/db';
 import { calcularIdoneidad, type Idoneidad } from '@/dominio/idoneidad';
 import {
   calcularEstacionEfectiva,
@@ -65,9 +66,10 @@ export async function estacionEfectivaDe(
   fecha: string,
   momento: Momento,
   nombreDia?: string,
+  opciones: { esperaMaximaMs?: number } = {},
 ): Promise<ResultadoEstacionEfectiva> {
   const { ubicacion, umbrales } = await leerConfiguracion(userId);
-  const clima = await obtenerClima(ubicacion, fecha);
+  const clima = await climaSinBloquear(ubicacion, fecha, opciones.esperaMaximaMs);
   return calcularEstacionEfectiva({
     fecha,
     momento,
@@ -77,6 +79,39 @@ export async function estacionEfectivaDe(
     nombreDia,
   });
 }
+
+/**
+ * El tiempo del dia sin dejar que Open-Meteo frene la pantalla. La primera
+ * apertura del dia tenia que esperar a su respuesta (hasta 6 s con mala
+ * suerte) antes de pintar nada. Con `esperaMaximaMs`, si no ha llegado en ese
+ * tiempo, se pinta con el calendario y la consulta sigue en segundo plano:
+ * deja el dia en la cache y la siguiente apertura ya lo tiene.
+ */
+async function climaSinBloquear(
+  ubicacion: Parameters<typeof obtenerClima>[0],
+  fecha: string,
+  esperaMaximaMs?: number,
+) {
+  const pendiente = obtenerClima(ubicacion, fecha);
+  if (!esperaMaximaMs) return pendiente;
+  const tarde = Symbol('tarde');
+  const ganador = await Promise.race([
+    pendiente,
+    new Promise<typeof tarde>((resolver) => setTimeout(() => resolver(tarde), esperaMaximaMs)),
+  ]);
+  if (ganador !== tarde) return ganador;
+  try {
+    // En Vercel la funcion se congela al responder: `after` la mantiene viva
+    // hasta que la consulta termina y se guarda.
+    after(() => pendiente.then(() => undefined));
+  } catch {
+    // Fuera de una peticion (tests, scripts) no hay `after`; la promesa sigue.
+  }
+  return null;
+}
+
+/** Lo que una pantalla espera al tiempo antes de pintar con el calendario. */
+export const ESPERA_CLIMA_PANTALLA_MS = 1500;
 
 export interface DatosUso {
   /** Generado en el cliente: hace idempotente el reenvio de la cola offline. */
@@ -163,35 +198,67 @@ async function resolverEstacion(
   return estacionEfectivaDe(userId, datos.fecha, datos.momento);
 }
 
-export async function registrarUso(userId: string, datos: DatosUso): Promise<ResultadoRegistro> {
+/** La fila que se inserta para un uso, con su snapshot ya calculado. */
+async function filaDeUso(userId: string, datos: DatosUso) {
   const { idoneidad, estacion } = await previsualizarIdoneidad(userId, datos);
-  const db = crearDb();
   const id = datos.id ?? crypto.randomUUID();
+  const fila = {
+    id,
+    userId,
+    perfumeId: datos.perfumeId,
+    fecha: datos.fecha,
+    momento: datos.momento,
+    contextoId: datos.contextoId,
+    sprays: datos.sprays ?? null,
+    duracionPercibida: datos.duracionPercibida ?? null,
+    valoracionDia: datos.valoracionDia ?? null,
+    comentario: datos.comentario?.trim() || null,
+    idoneidadPct: idoneidad.pct,
+    idoneidadDetalle: idoneidad.detalle,
+    estacionEfectiva: estacion.dominante,
+    estacionesEfectivas: estacion.estaciones,
+    origenEstacion: estacion.origen,
+    // La temperatura que decidio la estacion, guardada desde ya: el
+    // rendimiento segun el tiempo necesita meses de datos para decir algo.
+    temperaturaUsada: estacion.temperaturaUsada,
+    bochorno: estacion.ajusteBochorno,
+  };
+  return { id, idoneidad, estacion, fila };
+}
+
+export async function registrarUso(userId: string, datos: DatosUso): Promise<ResultadoRegistro> {
+  const { id, idoneidad, estacion, fila } = await filaDeUso(userId, datos);
+  const db = crearDb();
 
   const insertadas = await db
     .insert(schema.uso)
-    .values({
-      id,
-      userId,
-      perfumeId: datos.perfumeId,
-      fecha: datos.fecha,
-      momento: datos.momento,
-      contextoId: datos.contextoId,
-      sprays: datos.sprays ?? null,
-      duracionPercibida: datos.duracionPercibida ?? null,
-      valoracionDia: datos.valoracionDia ?? null,
-      comentario: datos.comentario?.trim() || null,
-      idoneidadPct: idoneidad.pct,
-      idoneidadDetalle: idoneidad.detalle,
-      estacionEfectiva: estacion.dominante,
-      estacionesEfectivas: estacion.estaciones,
-      origenEstacion: estacion.origen,
-    })
+    .values(fila)
     // Mismo id = mismo registro: reenviar la cola offline no duplica.
     .onConflictDoNothing({ target: schema.uso.id })
     .returning({ id: schema.uso.id });
 
   return { id, idoneidad, estacion, yaExistia: insertadas.length === 0 };
+}
+
+/**
+ * «Ajustar» un registro recien hecho: el viejo se borra y el nuevo entra en
+ * la misma transaccion, y solo al confirmar. Antes se borraba al pulsar
+ * Ajustar, y salir del formulario sin guardar perdia el uso.
+ *
+ * Es borrar y crear, no actualizar, porque cambiar perfume, momento o contexto
+ * cambia el snapshot de idoneidad, y ese snapshot no se edita nunca.
+ */
+export async function reemplazarUso(
+  userId: string,
+  viejoId: string,
+  datos: DatosUso,
+): Promise<ResultadoRegistro> {
+  const { id, idoneidad, estacion, fila } = await filaDeUso(userId, datos);
+  await enUnaTransaccion((db) => [
+    db.delete(schema.uso).where(and(eq(schema.uso.userId, userId), eq(schema.uso.id, viejoId))),
+    db.insert(schema.uso).values(fila).onConflictDoNothing({ target: schema.uso.id }),
+  ]);
+  return { id, idoneidad, estacion, yaExistia: false };
 }
 
 /**
@@ -227,11 +294,23 @@ export async function descartarRecomendacion(
   userId: string,
   perfumeId: string,
   fecha: string,
+  para?: { contextoId?: string | null; momento?: Momento | null },
 ): Promise<void> {
   const db = crearDb();
+  // El contexto tiene que ser de la cuenta: es una clave ajena y, sin esto,
+  // se podria apuntar un descarte a un contexto ajeno.
+  let contextoId: string | null = null;
+  if (para?.contextoId) {
+    const [propio] = await db
+      .select({ id: schema.contexto.id })
+      .from(schema.contexto)
+      .where(and(eq(schema.contexto.userId, userId), eq(schema.contexto.id, para.contextoId)))
+      .limit(1);
+    contextoId = propio?.id ?? null;
+  }
   await db
     .insert(schema.recomendacionDescarte)
-    .values({ userId, perfumeId, fecha })
+    .values({ userId, perfumeId, fecha, contextoId, momento: para?.momento ?? null })
     .onConflictDoNothing();
 }
 
@@ -249,6 +328,7 @@ export async function usosDelDia(userId: string, fecha: string) {
       sprays: schema.uso.sprays,
       duracionPercibida: schema.uso.duracionPercibida,
       valoracionDia: schema.uso.valoracionDia,
+      comentario: schema.uso.comentario,
       idoneidadPct: schema.uso.idoneidadPct,
       idoneidadDetalle: schema.uso.idoneidadDetalle,
       estacionEfectiva: schema.uso.estacionEfectiva,

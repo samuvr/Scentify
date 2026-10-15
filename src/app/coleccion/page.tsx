@@ -7,6 +7,7 @@ import {
   listarContextos,
   listarFamilias,
   marcasDeLaColeccion,
+  notasDeLaColeccion,
   type FiltrosColeccion,
 } from '@/servicios/consultas';
 import { formatearFecha } from '@/componentes/BloquePromedios';
@@ -32,9 +33,11 @@ export default async function PaginaColeccion({
     estado: p.estado === 'LO_TUVE' || p.estado === 'LO_TENGO' ? p.estado : undefined,
     marca: p.marca,
     familiaId: uuidOVacio(p.familia),
+    notaId: uuidOVacio(p.nota),
     contextoId: uuidOVacio(p.contexto),
-    estacion: p.estacion as FiltrosColeccion['estacion'],
-    momento: p.momento as FiltrosColeccion['momento'],
+    // Un valor desconocido en la URL se ignora: antes tumbaba la pantalla.
+    estacion: (['PRIMAVERA', 'VERANO', 'OTONO', 'INVIERNO'] as const).find((e) => e === p.estacion),
+    momento: (['DIA', 'NOCHE'] as const).find((m) => m === p.momento),
     valoracionMinima: Number(p.valoracion) >= 1 ? Math.min(5, Number(p.valoracion)) : undefined,
     incluirArchivados: p.archivados === '1',
     orden: (ORDENES as readonly string[]).includes(p.orden ?? '')
@@ -42,12 +45,17 @@ export default async function PaginaColeccion({
       : 'nombre',
   };
 
-  const [perfumes, marcas, familias, contextos] = await Promise.all([
+  const [perfumes, marcas, familias, contextos, notas] = await Promise.all([
     listarColeccion(userId, filtros),
     marcasDeLaColeccion(userId),
     listarFamilias(),
     listarContextos(userId),
+    notasDeLaColeccion(userId),
   ]);
+  const notaActiva = filtros.notaId ? notas.find((n) => n.id === filtros.notaId) : undefined;
+  const familiaActiva = filtros.familiaId
+    ? familias.find((f) => f.id === filtros.familiaId)
+    : undefined;
 
   return (
     <div className="space-y-5">
@@ -62,10 +70,13 @@ export default async function PaginaColeccion({
         marcas={marcas}
         familias={familias.map((f) => ({ id: f.id, nombre: f.nombre }))}
         contextos={contextos.map((c) => ({ id: c.id, nombre: c.nombre }))}
+        notas={notas}
       />
 
       <p className="text-sm text-texto-tenue">
         {perfumes.length} {perfumes.length === 1 ? 'perfume' : 'perfumes'}
+        {notaActiva ? ` con ${notaActiva.nombre}` : ''}
+        {familiaActiva ? ` de la familia ${familiaActiva.nombre}` : ''}
       </p>
 
       {/*
@@ -116,10 +127,21 @@ export default async function PaginaColeccion({
       </ul>
 
       {perfumes.length === 0 ? (
-        <p className="tarjeta text-sm text-texto-tenue">
-          Nada con estos filtros. Prueba a quitar alguno o a importar tu colección desde
-          Más → Datos.
-        </p>
+        filtros.texto ? (
+          <div className="tarjeta space-y-3 text-sm">
+            <p>No tienes nada que se llame «{filtros.texto}».</p>
+            <Link
+              href={`/coleccion/nuevo?nombre=${encodeURIComponent(filtros.texto)}`}
+              className="boton-secundario px-4 text-sm"
+            >
+              Añadirlo
+            </Link>
+          </div>
+        ) : (
+          <p className="tarjeta text-sm text-texto-tenue">
+            Nada con estos filtros. Prueba a quitar alguno.
+          </p>
+        )
       ) : null}
     </div>
   );

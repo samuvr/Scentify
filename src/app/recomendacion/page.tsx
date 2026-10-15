@@ -18,6 +18,7 @@ import {
 import {
   desplazarDias,
   esFinDeSemana,
+  ESPERA_CLIMA_PANTALLA_MS,
   estacionEfectivaDe,
   hoyIso,
   momentoDeAhora,
@@ -67,7 +68,9 @@ export default async function PaginaRecomendacion({
     listarContextos(userId),
     candidatosParaRecomendar(userId),
     descartesDeHoy(userId, fecha),
-    estacionEfectivaDe(userId, fecha, momento, paraManana ? 'mañana' : 'hoy'),
+    estacionEfectivaDe(userId, fecha, momento, paraManana ? 'mañana' : 'hoy', {
+      esperaMaximaMs: ESPERA_CLIMA_PANTALLA_MS,
+    }),
     parametros.contexto ? null : contextoHabitual(userId, momento, esFinDeSemana(fecha)),
   ]);
 

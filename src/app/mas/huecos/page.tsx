@@ -9,6 +9,11 @@ import { redirect } from 'next/navigation';
 import { usuarioActual } from '@/servicios/auth';
 import { candidatosParaRecomendar, listarContextos } from '@/servicios/consultas';
 import { agruparPorContexto, detectarHuecos } from '@/dominio/huecos';
+import { huecosQueCierra } from '@/dominio/recategorizacion';
+import { PropuestasMarcas } from '@/componentes/PropuestasMarcas';
+import { propuestasDeLaColeccion } from '@/servicios/recategorizacion';
+import { hoyIso } from '@/servicios/usos';
+import { zonaDelUsuario } from '@/servicios/zona';
 import type { Estacion, Momento } from '@/dominio/tipos';
 
 export const dynamic = 'force-dynamic';
@@ -26,10 +31,22 @@ export default async function PaginaHuecos() {
   const userId = await usuarioActual();
   if (!userId) redirect('/login');
 
-  const [contextos, coleccion] = await Promise.all([
+  const hoy = hoyIso(await zonaDelUsuario());
+  const [contextos, coleccion, propuestas] = await Promise.all([
     listarContextos(userId),
     candidatosParaRecomendar(userId),
+    propuestasDeLaColeccion(userId, hoy),
   ]);
+  const contextoIds = contextos.map((c) => c.id);
+
+  // «Ya lo cubres sin saberlo»: marcas que tus usos respaldan y que cerrarian
+  // huecos. Antes la pantalla pedia comprar lo que ya tenias.
+  const cubresSinSaberlo = propuestas
+    .filter((p) => p.accion === 'añadir')
+    .map((p) => ({ ...p, cierra: huecosQueCierra(coleccion, contextoIds, p) }))
+    .filter((p) => p.cierra > 0)
+    .sort((a, b) => b.cierra - a.cierra)
+    .slice(0, 5);
 
   const resultado = detectarHuecos(
     coleccion,
@@ -60,6 +77,23 @@ export default async function PaginaHuecos() {
           <div className="h-full bg-acento" style={{ width: `${porcentaje}%` }} />
         </div>
       </section>
+
+      {cubresSinSaberlo.length > 0 ? (
+        <section className="space-y-2">
+          <h2 className="subtitulo">Ya lo cubres sin saberlo</h2>
+          <p className="text-sm text-texto-tenue">
+            Te los pones así y no los tienes marcados. Marcarlos cierra huecos sin comprar nada.
+          </p>
+          <PropuestasMarcas
+            propuestas={cubresSinSaberlo.map((p) => ({
+              ...p,
+              nombre: `${p.nombre} (cierra ${p.cierra} ${p.cierra === 1 ? 'hueco' : 'huecos'})`,
+            }))}
+            contextos={contextos}
+            conPerfume
+          />
+        </section>
+      ) : null}
 
       {resultado.huecos.length === 0 ? (
         <p className="tarjeta text-sm text-texto">

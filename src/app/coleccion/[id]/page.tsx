@@ -6,9 +6,17 @@ import { fichaDePerfume, listarContextos } from '@/servicios/consultas';
 import { BloquePromedios, DURACION_LEGIBLE, formatearFecha } from '@/componentes/BloquePromedios';
 import { DesgloseIdoneidad, InsigniaIdoneidad } from '@/componentes/Idoneidad';
 import { accionArchivar, accionCambiarEstado } from '@/app/acciones';
-import { CompletarUso } from './CompletarUso';
+import { CompletarUso } from '@/componentes/CompletarUso';
+import { PropuestasMarcas } from '@/componentes/PropuestasMarcas';
+import { VolverAColeccion } from '@/componentes/VolverAColeccion';
+import { propuestasDeLaColeccion } from '@/servicios/recategorizacion';
+import { hoyIso } from '@/servicios/usos';
+import { zonaDelUsuario } from '@/servicios/zona';
 import type { Estacion } from '@/dominio/tipos';
 import { esUuid } from '@/dominio/navegacion';
+
+/** Los ultimos usos que se ven sin pedirlo: la ficha de un perfume muy usado medía 11.668 px. */
+const USOS_A_LA_VISTA = 10;
 
 export const dynamic = 'force-dynamic';
 
@@ -19,25 +27,45 @@ const NOMBRE_ESTACION: Record<Estacion, string> = {
   INVIERNO: 'Invierno',
 };
 
-export default async function PaginaFicha({ params }: { params: Promise<{ id: string }> }) {
+export default async function PaginaFicha({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ historial?: string; guardado?: string }>;
+}) {
   const userId = await usuarioActual();
   if (!userId) redirect('/login');
 
   const { id } = await params;
   if (!esUuid(id)) notFound();
-  const [ficha, contextos] = await Promise.all([
+  const { historial: verHistorial, guardado } = await searchParams;
+  const hoy = hoyIso(await zonaDelUsuario());
+  const [ficha, contextos, propuestas] = await Promise.all([
     fichaDePerfume(userId, id),
     listarContextos(userId),
+    propuestasDeLaColeccion(userId, hoy, id),
   ]);
   if (!ficha) notFound();
 
   const { perfume, notas, familias, promedios, historial } = ficha;
+  const todoElHistorial = verHistorial === 'todo';
+  const usosVisibles = todoElHistorial ? historial : historial.slice(0, USOS_A_LA_VISTA);
+  const disponible = perfume.estado === 'LO_TENGO' && !perfume.archivado;
   const nombreContexto = (contextoId: string) =>
     contextos.find((c) => c.id === contextoId)?.nombre ?? '—';
 
   return (
     <div className="space-y-6">
       <header className="space-y-2">
+        <VolverAColeccion />
+        {guardado ? (
+          <p className="aviso-hecho" role="status">
+            {guardado === 'deseo'
+              ? 'Añadido a tu colección y quitado de la wishlist.'
+              : 'Cambios guardados.'}
+          </p>
+        ) : null}
         <div className="flex items-start justify-between gap-3">
           <div>
             <h1 className="titulo">{perfume.nombre}</h1>
@@ -57,6 +85,12 @@ export default async function PaginaFicha({ params }: { params: Promise<{ id: st
           {perfume.valoracion ? <span className="etiqueta">{perfume.valoracion}/5</span> : null}
           {perfume.archivado ? <span className="etiqueta text-texto-tenue">Archivado</span> : null}
         </div>
+        {/* Registrar desde la ficha: el mismo toque de Hoy, con su Deshacer. */}
+        {disponible ? (
+          <Link href={`/?toque=${perfume.id}`} className="boton-primario w-full">
+            Me lo pongo hoy
+          </Link>
+        ) : null}
       </header>
 
       <section className="space-y-2">
@@ -90,9 +124,14 @@ export default async function PaginaFicha({ params }: { params: Promise<{ id: st
               </p>
               <div className="mt-1 flex flex-wrap gap-2">
                 {delNivel.map((n) => (
-                  <span key={`${nivel}-${n.id}`} className="etiqueta text-sm">
+                  // Cada nota lleva a los perfumes de la coleccion que la tienen.
+                  <Link
+                    key={`${nivel}-${n.id}`}
+                    href={`/coleccion?nota=${n.id}`}
+                    className="etiqueta text-sm underline-offset-2 hover:underline"
+                  >
                     {n.nombre}
-                  </span>
+                  </Link>
                 ))}
               </div>
             </div>
@@ -101,12 +140,28 @@ export default async function PaginaFicha({ params }: { params: Promise<{ id: st
         {notas.length === 0 ? <p className="text-sm text-texto-tenue">Sin notas.</p> : null}
       </section>
 
+      {propuestas.length > 0 ? (
+        <section className="space-y-2">
+          <h2 className="subtitulo">Lo que haces y lo que marcaste</h2>
+          <PropuestasMarcas propuestas={propuestas} contextos={contextos} />
+        </section>
+      ) : null}
+
       <section className="space-y-3">
         <h2 className="subtitulo">Cómo lo tengo marcado</h2>
         <div className="space-y-2 text-sm">
           <p>
             <span className="text-texto-tenue">Familias: </span>
-            {familias.length > 0 ? familias.map((f) => f.nombre).join(', ') : '—'}
+            {familias.length > 0
+              ? familias.map((f, i) => (
+                  <span key={f.id}>
+                    {i > 0 ? ', ' : ''}
+                    <Link href={`/coleccion?familia=${f.id}`} className="underline-offset-2 hover:underline">
+                      {f.nombre}
+                    </Link>
+                  </span>
+                ))
+              : '—'}
           </p>
           <p>
             <span className="text-texto-tenue">Estaciones: </span>
@@ -143,34 +198,53 @@ export default async function PaginaFicha({ params }: { params: Promise<{ id: st
         {historial.length === 0 ? (
           <p className="text-sm text-texto-tenue">Todavía no lo has usado.</p>
         ) : (
-          <ul className="space-y-2">
-            {historial.map((uso) => (
-              <li key={uso.id} className="tarjeta space-y-2">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="font-medium">{formatearFecha(uso.fecha)}</p>
-                    <p className="text-sm text-texto-tenue">
-                      {uso.momento === 'DIA' ? 'Día' : 'Noche'} · {uso.contexto} ·{' '}
-                      {NOMBRE_ESTACION[uso.estacionEfectiva]}
-                      {uso.sprays !== null ? ` · ${uso.sprays} sprays` : ''}
-                      {uso.duracionPercibida ? ` · ${DURACION_LEGIBLE[uso.duracionPercibida]}` : ''}
-                      {uso.valoracionDia !== null ? ` · ${uso.valoracionDia}/5` : ''}
-                    </p>
-                  </div>
-                  <InsigniaIdoneidad pct={uso.idoneidadPct} />
-                </div>
-                <DesgloseIdoneidad detalle={uso.idoneidadDetalle} />
-                {uso.comentario ? <p className="text-sm">{uso.comentario}</p> : null}
-                <CompletarUso
-                  usoId={uso.id}
-                  sprays={uso.sprays}
-                  duracion={uso.duracionPercibida}
-                  valoracion={uso.valoracionDia}
-                  comentario={uso.comentario}
-                />
-              </li>
-            ))}
-          </ul>
+          <>
+            {/* Una linea por uso; el desglose y «Completar» al desplegarlo. */}
+            <ul className="divide-y divide-borde/70 border-y border-borde/70">
+              {usosVisibles.map((uso) => (
+                <li key={uso.id}>
+                  <details className="group">
+                    <summary className="flex min-h-tactil cursor-pointer list-none items-center justify-between gap-3 py-2">
+                      <span className="min-w-0 text-sm">
+                        <span className="font-medium">{formatearFecha(uso.fecha)}</span>
+                        <span className="text-texto-tenue">
+                          {' '}
+                          · {uso.momento === 'DIA' ? 'Día' : 'Noche'} · {uso.contexto}
+                          {uso.valoracionDia !== null ? ` · ${uso.valoracionDia}/5` : ''}
+                        </span>
+                      </span>
+                      <InsigniaIdoneidad pct={uso.idoneidadPct} />
+                    </summary>
+                    <div className="space-y-2 pb-3">
+                      <p className="text-sm text-texto-tenue">
+                        {NOMBRE_ESTACION[uso.estacionEfectiva]}
+                        {uso.sprays !== null ? ` · ${uso.sprays} sprays` : ''}
+                        {uso.duracionPercibida ? ` · ${DURACION_LEGIBLE[uso.duracionPercibida]}` : ''}
+                      </p>
+                      <DesgloseIdoneidad detalle={uso.idoneidadDetalle} />
+                      {uso.comentario ? <p className="text-sm">{uso.comentario}</p> : null}
+                      <CompletarUso
+                        usoId={uso.id}
+                        sprays={uso.sprays}
+                        duracion={uso.duracionPercibida}
+                        valoracion={uso.valoracionDia}
+                        comentario={uso.comentario}
+                      />
+                    </div>
+                  </details>
+                </li>
+              ))}
+            </ul>
+            {historial.length > usosVisibles.length ? (
+              <Link
+                href={`/coleccion/${perfume.id}?historial=todo`}
+                scroll={false}
+                className="boton-fantasma w-full text-sm"
+              >
+                Ver los {historial.length}
+              </Link>
+            ) : null}
+          </>
         )}
       </section>
 

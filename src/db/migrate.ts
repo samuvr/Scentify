@@ -6,9 +6,11 @@
  * proposito: asi compilar en local no exige tener una base de datos.
  */
 import './entorno';
+import { readFileSync } from 'node:fs';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import postgres from 'postgres';
+import { crearRamaDeSeguridad, migracionesPendientes } from './rama-de-seguridad';
 
 /*
  * En Vercel solo migra el despliegue de produccion.
@@ -45,7 +47,25 @@ if (!DATABASE_URL) {
 
 const sql = postgres(DATABASE_URL, { max: 1 });
 
+/** El `when` de la ultima migracion aplicada, o null en una base sin migrar. */
+async function ultimaAplicada(): Promise<number | null> {
+  try {
+    const [fila] = await sql`select max(created_at) as ultima from drizzle.__drizzle_migrations`;
+    return fila?.ultima == null ? null : Number(fila.ultima);
+  } catch {
+    return null;
+  }
+}
+
 try {
+  const diario = JSON.parse(readFileSync('./drizzle/meta/_journal.json', 'utf8')) as {
+    entries: { tag: string; when: number }[];
+  };
+  const ultima = await ultimaAplicada();
+  const pendientes = migracionesPendientes(diario.entries, ultima);
+  // Una base nueva no tiene nada que guardar.
+  if (pendientes.length > 0 && ultima !== null) await crearRamaDeSeguridad(pendientes);
+
   await migrate(drizzle(sql), { migrationsFolder: './drizzle' });
   console.log('Migraciones aplicadas.');
 } finally {

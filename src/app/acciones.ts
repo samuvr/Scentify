@@ -7,13 +7,14 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
-import { destinoSeguro } from '@/dominio/navegacion';
+import { destinoSeguro, esUuid } from '@/dominio/navegacion';
 import { cerrarSesion, exigirUsuario, iniciarSesion, registrarUsuario } from '@/servicios/auth';
 import {
   actualizarPerfume,
   archivarPerfume,
   cambiarEstado,
   crearPerfume,
+  ErrorDuplicado,
   ErrorValidacion,
   type DatosPerfume,
 } from '@/servicios/perfumes';
@@ -21,9 +22,10 @@ import {
   crearDeseo,
   actualizarDeseo,
   borrarDeseo,
+  marcarConvertido,
   solapamientoConLaColeccion,
 } from '@/servicios/wishlist';
-import { guardarSuscripcion, borrarSuscripcion } from '@/servicios/recordatorio';
+import { guardarSuscripcion, borrarSuscripcion, leerRecordatorio } from '@/servicios/recordatorio';
 import {
   importarColeccion,
   previsualizarImportacion,
@@ -39,6 +41,7 @@ import {
 } from '@/servicios/hoja-actualizacion';
 import type { AnalisisHoja } from '@/dominio/hoja-actualizacion';
 import { guardarAjuste, guardarUmbrales } from '@/servicios/ajustes';
+import { ajustarMarca, rechazarPropuesta } from '@/servicios/recategorizacion';
 import { validarUmbrales } from '@/dominio/estacion';
 import { HORA_MAXIMA_RECORDATORIO } from '@/servicios/recordatorio';
 import { zonaDelUsuario } from '@/servicios/zona';
@@ -47,6 +50,7 @@ import {
   borrarUso,
   completarUso,
   descartarRecomendacion,
+  reemplazarUso,
   desplazarDias,
   hoyIso,
   previsualizarIdoneidad,
@@ -192,21 +196,76 @@ export async function accionCompletarUso(datos: FormData) {
     valoracionDia: leer('valoracionDia'),
     comentario: leer('comentario'),
   });
-  if (!usoId || !analisis.success) return;
+  if (!usoId) return { ok: false as const, error: 'Falta el registro.' };
+  if (!analisis.success) {
+    return { ok: false as const, error: 'Revisa los datos: los sprays van de 0 a 100.' };
+  }
 
   await completarUso(userId, usoId, analisis.data);
-  revalidatePath('/');
-  revalidatePath('/coleccion', 'layout');
-  revalidatePath('/estadisticas');
+  revalidarUsos();
+  return { ok: true as const };
 }
 
 export async function accionBorrarUso(datos: FormData) {
   const userId = await exigirUsuario();
   const usoId = String(datos.get('usoId') ?? '');
   if (usoId) await borrarUso(userId, usoId);
+  revalidarUsos();
+}
+
+/** Todo lo que enseña usos: Hoy, la ficha, el calendario y las estadisticas. */
+function revalidarUsos() {
   revalidatePath('/');
   revalidatePath('/coleccion', 'layout');
+  revalidatePath('/mas/calendario', 'layout');
   revalidatePath('/estadisticas');
+}
+
+/**
+ * «Ajustar» tras un registro de un toque: el viejo solo se borra al guardar
+ * el nuevo, y los dos cambios van juntos. Salir del formulario sin guardar
+ * deja el registro de antes como estaba.
+ */
+export async function accionReemplazarUso(
+  viejoId: string,
+  entrada: unknown,
+): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  const userId = await exigirUsuario();
+  const analisis = esquemaUso.safeParse(entrada);
+  if (!esUuid(viejoId) || !analisis.success) {
+    return { ok: false, error: 'Faltan datos del registro.' };
+  }
+  try {
+    const resultado = await reemplazarUso(userId, viejoId, analisis.data as DatosUso);
+    revalidarUsos();
+    return { ok: true, id: resultado.id };
+  } catch (error) {
+    if (error instanceof ErrorValidacion) return { ok: false, error: error.message };
+    throw error;
+  }
+}
+
+const esquemaValoracionRapida = z
+  .object({
+    valoracionDia: z.number().int().min(1).max(5).nullable().optional(),
+    duracionPercibida: z.enum(DURACIONES).nullable().optional(),
+  })
+  .strict();
+
+/**
+ * Cierre del dia de un toque: guarda solo el campo que se ha tocado, sin
+ * boton Guardar. Null lo quita (volver a tocar la misma estrella).
+ */
+export async function accionValorarUso(
+  usoId: string,
+  campos: unknown,
+): Promise<{ ok: boolean }> {
+  const userId = await exigirUsuario();
+  const analisis = esquemaValoracionRapida.safeParse(campos);
+  if (!esUuid(usoId) || !analisis.success) return { ok: false };
+  await completarUso(userId, usoId, analisis.data);
+  revalidarUsos();
+  return { ok: true };
 }
 
 export async function accionDescartarRecomendacion(datos: FormData) {
@@ -215,8 +274,16 @@ export async function accionDescartarRecomendacion(datos: FormData) {
   // Solo hoy o mañana: es lo unico que la pantalla deja pedir.
   const hoy = hoyIso(await zonaDelUsuario());
   const fecha = datos.get('fecha') === desplazarDias(hoy, 1) ? desplazarDias(hoy, 1) : hoy;
-  if (perfumeId) await descartarRecomendacion(userId, perfumeId, fecha);
+  const momento = datos.get('momento');
+  const contextoId = String(datos.get('contextoId') ?? '');
+  if (perfumeId) {
+    await descartarRecomendacion(userId, perfumeId, fecha, {
+      contextoId: esUuid(contextoId) ? contextoId : null,
+      momento: momento === 'DIA' || momento === 'NOCHE' ? momento : null,
+    });
+  }
   revalidatePath('/recomendacion');
+  revalidatePath('/');
 }
 
 /** Vista previa de idoneidad mientras se rellena el formulario. */
@@ -297,9 +364,14 @@ const esquemaPerfume = z.object({
   contextoIds: z.array(z.string().uuid()).min(1, 'Marca al menos un contexto.'),
   estaciones: z.array(z.enum(ESTACIONES)).min(1, 'Marca al menos una estación.'),
   momentos: z.array(z.enum(MOMENTOS)).min(1, 'Marca al menos un momento del día.'),
+  confirmarDuplicado: z.boolean().optional(),
+  /** El deseo de la wishlist del que viene el alta: se marca como conseguido. */
+  deseoId: z.string().uuid().nullable().optional(),
 });
 
-export type RespuestaPerfume = { ok: true; id: string } | { ok: false; error: string };
+export type RespuestaPerfume =
+  | { ok: true; id: string; deseoConvertido?: boolean }
+  | { ok: false; error: string; duplicado?: string };
 
 export async function accionGuardarPerfume(
   perfumeId: string | null,
@@ -312,15 +384,23 @@ export async function accionGuardarPerfume(
   }
 
   try {
-    const datos = analisis.data as DatosPerfume;
+    const { deseoId, ...datos } = analisis.data;
     const id = perfumeId
-      ? (await actualizarPerfume(userId, perfumeId, datos), perfumeId)
-      : await crearPerfume(userId, datos);
+      ? (await actualizarPerfume(userId, perfumeId, datos as DatosPerfume), perfumeId)
+      : await crearPerfume(userId, datos as DatosPerfume);
 
+    // «Convertir en colección» cierra el deseo: antes se quedaba en la lista.
+    if (!perfumeId && deseoId) {
+      await marcarConvertido(userId, deseoId, id);
+      revalidatePath('/mas/wishlist');
+    }
     revalidatePath('/coleccion');
     revalidatePath(`/coleccion/${id}`);
-    return { ok: true, id };
+    return { ok: true, id, deseoConvertido: Boolean(!perfumeId && deseoId) };
   } catch (error) {
+    if (error instanceof ErrorDuplicado) {
+      return { ok: false, error: error.message, duplicado: error.perfumeId };
+    }
     if (error instanceof ErrorValidacion) return { ok: false, error: error.message };
     throw error;
   }
@@ -342,6 +422,49 @@ export async function accionCambiarEstado(datos: FormData) {
   if (perfumeId) await cambiarEstado(userId, perfumeId, estado);
   revalidatePath('/coleccion');
   revalidatePath(`/coleccion/${perfumeId}`);
+}
+
+/* ------------------------------------------------------ recategorizacion */
+
+const esquemaPropuesta = z.object({
+  perfumeId: z.string().uuid(),
+  eje: z.enum(['contexto', 'momento', 'estacion']),
+  valor: z.string().min(1).max(64),
+  accion: z.enum(['añadir', 'quitar']).optional(),
+});
+
+function revalidarMarcas(perfumeId: string) {
+  revalidatePath(`/coleccion/${perfumeId}`);
+  revalidatePath('/coleccion');
+  revalidatePath('/mas/huecos');
+  revalidatePath('/estadisticas');
+  revalidatePath('/recomendacion');
+  revalidatePath('/');
+}
+
+/** Aplica una propuesta de recategorizacion: solo esa marca, sin el editor. */
+export async function accionAjustarMarca(datos: FormData) {
+  const userId = await exigirUsuario();
+  const analisis = esquemaPropuesta.safeParse(Object.fromEntries(datos.entries()));
+  if (!analisis.success || !analisis.data.accion) return;
+  const { perfumeId, eje, valor, accion } = analisis.data;
+  try {
+    await ajustarMarca(userId, perfumeId, eje, valor, accion!);
+  } catch (error) {
+    // El eje se quedaria vacio, o ya no existe: no hay nada que hacer.
+    if (!(error instanceof ErrorValidacion)) throw error;
+  }
+  revalidarMarcas(perfumeId);
+}
+
+/** «Fue casualidad»: oculta esa propuesta 90 dias. */
+export async function accionRechazarPropuesta(datos: FormData) {
+  const userId = await exigirUsuario();
+  const analisis = esquemaPropuesta.safeParse(Object.fromEntries(datos.entries()));
+  if (!analisis.success) return;
+  const { perfumeId, eje, valor } = analisis.data;
+  await rechazarPropuesta(userId, perfumeId, eje, valor, hoyIso(await zonaDelUsuario()));
+  revalidarMarcas(perfumeId);
 }
 
 /* --------------------------------------------------------------- wishlist */
@@ -470,23 +593,33 @@ export async function accionRestaurarCopia(json: string): Promise<{ ok: boolean;
 
 /* ------------------------------------------------------- recordatorio */
 
-export async function accionGuardarRecordatorio(datos: FormData) {
+/**
+ * Cambia el recordatorio de la noche. Llega solo lo que se toca (el
+ * interruptor, «Pregúntame qué tal» o la hora) y se junta con lo guardado:
+ * antes eran tres controles con un «Guardar» cada uno.
+ */
+export async function accionAjustarRecordatorio(cambios: unknown): Promise<{ ok: boolean }> {
   const userId = await exigirUsuario();
   const analisis = z
     .object({
-      activo: z.coerce.boolean(),
-      hora: z.coerce.number().int().min(0).max(HORA_MAXIMA_RECORDATORIO),
+      activo: z.boolean().optional(),
+      hora: z.number().int().min(0).max(HORA_MAXIMA_RECORDATORIO).optional(),
+      cierre: z.boolean().optional(),
     })
-    .safeParse({
-      activo: datos.get('activo') === 'on' || datos.get('activo') === 'true',
-      hora: datos.get('hora') ?? 21,
-    });
-  if (!analisis.success) return;
+    .strict()
+    .safeParse(cambios);
+  if (!analisis.success) return { ok: false };
 
+  const actual = await leerRecordatorio(userId);
   // El cron no tiene peticion de la que sacar la zona: se guarda con el
   // ajuste, y «su hora» y «hoy» se miden en la del usuario.
-  await guardarAjuste(userId, 'recordatorio', { ...analisis.data, zona: await zonaDelUsuario() });
+  await guardarAjuste(userId, 'recordatorio', {
+    ...actual,
+    ...analisis.data,
+    zona: await zonaDelUsuario(),
+  });
   revalidatePath('/mas/configuracion');
+  return { ok: true };
 }
 
 export async function accionSuscribirAvisos(suscripcion: {

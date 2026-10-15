@@ -35,7 +35,7 @@
  *     como mucho unos segundos si hay copia; y el armazon se vuelve a guardar
  *     ya con sesion.
  */
-const VERSION = 'v7';
+const VERSION = 'v8';
 const CACHE_ARMAZON = `scentify-armazon-${VERSION}`;
 const CACHE_DATOS = `scentify-datos-${VERSION}`;
 const ETIQUETA_SYNC = 'sincronizar-usos';
@@ -115,10 +115,16 @@ async function paginaSinConexion() {
 /** Red primero, cache como red de seguridad. Para HTML y lecturas de datos. */
 async function redPrimero(peticion, nombreCache, esperaMaxima) {
   const cache = await caches.open(nombreCache);
-  const guardada = await cache.match(peticion);
+  // Hoy con parametros (?toque=ayer, ?cierre=1, los atajos del icono) es la
+  // misma pantalla: sin red se sirve la copia de Hoy. Y no se guarda aparte,
+  // para que una copia vieja no vuelva a pedir el mismo toque.
+  const url = new URL(peticion.url);
+  const hoyConParametros =
+    peticion.mode === 'navigate' && url.pathname === '/' && url.search !== '';
+  const guardada = await cache.match(peticion, { ignoreSearch: hoyConParametros });
 
   const desdeRed = fetch(peticion).then((respuesta) => {
-    if (guardable(respuesta)) cache.put(peticion, respuesta.clone());
+    if (guardable(respuesta) && !hoyConParametros) cache.put(peticion, respuesta.clone());
     return respuesta;
   });
   // Si gana la espera y luego la red falla, que no quede un rechazo suelto.
@@ -279,13 +285,34 @@ self.addEventListener('message', (evento) => {
 
 /* ------------------------------------------- recordatorio diario (10.4) */
 
+/*
+ * El aviso de la noche trae botones que actuan sin abrir la app: registrar el
+ * dia («Repetir: Asad») o completar la duracion («4-6 h»). Cada accion lleva
+ * ya el uso decidido por el servidor. Si no hay red o la sesion ha caducado,
+ * el uso va a la misma cola que la app y sale al volver a abrirla.
+ *
+ * Donde las notificaciones no tienen botones (iPhone), tocar el aviso abre la
+ * app en el toque equivalente (`urlSinAcciones`), con su Deshacer.
+ */
+
+const ETIQUETA_AVISO = 'recordatorio-diario';
+
+function textoMomento(momento) {
+  return momento === 'DIA' ? 'Día' : 'Noche';
+}
+
+function admiteBotones() {
+  return (self.Notification?.maxActions ?? 0) > 0;
+}
+
 self.addEventListener('push', (evento) => {
-  let datos = { titulo: 'Scentify', cuerpo: '¿Qué te has puesto hoy?', url: '/' };
+  let datos = { titulo: 'Scentify', cuerpo: '¿Qué te has puesto hoy?', url: '/', acciones: [] };
   try {
     if (evento.data) datos = { ...datos, ...evento.data.json() };
   } catch {
     // Carga ilegible: se enseña el aviso por defecto en vez de perderlo.
   }
+  const conBotones = admiteBotones() && Array.isArray(datos.acciones) && datos.acciones.length > 0;
 
   evento.waitUntil(
     self.registration.showNotification(datos.titulo, {
@@ -294,30 +321,161 @@ self.addEventListener('push', (evento) => {
       badge: '/icono-192.png',
       lang: 'es',
       // Una sola notificacion al dia: una nueva reemplaza a la anterior.
-      tag: 'recordatorio-diario',
+      tag: ETIQUETA_AVISO,
       renotify: false,
-      data: { url: datos.url },
+      actions: conBotones
+        ? datos.acciones.slice(0, self.Notification?.maxActions ?? 2).map((a) => ({
+            action: a.id,
+            title: a.titulo,
+          }))
+        : [],
+      data: {
+        url: conBotones ? datos.url : (datos.urlSinAcciones ?? datos.url),
+        acciones: datos.acciones ?? [],
+      },
     }),
   );
 });
 
-self.addEventListener('notificationclick', (evento) => {
-  evento.notification.close();
-  const destino = evento.notification.data?.url ?? '/';
+/** Abre (o trae delante) la app en `destino`. */
+function abrirEn(destino) {
+  return self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async (clientes) => {
+    const url = new URL(destino, self.location.origin);
+    // Ya abierta en esa pantalla y sin nada que hacer al llegar: basta traerla.
+    const enDestino = clientes.find((c) => new URL(c.url).href === url.href);
+    if (enDestino) return enDestino.focus();
+    // Abierta en otra: se reutiliza la ventana y se lleva al destino.
+    const abierta = clientes.find((c) => 'navigate' in c);
+    if (abierta) {
+      const llevada = await abierta.navigate(url.href).catch(() => null);
+      return (llevada ?? abierta).focus();
+    }
+    return self.clients.openWindow(url.href);
+  });
+}
 
-  evento.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async (clientes) => {
-      const url = new URL(destino, self.location.origin);
-      // Ya abierta en esa pantalla: basta con traerla delante.
-      const enDestino = clientes.find((c) => new URL(c.url).pathname === url.pathname);
-      if (enDestino) return enDestino.focus();
-      // Abierta en otra: se reutiliza la ventana y se lleva al destino.
-      const abierta = clientes.find((c) => 'navigate' in c);
-      if (abierta) {
-        const llevada = await abierta.navigate(url.href).catch(() => null);
-        return (llevada ?? abierta).focus();
-      }
-      return self.clients.openWindow(url.href);
-    }),
-  );
+/** Una notificacion de respuesta, en el mismo sitio que el aviso. */
+function responder(titulo, opciones = {}) {
+  return self.registration.showNotification(titulo, {
+    icon: '/icono-192.png',
+    badge: '/icono-192.png',
+    lang: 'es',
+    tag: ETIQUETA_AVISO,
+    renotify: false,
+    ...opciones,
+  });
+}
+
+async function registrarDesdeAviso(plantilla) {
+  const uso = {
+    id: crypto.randomUUID(),
+    perfumeId: plantilla.perfumeId,
+    fecha: plantilla.fecha,
+    momento: plantilla.momento,
+    contextoId: plantilla.contextoId,
+    sprays: plantilla.sprays ?? null,
+    duracionPercibida: null,
+    valoracionDia: null,
+    comentario: null,
+  };
+  const apuntado = `Apuntado: ${plantilla.nombre} · ${textoMomento(plantilla.momento)} · ${plantilla.contexto}`;
+
+  let respuesta = null;
+  try {
+    respuesta = await fetch('/api/usos', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(uso),
+    });
+  } catch {
+    // Sin red: a la cola, como desde la app.
+  }
+
+  if (respuesta?.ok) {
+    return responder(apuntado, {
+      body: 'Si no era eso, deshazlo o ajústalo en la app.',
+      actions: admiteBotones() ? [{ action: 'deshacer', title: 'Deshacer' }] : [],
+      data: { url: '/', deshacer: { usoId: uso.id, enCola: false } },
+    });
+  }
+  if (respuesta && respuesta.status !== 401 && respuesta.status < 500) {
+    // El perfume ya no esta, o los datos no valen: no se arregla reintentando.
+    return responder('No se ha podido apuntar', {
+      body: 'Ábrelo en Scentify para registrarlo.',
+      data: { url: '/' },
+    });
+  }
+
+  await operar('readwrite', (almacen) => almacen.put(uso));
+  try {
+    await self.registration.sync?.register(ETIQUETA_SYNC);
+  } catch {
+    // Sin Background Sync, la app lo envia al abrirse.
+  }
+  return responder(apuntado, {
+    body:
+      respuesta?.status === 401
+        ? 'Guardado en el móvil. Abre Scentify para entrar y se enviará solo.'
+        : 'Sin conexión: guardado en el móvil, se enviará solo.',
+    actions: admiteBotones() ? [{ action: 'deshacer', title: 'Deshacer' }] : [],
+    data: { url: '/', deshacer: { usoId: uso.id, enCola: true } },
+  });
+}
+
+async function deshacerDesdeAviso({ usoId, enCola }) {
+  // Si aun estaba en la cola, se saca de ahi; y si ya se envio, se borra.
+  await operar('readwrite', (almacen) => almacen.delete(usoId)).catch(() => undefined);
+  if (!enCola) {
+    try {
+      const respuesta = await fetch(`/api/usos/${usoId}`, { method: 'DELETE' });
+      if (!respuesta.ok) throw new Error(String(respuesta.status));
+    } catch {
+      return responder('No se ha podido deshacer', {
+        body: 'Sigue apuntado. Bórralo desde Hoy cuando tengas conexión.',
+        data: { url: '/' },
+      });
+    }
+  }
+  return responder('Deshecho', { body: 'No se ha apuntado nada.', data: { url: '/' } });
+}
+
+async function completarDesdeAviso({ usoId, duracionPercibida }, titulo) {
+  try {
+    const respuesta = await fetch(`/api/usos/${usoId}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ duracionPercibida }),
+    });
+    if (!respuesta.ok) throw new Error(String(respuesta.status));
+  } catch {
+    return responder('No se ha podido guardar', {
+      body: 'Toca para completarlo en la app.',
+      data: { url: '/?cierre=1' },
+    });
+  }
+  return responder(`Duración: ${titulo}`, {
+    body: 'Toca para valorar el día.',
+    data: { url: '/?cierre=1' },
+  });
+}
+
+self.addEventListener('notificationclick', (evento) => {
+  const { notification: aviso, action } = evento;
+  aviso.close();
+  const datos = aviso.data ?? {};
+
+  if (action === 'deshacer' && datos.deshacer) {
+    evento.waitUntil(deshacerDesdeAviso(datos.deshacer));
+    return;
+  }
+  const accion = action ? (datos.acciones ?? []).find((a) => a.id === action) : null;
+  if (accion?.registrar) {
+    evento.waitUntil(registrarDesdeAviso(accion.registrar));
+    return;
+  }
+  if (accion?.completar) {
+    evento.waitUntil(completarDesdeAviso(accion.completar, accion.titulo));
+    return;
+  }
+  evento.waitUntil(abrirEn(datos.url ?? '/'));
 });

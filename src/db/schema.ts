@@ -25,6 +25,7 @@ import {
   pgEnum,
   pgTable,
   primaryKey,
+  real,
   smallint,
   text,
   timestamp,
@@ -332,6 +333,13 @@ export const uso = pgTable(
     /** Conjunto completo de estaciones compatibles que se uso para calcular (7.1). */
     estacionesEfectivas: estacionEnum('estaciones_efectivas').array().notNull(),
     origenEstacion: origenEstacionEnum('origen_estacion').notNull().default('TEMPERATURA'),
+    /**
+     * Snapshot de la temperatura (°C) que decidio la estacion, y si se le sumo
+     * el ajuste por bochorno. Null si la estacion salio del calendario o se
+     * eligio a mano, y en los usos de antes de guardarlo.
+     */
+    temperaturaUsada: real('temperatura_usada'),
+    bochorno: boolean('bochorno'),
     comentario: text('comentario'),
     creadoEn: timestamp('creado_en', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -444,6 +452,12 @@ export const recomendacionDescarte = pgTable(
       .notNull()
       .references(() => perfume.id, { onDelete: 'cascade' }),
     fecha: date('fecha').notNull().default(sql`current_date`),
+    /**
+     * Para que se descarto: los «Otro» repetidos en la misma combinacion son
+     * evidencia para la recategorizacion. Null en los de antes de guardarlo.
+     */
+    contextoId: uuid('contexto_id').references(() => contexto.id, { onDelete: 'set null' }),
+    momento: momentoEnum('momento'),
     creadoEn: timestamp('creado_en', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
