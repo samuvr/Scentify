@@ -330,6 +330,27 @@ export async function resolverFicha(userId: string, datos: DatosFicha): Promise<
   return creada.id;
 }
 
+/**
+ * Refresca «Esta fragancia me recuerda a» de una ficha con lo que trae el
+ * boton «Enviar a Scentify» sobre un perfume que ya se tiene. Si la ficha no
+ * tenia URL de Fragrantica, se queda con esta: la proxima vez se reconoce a
+ * la primera.
+ */
+export async function guardarParecidos(
+  fichaId: string,
+  parecidos: ParecidosLeidos,
+  fragranticaUrl: string,
+): Promise<void> {
+  const db = crearDb();
+  await db
+    .update(schema.ficha)
+    .set({
+      parecidos,
+      fragranticaUrl: sql`coalesce(${schema.ficha.fragranticaUrl}, ${fragranticaUrl})`,
+    })
+    .where(eq(schema.ficha.id, fichaId));
+}
+
 /** Una ficha sin ningun frasco que ha dejado de hacer falta tras moverlo. */
 async function borrarFichaSiHuerfana(fichaId: string): Promise<void> {
   const db = crearDb();

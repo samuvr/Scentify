@@ -6,8 +6,11 @@
  * las cuentas: una lectura que no lo trae no lo borra, y lo que llega de una
  * copia subida a mano se valida antes de entrar.
  */
+import { readFileSync } from 'node:fs';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { desempaquetarFicha } from '@/dominio/ficha-compartida';
 import type { Parecido } from '@/dominio/parecidos';
+import { PARECIDOS_TEXTO } from '../fixtures/fragrantica';
 
 const cuando = process.env.DATABASE_URL ? describe : describe.skip;
 // Las fichas sobreviven a las cuentas: nombres unicos por corrida.
@@ -19,6 +22,19 @@ const HAWAS: Parecido = { marca: 'Rasasi', nombre: 'Hawas for Him', positivos: 9
 
 const leidos = (perfumes: Parecido[]) => ({ leidosEn: new Date().toISOString(), perfumes });
 
+/** La pagina real pegada, sin el bloque y con el bloque donde va. */
+const PAGINA = readFileSync(
+  new URL('../fixtures/fragrantica-pegado-ruidoso.txt', import.meta.url),
+  'utf8',
+);
+const VECINO = 'A los usuarios que les gusta esta fragancia, también les gusta:';
+const PAGINA_CON_BLOQUE = PAGINA.replace(VECINO, `${PARECIDOS_TEXTO}\n${VECINO}`);
+
+/** Un numero de ficha por corrida: las fichas de otras corridas no deben casar. */
+const NUMERO = 90_000_000 + Math.floor(Math.random() * 1_000_000);
+const urlDe = (dominio: 'es' | 'com', ruta: string, numero = NUMERO) =>
+  `https://www.fragrantica.${dominio}/perfume/Lattafa-Perfumes/${ruta}-${numero}.html`;
+
 cuando('«Esta fragancia me recuerda a» en la ficha', () => {
   let db: import('@/db').Db;
   let esquema: typeof import('@/db/schema');
@@ -26,6 +42,7 @@ cuando('«Esta fragancia me recuerda a» en la ficha', () => {
   let perfumes: typeof import('@/servicios/perfumes');
   let consultas: typeof import('@/servicios/consultas');
   let datos: typeof import('@/servicios/datos');
+  let compartido: typeof import('@/servicios/compartido');
   const cuentas: string[] = [];
 
   async function cuenta(nombre: string) {
@@ -74,6 +91,7 @@ cuando('«Esta fragancia me recuerda a» en la ficha', () => {
     perfumes = await import('@/servicios/perfumes');
     consultas = await import('@/servicios/consultas');
     datos = await import('@/servicios/datos');
+    compartido = await import('@/servicios/compartido');
     ana = await cuenta('ana');
     bea = await cuenta('bea');
   });
@@ -168,5 +186,97 @@ cuando('«Esta fragancia me recuerda a» en la ficha', () => {
     const porNombre = new Map(fichas.map((f) => [f.nombre, f.parecidos]));
     expect(porNombre.get(`Fakhar Gold Restaurado ${RONDA}`)?.perfumes).toEqual([HAWAS, EROS]);
     expect(porNombre.get(`Fakhar Silver Restaurado ${RONDA}`)).toBeNull();
+  });
+  /* ------------------------- completar los de antes con «Enviar a Scentify» */
+
+  let gema: { id: string; contexto: string };
+  let deGema: string;
+
+  it('el botón sobre un perfume que ya tengo guarda los parecidos en su ficha, aunque cambie el dominio', async () => {
+    gema = await cuenta('gema');
+    deGema = await perfumes.crearPerfume(
+      gema.id,
+      alta(gema.contexto, {
+        nombre: `Asad ${RONDA}`,
+        fragranticaUrl: urlDe('es', `Asad-${RONDA}`),
+      }),
+    );
+    expect(await parecidosDe(gema.id, deGema)).toBeNull();
+
+    const destino = await compartido.destinoDeCompartido(gema.id, {
+      url: urlDe('com', `Asad-${RONDA}`),
+      text: PAGINA_CON_BLOQUE,
+    });
+
+    expect(destino).toBe(`/coleccion/${deGema}?guardado=parecidos`);
+    expect((await parecidosDe(gema.id, deGema))?.perfumes).toEqual([CDNIM, EROS, HAWAS]);
+  });
+
+  it('si lo enviado no trae el bloque, lleva a la ficha y avisa, sin tocar nada', async () => {
+    const destino = await compartido.destinoDeCompartido(gema.id, {
+      url: urlDe('es', `Asad-${RONDA}`),
+      text: PAGINA,
+    });
+    expect(destino).toBe(`/coleccion/${deGema}?guardado=sin-parecidos`);
+    expect((await parecidosDe(gema.id, deGema))?.perfumes).toEqual([CDNIM, EROS, HAWAS]);
+  });
+
+  it('si no lo tengo, va al alta como siempre, con los parecidos en la ficha leída', async () => {
+    const destino = await compartido.destinoDeCompartido(bea.id, {
+      url: urlDe('com', `Asad-${RONDA}`),
+      text: PAGINA_CON_BLOQUE,
+    });
+    expect(destino.startsWith('/coleccion/nuevo?')).toBe(true);
+    const parametros = new URLSearchParams(destino.split('?')[1]);
+    expect(desempaquetarFicha(parametros.get('ficha') ?? undefined)?.parecidos).toEqual([
+      CDNIM,
+      EROS,
+      HAWAS,
+    ]);
+    // Y el alta reconoce la ficha de Gema aunque se guardara desde el otro dominio.
+    expect(await consultas.fichaPorUrl(urlDe('com', `Asad-${RONDA}`))).toBe(await fichaDe(deGema));
+  });
+
+  it('reconoce por nombre y marca un perfume guardado sin URL, y se queda con la URL', async () => {
+    const hugo = await cuenta('hugo');
+    const suyo = await perfumes.crearPerfume(
+      hugo.id,
+      alta(hugo.contexto, { nombre: `Fakhar Noir ${RONDA}` }),
+    );
+    const url = urlDe('es', `Fakhar-Noir-${RONDA}`, NUMERO + 1);
+
+    const destino = await compartido.destinoDeCompartido(hugo.id, { url, text: PAGINA_CON_BLOQUE });
+
+    expect(destino).toBe(`/coleccion/${suyo}?guardado=parecidos`);
+    const ficha = await consultas.fichaDePerfume(hugo.id, suyo);
+    expect(ficha?.parecidos?.perfumes).toEqual([CDNIM, EROS, HAWAS]);
+    expect(ficha?.perfume.fragranticaUrl).toBe(url);
+  });
+
+  it('si por nombre hay duda (el EDT y el EDP), no elige: va al alta', async () => {
+    const ines = await cuenta('ines');
+    const edt = await perfumes.crearPerfume(
+      ines.id,
+      alta(ines.contexto, { nombre: `Fakhar Duo ${RONDA}`, concentracion: 'EDT' }),
+    );
+    const edp = await perfumes.crearPerfume(
+      ines.id,
+      alta(ines.contexto, { nombre: `Fakhar Duo ${RONDA}`, concentracion: 'EDP' }),
+    );
+
+    const destino = await compartido.destinoDeCompartido(ines.id, {
+      url: urlDe('es', `Fakhar-Duo-${RONDA}`, NUMERO + 2),
+      text: PAGINA_CON_BLOQUE,
+    });
+
+    expect(destino.startsWith('/coleccion/nuevo?')).toBe(true);
+    expect(await parecidosDe(ines.id, edt)).toBeNull();
+    expect(await parecidosDe(ines.id, edp)).toBeNull();
+
+    // Los dos siguen pendientes; a Gema ya no le falta ninguno.
+    const pendientes = await consultas.parecidosPendientes(ines.id);
+    expect(pendientes.total).toBe(2);
+    expect(pendientes.pendientes.map((p) => p.id).sort()).toEqual([edt, edp].sort());
+    expect(await consultas.parecidosPendientes(gema.id)).toEqual({ total: 1, pendientes: [] });
   });
 });

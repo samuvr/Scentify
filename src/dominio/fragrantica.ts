@@ -799,6 +799,29 @@ export function datosDeUrlFragrantica(url: string): { marca: string; nombre: str
   return marca && nombre ? { marca, nombre } : null;
 }
 
+/**
+ * El numero de la ficha, el del final de la URL: `.../Fakhar-Black-70465.html`
+ * -> '70465'. Es el mismo en fragrantica.es y en fragrantica.com, asi que sirve
+ * para reconocer un perfume aunque se haya guardado con el otro dominio.
+ */
+export function idDeFichaFragrantica(url: string): string | null {
+  if (!esUrlDeFichaValida(url)) return null;
+  try {
+    return new URL(url).pathname.match(/-(\d+)\.html$/i)?.[1] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Para un perfume sin URL guardada: una busqueda web acotada a Fragrantica,
+ * que lleva a su ficha en un toque.
+ */
+export function busquedaEnFragrantica(nombre: string, marca: string): string {
+  const consulta = `site:fragrantica.es ${marca} ${nombre}`.replace(/\s+/g, ' ').trim();
+  return `https://www.google.com/search?q=${encodeURIComponent(consulta)}`;
+}
+
 function aTexto(segmento: string | undefined): string {
   return decodeURIComponent(segmento ?? '')
     .replace(/-/g, ' ')

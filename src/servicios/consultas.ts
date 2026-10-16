@@ -6,8 +6,9 @@
  * conocer el esquema.
  */
 import 'server-only';
-import { and, asc, desc, eq, gte, ilike, inArray, lte, ne, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, ilike, inArray, isNull, like, lte, ne, or, sql } from 'drizzle-orm';
 import { crearDb, schema } from '@/db';
+import { datosDeUrlFragrantica, idDeFichaFragrantica } from '@/dominio/fragrantica';
 import { parecidosValidos } from '@/dominio/parecidos';
 import type { PerfumeCandidato } from '@/dominio/recomendacion';
 import type {
@@ -17,7 +18,12 @@ import type {
   PerfumeIdoneidad,
   PromediosPerfume,
 } from '@/dominio/tipos';
-import { MINIMO_CARACTERES_BUSQUEDA, normalizar, palabrasDeBusqueda } from '@/dominio/texto';
+import {
+  claveBusqueda,
+  MINIMO_CARACTERES_BUSQUEDA,
+  normalizar,
+  palabrasDeBusqueda,
+} from '@/dominio/texto';
 
 /**
  * Condicion de busqueda por palabras sueltas: cada una tiene que estar en la
@@ -737,15 +743,86 @@ export async function buscarEnCatalogo(userId: string, texto: string, limite = 6
     .limit(limite);
 }
 
+/**
+ * Condicion «esta ficha es la de esa URL de Fragrantica». Por el numero de la
+ * ficha y no por la URL entera: la misma ficha se guarda a veces desde
+ * fragrantica.es y otras desde .com, o con un `#` detras.
+ */
+function esLaFichaDe(url: string) {
+  const id = idDeFichaFragrantica(url);
+  return id
+    ? like(schema.ficha.fragranticaUrl, `%-${id}.html%`)
+    : eq(schema.ficha.fragranticaUrl, url.trim());
+}
+
 /** La ficha que se comparte desde Fragrantica, si alguien la tiene ya. */
 export async function fichaPorUrl(url: string) {
   const db = crearDb();
   const [fila] = await db
     .select({ id: schema.ficha.id })
     .from(schema.ficha)
-    .where(eq(schema.ficha.fragranticaUrl, url.trim()))
+    .where(esLaFichaDe(url))
+    .orderBy(asc(schema.ficha.creadoEn))
     .limit(1);
   return fila?.id ?? null;
+}
+
+/**
+ * Mi frasco del perfume de esa ficha de Fragrantica, si ya lo tengo.
+ *
+ * Primero por la URL guardada. Si no, por el nombre y la marca que trae la
+ * propia URL, pero solo entre fichas sin URL (las importadas de una hoja, p.
+ * ej.) y solo si no hay duda: con el EDT y el EDP del mismo perfume no se elige.
+ */
+export async function miFrascoDeFragrantica(
+  userId: string,
+  url: string,
+): Promise<{ perfumeId: string; fichaId: string } | null> {
+  const db = crearDb();
+  const p = schema.perfume;
+  const f = schema.ficha;
+  const frascos = (condicion: ReturnType<typeof and>) =>
+    db
+      .select({ perfumeId: p.id, fichaId: f.id })
+      .from(p)
+      .innerJoin(f, eq(f.id, p.fichaId))
+      .where(and(eq(p.userId, userId), condicion))
+      .orderBy(asc(p.creadoEn));
+
+  const [porUrl] = await frascos(esLaFichaDe(url));
+  if (porUrl) return porUrl;
+
+  const datos = datosDeUrlFragrantica(url);
+  if (!datos) return null;
+  const porNombre = await frascos(
+    and(isNull(f.fragranticaUrl), eq(f.busquedaNormalizada, claveBusqueda(datos.nombre, datos.marca))),
+  );
+  return new Set(porNombre.map((c) => c.fichaId)).size === 1 ? porNombre[0]! : null;
+}
+
+/**
+ * Mis perfumes sin «Esta fragancia me recuerda a», para completarlos uno a uno
+ * con el boton: no hay forma de traerlo en lote (ver `dominio/parecidos.ts`).
+ * Sin los archivados.
+ */
+export async function parecidosPendientes(userId: string) {
+  const db = crearDb();
+  const p = schema.perfume;
+  const f = schema.ficha;
+  const filas = await db
+    .select({
+      id: p.id,
+      nombre: f.nombre,
+      marca: f.marca,
+      concentracion: f.concentracion,
+      fragranticaUrl: f.fragranticaUrl,
+      tiene: sql<boolean>`${f.parecidos} is not null`,
+    })
+    .from(p)
+    .innerJoin(f, eq(f.id, p.fichaId))
+    .where(and(eq(p.userId, userId), eq(p.archivado, false)))
+    .orderBy(asc(f.nombre), asc(f.marca));
+  return { total: filas.length, pendientes: filas.filter((fila) => !fila.tiene) };
 }
 
 /** Mi frasco de esa ficha, si ya lo tengo. */

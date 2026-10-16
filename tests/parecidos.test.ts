@@ -10,7 +10,11 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { desempaquetarFicha, empaquetarFicha } from '@/dominio/ficha-compartida';
-import { leerFichaFragrantica } from '@/dominio/fragrantica';
+import {
+  busquedaEnFragrantica,
+  idDeFichaFragrantica,
+  leerFichaFragrantica,
+} from '@/dominio/fragrantica';
 import { parecidosValidos, porcentajePositivo } from '@/dominio/parecidos';
 import {
   FICHA_EN_INGLES,
@@ -213,5 +217,31 @@ describe('viaje en la ficha compartida', () => {
     };
     const empaquetada = Buffer.from(JSON.stringify(ficha)).toString('base64url');
     expect(desempaquetarFicha(empaquetada)).toBeNull();
+  });
+});
+
+describe('reconocer la ficha de Fragrantica', () => {
+  it('el número de la ficha es el mismo en .es y en .com, con o sin # detrás', () => {
+    for (const url of [
+      'https://www.fragrantica.es/perfume/Lattafa-Perfumes/Fakhar-Black-70465.html',
+      'https://www.fragrantica.com/perfume/Lattafa-Perfumes/Fakhar-Black-70465.html#reviews',
+      'https://fragrantica.es/perfume/Lattafa-Perfumes/Fakhar-Black-70465.html?x=1',
+    ]) {
+      expect(idDeFichaFragrantica(url)).toBe('70465');
+    }
+  });
+
+  it.each([
+    ['otro sitio', 'https://www.ejemplo.com/perfume/Lattafa-Perfumes/Fakhar-Black-70465.html'],
+    ['sin número', 'https://www.fragrantica.es/perfume/Lattafa-Perfumes/'],
+    ['sin https', 'http://www.fragrantica.es/perfume/Lattafa-Perfumes/Fakhar-Black-70465.html'],
+    ['no es una URL', 'Fakhar Black'],
+  ])('sin número de ficha: %s', (_etiqueta, url) => {
+    expect(idDeFichaFragrantica(url)).toBeNull();
+  });
+
+  it('la búsqueda de un perfume sin URL se queda en fragrantica.es', () => {
+    const enlace = new URL(busquedaEnFragrantica('Fakhar  Black', 'Lattafa Perfumes'));
+    expect(enlace.searchParams.get('q')).toBe('site:fragrantica.es Lattafa Perfumes Fakhar Black');
   });
 });

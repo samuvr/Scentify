@@ -74,11 +74,19 @@ export default async function PaginaFicha({
     <div className="space-y-6">
       <header className="space-y-2">
         <VolverAColeccion />
-        {guardado ? (
+        {guardado === 'sin-parecidos' ? (
+          <p className="aviso-atencion" role="status">
+            Ya lo tienes en tu colección, pero en lo enviado no venía «Esta fragancia me recuerda
+            a». Puede que aún no se hubiera cargado: en Fragrantica, baja hasta ese bloque y vuelve
+            a pulsar «Enviar a Scentify».
+          </p>
+        ) : guardado ? (
           <p className="aviso-hecho" role="status">
             {guardado === 'deseo'
               ? 'Añadido a tu colección y quitado de la wishlist.'
-              : 'Cambios guardados.'}
+              : guardado === 'parecidos'
+                ? 'Ya lo tenías: se ha actualizado «Esta fragancia me recuerda a».'
+                : 'Cambios guardados.'}
           </p>
         ) : null}
         <div className="flex items-start justify-between gap-3">

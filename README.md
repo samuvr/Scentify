@@ -503,6 +503,19 @@ votos siguen moviéndose) y es común a todas las cuentas, como la pirámide.
   tests usan tarjetas sintéticas con la forma de las vecinas («A los usuarios que les
   gusta…»), metidas en la página real pegada para que lo que las rodea sea de verdad.
 
+**Los perfumes que ya estaban** se completan uno a uno, porque en lote no se puede: la
+sección 5.1 prohíbe recorrer Fragrantica, Cloudflare bloquea al servidor y, aunque no
+lo hiciera, el bloque no viene en el HTML. Lo que sí hay:
+
+- Pulsar «Enviar a Scentify» (o compartir la selección) con la ficha de un perfume que
+  ya tienes no abre un alta: guarda «Esta fragancia me recuerda a» en su ficha y lleva
+  a ella. Si lo enviado no traía el bloque, lo dice. El perfume se reconoce por el
+  número de la ficha de Fragrantica, que es el mismo en `.es` y en `.com`; si se guardó
+  sin URL, por el nombre y la marca de la URL, solo si no hay duda, y entonces la
+  ficha se queda con la URL.
+- «Más → Botón de Fragrantica» lista los que faltan, cada uno con su enlace a
+  Fragrantica (o a una búsqueda, si no tiene URL), y van saliendo según se completan.
+
 **Descartado: la captura de pantalla.** Medida a 390 px, una ficha real ocupa 58.022 px
 de alto, unas 69 pantallas de móvil, y los tres datos que hacen falta están en las
 pantallas 4 (acordes), 9 (votos) y 20 (pirámide). Harían falta tres capturas apuntadas
