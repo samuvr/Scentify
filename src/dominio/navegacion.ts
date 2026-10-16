@@ -1,3 +1,6 @@
+/** La pantalla con la que se abre la app: Sugerir, no Hoy. */
+export const INICIO = '/recomendacion';
+
 /**
  * Destinos de vuelta tras iniciar sesion.
  *
@@ -12,19 +15,19 @@
  * misma app, y ante cualquier duda se vuelve al inicio.
  */
 export function destinoSeguro(valor: unknown): string {
-  if (typeof valor !== 'string') return '/';
+  if (typeof valor !== 'string') return INICIO;
   const ruta = valor.trim();
 
   // Tiene que ser una ruta absoluta de este sitio...
-  if (!ruta.startsWith('/')) return '/';
+  if (!ruta.startsWith('/')) return INICIO;
   // ...y no "//otro-sitio", que el navegador trata como URL con protocolo
   // heredado y sale fuera igual que una absoluta.
-  if (ruta.startsWith('//') || ruta.startsWith('/\\')) return '/';
+  if (ruta.startsWith('//') || ruta.startsWith('/\\')) return INICIO;
   // Ni caracteres de control. Un salto de linea partiria una cabecera
   // Location, y el navegador quita tabuladores y saltos al resolver la URL:
   // "/\t/otro-sitio" acaba siendo "//otro-sitio".
   // eslint-disable-next-line no-control-regex
-  if (/[\u0000-\u001f\u007f]/.test(ruta)) return '/';
+  if (/[\u0000-\u001f\u007f]/.test(ruta)) return INICIO;
 
   return ruta;
 }

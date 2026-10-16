@@ -2,7 +2,7 @@
   "name": "Scentify — mi colección de perfumes",
   "short_name": "Scentify",
   "description": "Inventario, registro diario y recomendaciones de mi colección de perfumes.",
-  "start_url": "/",
+  "start_url": "/recomendacion",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",

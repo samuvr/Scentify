@@ -6,6 +6,7 @@
  */
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import { INICIO } from '@/dominio/navegacion';
 import { registroAbierto, usuarioActual } from '@/servicios/auth';
 import { FormularioRegistro } from './FormularioRegistro';
 
@@ -16,7 +17,7 @@ export default async function PaginaRegistro({
 }: {
   searchParams: Promise<{ codigo?: string; siguiente?: string }>;
 }) {
-  if (await usuarioActual()) redirect('/');
+  if (await usuarioActual()) redirect(INICIO);
   const { codigo, siguiente } = await searchParams;
   const abierto = registroAbierto();
 
