@@ -156,6 +156,7 @@ MVP y fase 2 completos.
 | Idoneidad, estación efectiva y recomendación (secc. 6.2, 7.1, 7.2) | Hecho, con tests |
 | Colección: listado, filtros, ficha y alta en pasos (secc. 4) | Hecho |
 | Integración Fragrantica con sus dos fallbacks (secc. 5) | Hecho, con tests sobre fichas reales |
+| «Esta fragancia me recuerda a» en la ficha (secc. 5.3) | Hecho, con tests sobre bloques sintéticos |
 | Registro diario (secc. 6) | Hecho |
 | Estadísticas (secc. 8) | Hecho, con tests |
 | Importar, exportar y copia de seguridad (secc. 9) | Hecho, con tests |
@@ -479,6 +480,41 @@ Con la ficha leída (o elegida del catálogo), el alta ya no son ocho pasos: es 
 contextos a la vista, y el inventario plegado. «Marcar según Fragrantica» pone las
 casillas que se acercan a la opción más votada (`src/dominio/votos.ts`); es una
 propuesta que se ve marcada y se cambia a mano, y los votos siguen sin guardarse.
+
+**«Esta fragancia me recuerda a».** De ese bloque se leen los tres primeros perfumes,
+con sus votos a favor y en contra, y la ficha los enseña con el porcentaje a favor
+sobre el total de cada uno. Es la única excepción a «los votos no se persisten»: no
+ayuda a marcar casillas, se enseña en la ficha, y ninguna lógica decide con ello. Se
+guarda en `ficha.parecidos` (JSON, con la fecha de lectura, porque en Fragrantica los
+votos siguen moviéndose) y es común a todas las cuentas, como la pirámide.
+
+- Fragrantica lo pinta en el navegador después de cargar, así que la petición del
+  servidor no suele traerlo; el botón «Enviar a Scentify», compartir la selección y
+  pegar el texto, sí. Por eso se lee por líneas de texto, que es lo que tienen en común
+  el HTML y lo pegado.
+- Cada tarjeta es marca, nombre y los dos recuentos. Los votos son los dos **últimos**
+  números antes de la tarjeta siguiente: hay perfumes que se llaman con un número
+  («212», «28»), y ese va con el nombre.
+- Una lectura que no lo trae no borra el de una lectura anterior, y un alta a mano
+  sobre una ficha ajena solo lo rellena si faltaba. Lo que entra por una copia de
+  seguridad subida a mano se valida (`src/dominio/parecidos.ts`) antes de llegar a una
+  ficha que ven otras personas.
+- Ninguna de las capturas reales de `tests/fixtures/` trae el bloque, así que los
+  tests usan tarjetas sintéticas con la forma de las vecinas («A los usuarios que les
+  gusta…»), metidas en la página real pegada para que lo que las rodea sea de verdad.
+
+**Los perfumes que ya estaban** se completan uno a uno, porque en lote no se puede: la
+sección 5.1 prohíbe recorrer Fragrantica, Cloudflare bloquea al servidor y, aunque no
+lo hiciera, el bloque no viene en el HTML. Lo que sí hay:
+
+- Pulsar «Enviar a Scentify» (o compartir la selección) con la ficha de un perfume que
+  ya tienes no abre un alta: guarda «Esta fragancia me recuerda a» en su ficha y lleva
+  a ella. Si lo enviado no traía el bloque, lo dice. El perfume se reconoce por el
+  número de la ficha de Fragrantica, que es el mismo en `.es` y en `.com`; si se guardó
+  sin URL, por el nombre y la marca de la URL, solo si no hay duda, y entonces la
+  ficha se queda con la URL.
+- «Más → Botón de Fragrantica» lista los que faltan, cada uno con su enlace a
+  Fragrantica (o a una búsqueda, si no tiene URL), y van saliendo según se completan.
 
 **Descartado: la captura de pantalla.** Medida a 390 px, una ficha real ocupa 58.022 px
 de alto, unas 69 pantallas de móvil, y los tres datos que hacen falta están en las

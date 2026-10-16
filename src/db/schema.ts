@@ -5,7 +5,8 @@
  *  - Un perfume nunca se borra, se archiva: `uso.perfume_id` es ON DELETE RESTRICT,
  *    de modo que un DELETE sobre un perfume con historial falla.
  *  - Los votos de Fragrantica no se persisten: no hay ninguna columna de votos en
- *    `perfume_estacion` ni en `perfume_momento`. Solo se conserva `fragrantica_url`.
+ *    `perfume_estacion` ni en `perfume_momento`. Solo se conserva `fragrantica_url`
+ *    y, para enseñarlo en la ficha, el bloque «Esta fragancia me recuerda a».
  *  - La idoneidad de un uso es un snapshot: se guarda calculada y no se recalcula
  *    nunca, aunque el perfume cambie despues.
  *
@@ -33,6 +34,8 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
+// Relativa y solo de tipo: drizzle-kit carga este fichero sin los alias de tsconfig.
+import type { ParecidosLeidos } from '../dominio/parecidos';
 
 /* ------------------------------------------------------------------ enums */
 
@@ -165,6 +168,12 @@ export const ficha = pgTable(
     anioLanzamiento: integer('anio_lanzamiento'),
     /** Se conserva para poder reconsultar bajo demanda. Los votos no se persisten. */
     fragranticaUrl: text('fragrantica_url'),
+    /**
+     * «Esta fragancia me recuerda a»: los tres primeros, con sus votos y la
+     * fecha en que se leyeron. Es lo unico de Fragrantica con votos que se
+     * guarda, porque se enseña en la ficha; nada decide con ello.
+     */
+    parecidos: jsonb('parecidos').$type<ParecidosLeidos>(),
     /** Quien la dio de alta. Si esa cuenta desaparece, la ficha sigue. */
     creadaPor: uuid('creada_por').references(() => usuario.id, { onDelete: 'set null' }),
     creadoEn: timestamp('creado_en', { withTimezone: true }).notNull().defaultNow(),

@@ -16,6 +16,7 @@ import {
   type ErrorFila,
   type FilaColeccion,
 } from '@/dominio/csv';
+import { parecidosValidos } from '@/dominio/parecidos';
 import { claveBusqueda, normalizar } from '@/dominio/texto';
 import { crearPerfume, resolverFicha } from './perfumes';
 import { documentoParaIa, type PerfumeExportable } from '@/dominio/exportacion-ia';
@@ -566,6 +567,7 @@ export function aVersion2(copia: Copia | CopiaV1): Copia {
       concentracion: p.concentracion,
       anioLanzamiento: p.anioLanzamiento,
       fragranticaUrl: p.fragranticaUrl,
+      parecidos: null,
       creadaPor: p.userId,
       creadoEn: p.creadoEn,
       actualizadoEn: p.actualizadoEn,
@@ -634,6 +636,9 @@ export async function restaurarCopia(userId: string, entrada: Copia | CopiaV1): 
         concentracion: ficha.concentracion,
         anioLanzamiento: ficha.anioLanzamiento,
         fragranticaUrl: ficha.fragranticaUrl,
+        // La copia viene de un fichero y la ficha es de todos: lo que no tenga
+        // la forma esperada se queda fuera. Las copias de antes no lo llevan.
+        parecidos: parecidosValidos(ficha.parecidos),
         notas,
         familiaIds,
       }),

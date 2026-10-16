@@ -10,6 +10,7 @@
  */
 import { z } from 'zod';
 import type { FichaFragrantica } from './fragrantica';
+import { esquemaParecido, MAXIMO_PARECIDOS } from './parecidos';
 
 const voto = z.object({
   votos: z.number().nullable(),
@@ -35,6 +36,9 @@ const esquema = z.object({
   marca: z.string().nullable(),
   anio: z.number().nullable(),
   acordes: z.array(z.string()),
+  // Por defecto vacia: un enlace empaquetado antes de leer este bloque sigue
+  // valiendo.
+  parecidos: z.array(esquemaParecido).max(MAXIMO_PARECIDOS).default([]),
 });
 
 export function empaquetarFicha(ficha: FichaFragrantica): string {

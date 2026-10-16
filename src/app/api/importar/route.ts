@@ -7,8 +7,9 @@
  * fragrantica.com, la cookie `SameSite=Lax` no iria y lo compartido se
  * perderia en el login.
  *
- * No escribe nada en la base de datos: devuelve a donde ir, con la ficha ya
- * leida en la URL, y los votos mueren en el formulario (5.3).
+ * Devuelve a donde ir, con la ficha ya leida en la URL, y los votos mueren en
+ * el formulario (5.3). Solo escribe si el perfume ya es mio: entonces guarda
+ * en su ficha «Esta fragancia me recuerda a».
  */
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
@@ -21,13 +22,12 @@ const esquema = z.object({
 });
 
 export async function POST(peticion: Request) {
-  if (!(await usuarioActual())) {
-    return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
-  }
+  const userId = await usuarioActual();
+  if (!userId) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
 
   const analisis = esquema.safeParse(await peticion.json().catch(() => null));
   if (!analisis.success) return NextResponse.json({ error: 'Parámetros' }, { status: 400 });
 
   const { url, texto } = analisis.data;
-  return NextResponse.json({ destino: destinoDeCompartido({ url, text: texto }) });
+  return NextResponse.json({ destino: await destinoDeCompartido(userId, { url, text: texto }) });
 }
