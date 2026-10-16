@@ -13,6 +13,7 @@ import {
   indiceRotacion,
   periodoAnterior,
   type Comparacion,
+  type DesgloseAcierto,
   type Indicadores,
   type RangoFechas,
 } from '@/dominio/estadisticas';
@@ -79,6 +80,10 @@ export interface Estadisticas {
   };
   porEstacion: { estacion: Estacion; usos: number }[];
   totalColeccion: number;
+  /** De donde sale la tasa de acierto: aciertos y en que eje fallo el resto. */
+  desgloseAcierto: DesgloseAcierto;
+  /** Los perfumes con mas usos que no encajaban del todo, para ir a corregirlos. */
+  masFallados: { id: string; nombre: string; marca: string; fallos: number }[];
 }
 
 export async function calcularEstadisticas(
@@ -112,6 +117,8 @@ export async function calcularEstadisticas(
     porEstacion,
     diasConRegistro,
     promedios,
+    [desglose],
+    masFallados,
   ] = await Promise.all([
     indicadoresDe(userId, rango, filtros, totalColeccion),
     indicadoresDe(userId, anterior, filtros, totalColeccion),
@@ -187,6 +194,32 @@ export async function calcularEstadisticas(
       })
       .from(u)
       .where(donde),
+
+    db
+      .select({
+        usos: sql<number>`count(*)::int`,
+        aciertos: sql<number>`count(*) filter (where ${u.idoneidadPct} = 100)::int`,
+        fallosContexto: sql<number>`count(*) filter (where (${u.idoneidadDetalle}->>'contexto')::boolean is false)::int`,
+        fallosMomento: sql<number>`count(*) filter (where (${u.idoneidadDetalle}->>'momento')::boolean is false)::int`,
+        fallosEstacion: sql<number>`count(*) filter (where (${u.idoneidadDetalle}->>'estacion')::boolean is false)::int`,
+      })
+      .from(u)
+      .where(donde),
+
+    db
+      .select({
+        id: p.id,
+        nombre: f.nombre,
+        marca: f.marca,
+        fallos: sql<number>`count(*)::int`,
+      })
+      .from(u)
+      .innerJoin(p, eq(p.id, u.perfumeId))
+      .innerJoin(f, eq(f.id, p.fichaId))
+      .where(and(donde, sql`${u.idoneidadPct} < 100`))
+      .groupBy(p.id, f.nombre, f.marca)
+      .orderBy(desc(sql`count(*)`), asc(f.nombre))
+      .limit(5),
   ]);
 
   // Sin usar en el periodo: en coleccion y con cero registros en el rango,
@@ -247,5 +280,13 @@ export async function calcularEstadisticas(
       valoracionMedia: promedios[0]?.valoracionMedia ?? null,
     },
     totalColeccion,
+    desgloseAcierto: desglose ?? {
+      usos: 0,
+      aciertos: 0,
+      fallosContexto: 0,
+      fallosMomento: 0,
+      fallosEstacion: 0,
+    },
+    masFallados,
   };
 }

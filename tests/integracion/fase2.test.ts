@@ -38,6 +38,30 @@ cuando('solapamiento de la wishlist (10.2)', () => {
       estaciones: ['OTONO'],
       momentos: ['NOCHE'],
     });
+    // Mismas notas, pero ya no lo tiene: no puede salir como «que ya tienes».
+    await perfumes.crearPerfume(USUARIO, {
+      nombre: `Vendido ${sufijo}`,
+      marca: 'Prueba',
+      estado: 'LO_TUVE',
+      notas: [
+        { nombre: 'Vainilla', nivel: 'FONDO' },
+        { nombre: 'Haba tonka', nivel: 'FONDO' },
+        { nombre: 'Benjuí', nivel: 'FONDO' },
+      ],
+      familiaIds: [],
+      contextoIds: [contextos[0]!.id],
+      estaciones: ['OTONO'],
+      momentos: ['NOCHE'],
+    });
+  });
+
+  it('no cuenta los perfumes marcados como «lo tuve»', async () => {
+    const solapa = await wishlist.solapamientoConLaColeccion(USUARIO, [
+      'Vainilla',
+      'Haba tonka',
+      'Benjuí',
+    ]);
+    expect(solapa.some((s) => s.nombre === `Vendido ${sufijo}`)).toBe(false);
   });
 
   it('avisa cuando el deseo comparte tres notas de fondo', async () => {

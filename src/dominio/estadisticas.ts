@@ -78,6 +78,43 @@ export function tasaAcierto(idoneidades: number[]): number {
   return Math.round((100 * totales) / idoneidades.length);
 }
 
+/** Lo que hay debajo de la tasa de acierto. Un uso puede fallar en varios ejes. */
+export interface DesgloseAcierto {
+  usos: number;
+  aciertos: number;
+  fallosContexto: number;
+  fallosMomento: number;
+  fallosEstacion: number;
+}
+
+/**
+ * La tasa en una frase, con sus numeros: un porcentaje suelto no dice que
+ * mide ni que hacer para subirlo.
+ */
+export function explicarTasaAcierto(d: DesgloseAcierto): string[] {
+  if (d.usos === 0) return ['Sin usos en el periodo, no hay acierto que medir.'];
+  const frases = [
+    `${d.aciertos} de ${d.usos} ${d.usos === 1 ? 'uso fue' : 'usos fueron'} con un perfume marcado a la vez para ese contexto, ese momento y la estación del día.`,
+  ];
+  const fallos = d.usos - d.aciertos;
+  if (fallos === 0) return [...frases, 'Todos encajaban con lo que tienes marcado.'];
+  const ejes = [
+    [d.fallosContexto, 'el contexto'],
+    [d.fallosMomento, 'el momento'],
+    [d.fallosEstacion, 'la estación'],
+  ] as const;
+  const partes = ejes
+    .filter(([n]) => n > 0)
+    .sort((a, b) => b[0] - a[0])
+    .map(([n, eje]) => `${eje} en ${n}`);
+  frases.push(
+    `${fallos === 1 ? 'El otro no encajaba' : `Los otros ${fallos} no encajaban`} por ${partes.join(', ')}${
+      partes.length > 1 ? ' (un uso puede fallar en más de uno)' : ''
+    }.`,
+  );
+  return frases;
+}
+
 export interface Indicadores {
   usos: number;
   perfumesDistintos: number;

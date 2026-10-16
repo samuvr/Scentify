@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   compararIndicadores,
   diasDelRango,
+  explicarTasaAcierto,
   indiceRotacion,
   periodoAnterior,
   rangoDePeriodo,
@@ -139,5 +140,43 @@ describe('rejilla del heatmap', () => {
     expect(semanas[0]?.[0]).toEqual({ fecha: '2026-09-21', registros: 2 });
     expect(semanas[0]?.[3]).toEqual({ fecha: '2026-09-24', registros: 1 });
     expect(semanas[0]?.[1]?.registros).toBe(0);
+  });
+});
+
+describe('explicación de la tasa de acierto', () => {
+  it('sin usos no inventa un porcentaje', () => {
+    expect(
+      explicarTasaAcierto({ usos: 0, aciertos: 0, fallosContexto: 0, fallosMomento: 0, fallosEstacion: 0 }),
+    ).toEqual(['Sin usos en el periodo, no hay acierto que medir.']);
+  });
+
+  it('dice cuántos acertaron y en qué eje fallaron los demás, del que más al que menos', () => {
+    const frases = explicarTasaAcierto({
+      usos: 10,
+      aciertos: 6,
+      fallosContexto: 3,
+      fallosMomento: 0,
+      fallosEstacion: 2,
+    });
+    expect(frases[0]).toBe(
+      '6 de 10 usos fueron con un perfume marcado a la vez para ese contexto, ese momento y la estación del día.',
+    );
+    expect(frases[1]).toBe(
+      'Los otros 4 no encajaban por el contexto en 3, la estación en 2 (un uso puede fallar en más de uno).',
+    );
+  });
+
+  it('con todo acertado no habla de fallos', () => {
+    const frases = explicarTasaAcierto({
+      usos: 1,
+      aciertos: 1,
+      fallosContexto: 0,
+      fallosMomento: 0,
+      fallosEstacion: 0,
+    });
+    expect(frases).toEqual([
+      '1 de 1 uso fue con un perfume marcado a la vez para ese contexto, ese momento y la estación del día.',
+      'Todos encajaban con lo que tienes marcado.',
+    ]);
   });
 });

@@ -16,7 +16,9 @@ const fuenteDisplay = Fraunces({
 });
 
 export const metadata: Metadata = {
-  title: 'Scentify',
+  // Cada pantalla pone su nombre delante: con todas titulandose «Scentify», el
+  // historial, el multitarea y el lector de pantalla no las distinguian.
+  title: { default: 'Scentify', template: '%s · Scentify' },
   description: 'Mi colección de perfumes',
   manifest: '/manifest.webmanifest',
   appleWebApp: { capable: true, statusBarStyle: 'black-translucent', title: 'Scentify' },
@@ -24,6 +26,7 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: '#14110e',
+  colorScheme: 'dark',
   width: 'device-width',
   initialScale: 1,
   // Sin maximumScale: bloquear el zoom rompe la accesibilidad.

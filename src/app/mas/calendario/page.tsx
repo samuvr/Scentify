@@ -18,6 +18,9 @@ import {
   semanasDelMes,
   type DiaCalendario,
 } from '@/dominio/calendario';
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = { title: 'Calendario' };
 
 export const dynamic = 'force-dynamic';
 

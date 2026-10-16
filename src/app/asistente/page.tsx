@@ -3,6 +3,9 @@ import { redirect } from 'next/navigation';
 import { asistenteDisponible } from '@/servicios/asistente';
 import { usuarioActual } from '@/servicios/auth';
 import { Chat } from './Chat';
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = { title: 'Asistente' };
 
 export const dynamic = 'force-dynamic';
 

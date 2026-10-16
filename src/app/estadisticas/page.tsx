@@ -6,7 +6,12 @@ import { listarContextos } from '@/servicios/consultas';
 import { calcularEstadisticas } from '@/servicios/estadisticas';
 import { hoyIso } from '@/servicios/usos';
 import { zonaDelUsuario } from '@/servicios/zona';
-import { rangoDePeriodo, rejillaHeatmap, type Periodo } from '@/dominio/estadisticas';
+import {
+  explicarTasaAcierto,
+  rangoDePeriodo,
+  rejillaHeatmap,
+  type Periodo,
+} from '@/dominio/estadisticas';
 import { DURACION_LEGIBLE, formatearFecha } from '@/componentes/BloquePromedios';
 import { SelectorPeriodo } from './SelectorPeriodo';
 import { Barras, Comparativa, Heatmap } from './Graficos';
@@ -14,6 +19,9 @@ import type { Estacion, Momento } from '@/dominio/tipos';
 import { fechaOVacia, uuidOVacio } from '@/dominio/navegacion';
 import { PropuestasMarcas } from '@/componentes/PropuestasMarcas';
 import { propuestasDeLaColeccion } from '@/servicios/recategorizacion';
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = { title: 'Estadísticas' };
 
 export const dynamic = 'force-dynamic';
 
@@ -86,6 +94,44 @@ export default async function PaginaEstadisticas({
         Rotación: {indicadores.perfumesDistintos} perfumes distintos sobre {datos.totalColeccion} en
         colección. Comparado con los {rango.desde} a {rango.hasta} del periodo anterior equivalente.
       </p>
+
+      {/* El KPI destacado, explicado: que mide, de donde sale y que lo baja. */}
+      <details className="tarjeta text-sm">
+        <summary className="cursor-pointer font-medium">
+          Tasa de acierto: {indicadores.tasaAcierto} %. ¿Qué mide?
+        </summary>
+        <div className="mt-3 space-y-2">
+          {explicarTasaAcierto(datos.desgloseAcierto).map((frase) => (
+            <p key={frase} className="text-texto-tenue">
+              {frase}
+            </p>
+          ))}
+          {datos.masFallados.length > 0 ? (
+            <>
+              <h3 className="subtitulo pt-1">Los que más la bajan</h3>
+              <ul className="space-y-1">
+                {datos.masFallados.map((fila) => (
+                  <li key={fila.id}>
+                    <Link href={`/coleccion/${fila.id}`} className="fila-toque justify-between">
+                      <span className="min-w-0 flex-1 truncate">
+                        {fila.nombre}
+                        <span className="text-sm text-texto-tenue"> · {fila.marca}</span>
+                      </span>
+                      <span className="text-xs text-texto-tenue">
+                        {fila.fallos} {fila.fallos === 1 ? 'uso' : 'usos'} sin encajar
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-xs text-texto-tenue">
+                Si de verdad te los pones así, márcalos en su ficha para ese uso: subirá la tasa y
+                la recomendación te los ofrecerá.
+              </p>
+            </>
+          ) : null}
+        </div>
+      </details>
 
       {propuestas.length > 0 ? (
         <section className="space-y-2">

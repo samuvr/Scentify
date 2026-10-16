@@ -30,6 +30,9 @@ import {
   usosDelDia,
 } from '@/servicios/usos';
 import { recomendar } from '@/dominio/recomendacion';
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = { title: 'Hoy' };
 
 export const dynamic = 'force-dynamic';
 

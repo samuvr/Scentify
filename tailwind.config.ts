@@ -37,6 +37,14 @@ export default {
         superficie: '#1c1814',
         'superficie-alta': '#29231d',
         borde: '#3d342b',
+        /**
+         * Contorno de lo que se pulsa o se rellena (campos, chips, opciones y
+         * botones secundarios). `borde` sirve para separar tarjetas y filas,
+         * pero sobre `superficie` da 1.45:1 y el contorno de un control pide
+         * 3:1 (WCAG 1.4.11). Este da 3.4:1 sobre `superficie` y 3.0:1 sobre
+         * `superficie-alta`.
+         */
+        'borde-control': '#7a6b5d',
         texto: '#f3ece3',
         'texto-tenue': '#a89b8c',
         /**

@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { usuarioActual } from '@/servicios/auth';
-import { fichaDePerfume, listarContextos } from '@/servicios/consultas';
+import { fichaDePerfume, listarContextos, nombreDePerfume } from '@/servicios/consultas';
 import { BloquePromedios, DURACION_LEGIBLE, formatearFecha } from '@/componentes/BloquePromedios';
 import { DesgloseIdoneidad, InsigniaIdoneidad } from '@/componentes/Idoneidad';
 import { accionArchivar, accionCambiarEstado } from '@/app/acciones';
@@ -14,6 +14,18 @@ import { hoyIso } from '@/servicios/usos';
 import { zonaDelUsuario } from '@/servicios/zona';
 import type { Estacion } from '@/dominio/tipos';
 import { esUuid } from '@/dominio/navegacion';
+import type { Metadata } from 'next';
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const userId = await usuarioActual();
+  const { id } = await params;
+  const nombre = userId && esUuid(id) ? await nombreDePerfume(userId, id) : null;
+  return { title: nombre ?? 'Perfume' };
+}
 
 /** Los ultimos usos que se ven sin pedirlo: la ficha de un perfume muy usado medía 11.668 px. */
 const USOS_A_LA_VISTA = 10;

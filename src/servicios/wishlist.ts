@@ -153,6 +153,8 @@ export async function solapamientoConLaColeccion(
     .where(
       and(
         eq(schema.perfume.userId, userId),
+        // «Que ya tienes»: ni los archivados ni los que marcaste como «lo tuve».
+        eq(schema.perfume.estado, 'LO_TENGO'),
         eq(schema.perfume.archivado, false),
         eq(schema.fichaNota.nivel, 'FONDO'),
       ),

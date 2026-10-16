@@ -1,4 +1,7 @@
 /** Pagina de reserva del service worker cuando no hay nada en cache. */
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = { title: 'Sin conexión' };
 export const dynamic = 'force-static';
 
 export default function PaginaSinConexion() {
