@@ -89,3 +89,65 @@ export function agruparPorContexto(huecos: Combinacion[]): Map<string, Combinaci
   }
   return mapa;
 }
+
+/* ------------------------------------------------- ponderacion por uso real */
+
+/** Cuantas veces te has puesto algo en una combinacion, sea lo que sea. */
+export interface UsosDeCombinacion extends Combinacion {
+  usos: number;
+}
+
+export interface HuecoPonderado extends Combinacion {
+  /** Usos reales en esa combinacion durante la ventana mirada. */
+  usos: number;
+}
+
+export interface HuecosPonderados {
+  /** Huecos en los que te has encontrado de verdad, de mas a menos usos. */
+  vividos: HuecoPonderado[];
+  /** Huecos de combinaciones que no has vivido: existen, pero no apremian. */
+  teoricos: Combinacion[];
+  /**
+   * Porcentaje de tus usos reales que caen en combinaciones cubiertas. Es la
+   * cobertura que importa: 48 casillas pesan igual, tus dias no. null si no
+   * hay usos en la ventana.
+   */
+  coberturaReal: number | null;
+}
+
+const claveDe = (c: Combinacion) => `${c.contextoId}|${c.momento}|${c.estacion}`;
+
+/**
+ * Los huecos no pesan igual: el de «Gimnasio · Noche · Verano» no apremia si
+ * nunca vas al gimnasio de noche. Se ordenan por cuantas veces has estado en
+ * esa situacion, y los que nunca has vivido van aparte.
+ */
+export function ponderarHuecos(
+  resultado: Pick<ResultadoHuecos, 'huecos'>,
+  usosPorCombinacion: UsosDeCombinacion[],
+): HuecosPonderados {
+  const usos = new Map<string, number>();
+  for (const fila of usosPorCombinacion) {
+    usos.set(claveDe(fila), (usos.get(claveDe(fila)) ?? 0) + fila.usos);
+  }
+
+  const vividos: HuecoPonderado[] = [];
+  const teoricos: Combinacion[] = [];
+  let usosEnHuecos = 0;
+  for (const hueco of resultado.huecos) {
+    const n = usos.get(claveDe(hueco)) ?? 0;
+    if (n > 0) {
+      vividos.push({ ...hueco, usos: n });
+      usosEnHuecos += n;
+    } else teoricos.push(hueco);
+  }
+  // Orden estable: a igualdad de usos, el orden de entrada (contexto, momento, estacion).
+  vividos.sort((a, b) => b.usos - a.usos);
+
+  const total = [...usos.values()].reduce((suma, n) => suma + n, 0);
+  return {
+    vividos,
+    teoricos,
+    coberturaReal: total === 0 ? null : Math.round((100 * (total - usosEnHuecos)) / total),
+  };
+}

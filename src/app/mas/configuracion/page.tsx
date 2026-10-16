@@ -7,6 +7,9 @@ import { CamposUbicacion } from './CamposUbicacion';
 import { MENSAJE_UMBRALES, type ErrorUmbrales } from '@/dominio/estacion';
 import { AvisosDiarios } from '@/componentes/AvisosDiarios';
 import { HORA_MAXIMA_RECORDATORIO, leerRecordatorio } from '@/servicios/recordatorio';
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = { title: 'Configuración' };
 
 export const dynamic = 'force-dynamic';
 

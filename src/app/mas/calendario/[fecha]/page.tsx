@@ -18,6 +18,16 @@ import {
 import { desplazarDias, esFinDeSemana, hoyIso, momentoDeAhora, usosDelDia } from '@/servicios/usos';
 import { esFechaIso } from '@/dominio/navegacion';
 import { fechaLarga, mesDe } from '@/dominio/calendario';
+import type { Metadata } from 'next';
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ fecha: string }>;
+}): Promise<Metadata> {
+  const { fecha } = await params;
+  return { title: esFechaIso(fecha) ? fechaLarga(fecha) : 'Calendario' };
+}
 
 export const dynamic = 'force-dynamic';
 

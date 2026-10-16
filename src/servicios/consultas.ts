@@ -534,6 +534,40 @@ export async function notasDeLaColeccion(userId: string) {
 
 /* ------------------------------------------------------------------ ficha */
 
+/**
+ * Cuantas veces te has puesto algo en cada contexto, momento y estacion
+ * efectiva desde una fecha. Pondera los huecos por lo que vives de verdad.
+ */
+export async function usosPorCombinacion(
+  userId: string,
+  desde: string,
+): Promise<{ contextoId: string; momento: Momento; estacion: Estacion; usos: number }[]> {
+  const db = crearDb();
+  const u = schema.uso;
+  return db
+    .select({
+      contextoId: u.contextoId,
+      momento: u.momento,
+      estacion: u.estacionEfectiva,
+      usos: sql<number>`count(*)::int`,
+    })
+    .from(u)
+    .where(and(eq(u.userId, userId), gte(u.fecha, desde)))
+    .groupBy(u.contextoId, u.momento, u.estacionEfectiva);
+}
+
+/** Solo el nombre, para el titulo de la pestaña: no merece cargar la ficha entera. */
+export async function nombreDePerfume(userId: string, perfumeId: string): Promise<string | null> {
+  const db = crearDb();
+  const [fila] = await db
+    .select({ nombre: schema.ficha.nombre })
+    .from(schema.perfume)
+    .innerJoin(schema.ficha, eq(schema.ficha.id, schema.perfume.fichaId))
+    .where(and(eq(schema.perfume.userId, userId), eq(schema.perfume.id, perfumeId)))
+    .limit(1);
+  return fila?.nombre ?? null;
+}
+
 export async function fichaDePerfume(userId: string, perfumeId: string) {
   const db = crearDb();
   const [fila] = await db

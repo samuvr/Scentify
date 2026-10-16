@@ -7,6 +7,9 @@
 import { redirect } from 'next/navigation';
 import { usuarioActual } from '@/servicios/auth';
 import { InstalarBoton } from './InstalarBoton';
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = { title: 'Importador' };
 
 export const dynamic = 'force-dynamic';
 

@@ -9,6 +9,9 @@ import { redirect } from 'next/navigation';
 import { INICIO } from '@/dominio/navegacion';
 import { registroAbierto, usuarioActual } from '@/servicios/auth';
 import { FormularioRegistro } from './FormularioRegistro';
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = { title: 'Crear cuenta' };
 
 export const dynamic = 'force-dynamic';
 

@@ -12,7 +12,7 @@
  * los que mas tiempo llevan sin usar, y los empates de tiempo se barajan.
  */
 import { describe, expect, it } from 'vitest';
-import { recomendar } from '@/dominio/recomendacion';
+import { porQueNoHayRecomendacion, recomendar } from '@/dominio/recomendacion';
 import type { PerfumeCandidato, PeticionRecomendacion } from '@/dominio/recomendacion';
 
 const OFICINA = 'ctx-oficina';
@@ -383,5 +383,52 @@ describe('casos limite', () => {
     const resultado = recomendar(peticion([candidato('Raro', { ultimoUso: '2026-01-01' })]));
     expect(nombres(resultado.recomendaciones)).toEqual(['Raro']);
     expect(resultado.recomendaciones[0]?.diasSinUsar).not.toBeNull();
+  });
+});
+
+describe('por qué no hay recomendación', () => {
+  it('sin nada disponible lo dice, sin culpar al contexto', () => {
+    const causa = porQueNoHayRecomendacion(
+      peticion([candidato('Vendido', { estado: 'LO_TUVE' }), candidato('Guardado', { archivado: true })]),
+    );
+    expect(causa).toEqual({ causa: 'SIN_PERFUMES' });
+  });
+
+  it('distingue cuando todo se ha descartado con «Otro»', () => {
+    const causa = porQueNoHayRecomendacion(
+      peticion([candidato('Khamrah'), candidato('Asad')], {
+        descartados: ['id-khamrah', 'id-asad'],
+      }),
+    );
+    expect(causa).toEqual({ causa: 'TODOS_DESCARTADOS', descartados: 2 });
+  });
+
+  it('cuando nada encaja, cuenta lo marcado en cada eje', () => {
+    const causa = porQueNoHayRecomendacion(
+      peticion(
+        [
+          candidato('Nocturno', { momentos: ['NOCHE'], contextos: [CASA], estaciones: ['OTONO'] }),
+          candidato('Veraniego', { momentos: ['NOCHE'], contextos: [CASA], estaciones: ['VERANO'] }),
+        ],
+        { momento: 'DIA', contextoId: OFICINA, estacionesCompatibles: ['OTONO'] },
+      ),
+    );
+    expect(causa).toEqual({
+      causa: 'NINGUNO_ENCAJA',
+      marcados: { contexto: 0, momento: 0, estacion: 1 },
+      disponibles: 2,
+    });
+    // Y es coherente con el motor: de verdad no recomienda nada.
+    expect(
+      recomendar(
+        peticion(
+          [
+            candidato('Nocturno', { momentos: ['NOCHE'], contextos: [CASA], estaciones: ['OTONO'] }),
+            candidato('Veraniego', { momentos: ['NOCHE'], contextos: [CASA], estaciones: ['VERANO'] }),
+          ],
+          { momento: 'DIA', contextoId: OFICINA, estacionesCompatibles: ['OTONO'] },
+        ),
+      ).recomendaciones,
+    ).toHaveLength(0);
   });
 });

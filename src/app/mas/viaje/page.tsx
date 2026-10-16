@@ -18,6 +18,9 @@ import type { Estacion, Momento } from '@/dominio/tipos';
 import { FormularioViaje } from './FormularioViaje';
 import { BloquePromedios } from '@/componentes/BloquePromedios';
 import { fechaOVacia } from '@/dominio/navegacion';
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = { title: 'Modo viaje' };
 
 export const dynamic = 'force-dynamic';
 

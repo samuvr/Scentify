@@ -6,7 +6,7 @@
  * desviara, la app se contradiria a si misma entre pantallas.
  */
 import { describe, expect, it } from 'vitest';
-import { agruparPorContexto, detectarHuecos } from '@/dominio/huecos';
+import { agruparPorContexto, detectarHuecos, ponderarHuecos } from '@/dominio/huecos';
 import {
   detectarSolapamiento,
   explicarSolapamiento,
@@ -500,5 +500,35 @@ describe('modo viaje', () => {
     expect(
       estacionesDistintas([['VERANO'], ['VERANO'], ['VERANO', 'OTONO'], ['OTONO', 'VERANO'], ['OTONO']]),
     ).toEqual([['VERANO'], ['VERANO', 'OTONO'], ['OTONO']]);
+  });
+});
+
+describe('huecos ponderados por el uso real', () => {
+  const huecos = detectarHuecos(
+    [perfume('Khamrah', { contextos: [OFICINA], momentos: ['DIA'], estaciones: ['OTONO'] })],
+    [OFICINA, GIMNASIO],
+  );
+
+  it('ordena por lo que vives y aparta lo que nunca has vivido', () => {
+    const ponderados = ponderarHuecos(huecos, [
+      { contextoId: OFICINA, momento: 'DIA', estacion: 'OTONO', usos: 20 },
+      { contextoId: OFICINA, momento: 'DIA', estacion: 'INVIERNO', usos: 3 },
+      { contextoId: GIMNASIO, momento: 'DIA', estacion: 'VERANO', usos: 7 },
+    ]);
+    expect(ponderados.vividos).toEqual([
+      { contextoId: GIMNASIO, momento: 'DIA', estacion: 'VERANO', usos: 7 },
+      { contextoId: OFICINA, momento: 'DIA', estacion: 'INVIERNO', usos: 3 },
+    ]);
+    // 16 combinaciones, 1 cubierta, 2 vividas sin cubrir.
+    expect(ponderados.teoricos).toHaveLength(13);
+    // 20 de 30 usos cayeron en lo cubierto.
+    expect(ponderados.coberturaReal).toBe(67);
+  });
+
+  it('sin usos no hay cobertura real que calcular', () => {
+    const ponderados = ponderarHuecos(huecos, []);
+    expect(ponderados.vividos).toEqual([]);
+    expect(ponderados.teoricos).toHaveLength(15);
+    expect(ponderados.coberturaReal).toBeNull();
   });
 });

@@ -4,6 +4,9 @@ import { usuarioActual } from '@/servicios/auth';
 import { leerUltimaCopia } from '@/servicios/ajustes';
 import { diasDesdeCopia, textoUltimaCopia, tocaCopia } from '@/dominio/copias';
 import { accionCerrarSesion } from '../acciones';
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = { title: 'Más' };
 
 export const dynamic = 'force-dynamic';
 

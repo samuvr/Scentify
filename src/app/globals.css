@@ -8,6 +8,12 @@
  */
 @layer base {
   html {
+    /*
+     * La app es oscura siempre: sin esto, los selects, los calendarios de
+     * fecha y las barras de scroll nativos se pintaban en tema claro.
+     */
+    color-scheme: dark;
+    accent-color: theme('colors.acento');
     /* Evita el zoom de iOS al enfocar un input: 16px es el mínimo seguro. */
     font-size: 16px;
     -webkit-text-size-adjust: 100%;
@@ -37,7 +43,7 @@
   input,
   select,
   textarea {
-    @apply w-full border border-borde bg-superficie px-4 py-3 text-texto
+    @apply w-full border border-borde-control bg-superficie px-4 py-3 text-texto
            placeholder:text-texto-tenue focus:border-acento focus:outline-none
            focus:ring-1 focus:ring-acento/60;
   }
@@ -85,7 +91,7 @@
   }
 
   .boton-secundario {
-    @apply boton border border-borde bg-superficie-alta text-texto;
+    @apply boton border border-borde-control bg-superficie-alta text-texto;
   }
 
   .boton-fantasma {
@@ -127,11 +133,11 @@
    * no es un interruptor), asi el estilo y la accesibilidad no se separan.
    */
   .opcion {
-    @apply boton border border-borde bg-superficie px-3 text-texto;
+    @apply boton border border-borde-control bg-superficie px-3 text-texto;
   }
 
   .chip {
-    @apply inline-flex min-h-tactil items-center gap-1.5 border border-borde
+    @apply inline-flex min-h-tactil items-center gap-1.5 border border-borde-control
            bg-superficie px-4 text-sm text-texto transition active:scale-[0.98];
   }
 

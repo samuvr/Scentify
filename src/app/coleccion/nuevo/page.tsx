@@ -15,6 +15,9 @@ import {
   listarNotas,
   miFrascoDeFicha,
 } from '@/servicios/consultas';
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = { title: 'Añadir perfume' };
 
 export const dynamic = 'force-dynamic';
 

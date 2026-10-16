@@ -5,6 +5,9 @@ import { leerUltimaCopia } from '@/servicios/ajustes';
 import { diasDesdeCopia, textoUltimaCopia, tocaCopia } from '@/dominio/copias';
 import { PanelDatos } from './PanelDatos';
 import { PanelHoja } from './PanelHoja';
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = { title: 'Datos' };
 
 export const dynamic = 'force-dynamic';
 

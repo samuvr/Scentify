@@ -238,3 +238,49 @@ export function recomendar(peticion: PeticionRecomendacion): ResultadoRecomendac
 
   return { recomendaciones };
 }
+
+/**
+ * Por que `recomendar` no devuelve nada, para que el estado vacio diga la causa
+ * real en vez de un consejo generico. Usa los mismos filtros duros que el motor.
+ */
+export type SinRecomendacion =
+  | { causa: 'SIN_PERFUMES' }
+  | { causa: 'TODOS_DESCARTADOS'; descartados: number }
+  | {
+      causa: 'NINGUNO_ENCAJA';
+      /** Disponibles marcados para cada eje por separado. */
+      marcados: { contexto: number; momento: number; estacion: number };
+      disponibles: number;
+    };
+
+export function porQueNoHayRecomendacion(
+  peticion: Pick<
+    PeticionRecomendacion,
+    'coleccion' | 'momento' | 'contextoId' | 'estacionesCompatibles' | 'descartados'
+  >,
+): SinRecomendacion {
+  const enColeccion = peticion.coleccion.filter((p) => p.estado === 'LO_TENGO' && !p.archivado);
+  if (enColeccion.length === 0) return { causa: 'SIN_PERFUMES' };
+
+  const descartados = new Set(peticion.descartados ?? []);
+  const disponibles = enColeccion.filter((p) => !descartados.has(p.id));
+  if (disponibles.length === 0) {
+    return { causa: 'TODOS_DESCARTADOS', descartados: enColeccion.length };
+  }
+
+  const cuantos = (eje: keyof EjesIdoneidad) =>
+    disponibles.filter(
+      (p) =>
+        calcularIdoneidad(p, {
+          momento: peticion.momento,
+          contextoId: peticion.contextoId,
+          estacionesCompatibles: peticion.estacionesCompatibles,
+        }).detalle[eje],
+    ).length;
+
+  return {
+    causa: 'NINGUNO_ENCAJA',
+    marcados: { contexto: cuantos('contexto'), momento: cuantos('momento'), estacion: cuantos('estacion') },
+    disponibles: disponibles.length,
+  };
+}

@@ -7,8 +7,26 @@ import { FormularioPerfume } from '@/componentes/FormularioPerfume';
 import type { ValoresPerfume } from '@/componentes/valores-perfume';
 import { usuarioActual } from '@/servicios/auth';
 import { claudeDisponible } from '@/servicios/claude';
-import { fichaDePerfume, listarContextos, listarFamilias, listarNotas } from '@/servicios/consultas';
+import {
+  fichaDePerfume,
+  listarContextos,
+  listarFamilias,
+  listarNotas,
+  nombreDePerfume,
+} from '@/servicios/consultas';
 import { esUuid } from '@/dominio/navegacion';
+import type { Metadata } from 'next';
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const userId = await usuarioActual();
+  const { id } = await params;
+  const nombre = userId && esUuid(id) ? await nombreDePerfume(userId, id) : null;
+  return { title: nombre ? `Editar ${nombre}` : 'Editar perfume' };
+}
 
 export const dynamic = 'force-dynamic';
 

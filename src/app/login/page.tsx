@@ -4,6 +4,9 @@ import { redirect } from 'next/navigation';
 import { INICIO } from '@/dominio/navegacion';
 import { registroAbierto, usuarioActual } from '@/servicios/auth';
 import { FormularioLogin } from './FormularioLogin';
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = { title: 'Entrar' };
 
 export const dynamic = 'force-dynamic';
 

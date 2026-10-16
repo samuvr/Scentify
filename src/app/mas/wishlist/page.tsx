@@ -7,6 +7,9 @@ import { formatearFecha } from '@/componentes/BloquePromedios';
 import { notasFondoDeDeseo } from '@/servicios/wishlist';
 import { FormularioDeseo } from './FormularioDeseo';
 import { TarjetaDeseo } from './TarjetaDeseo';
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = { title: 'Wishlist' };
 
 export const dynamic = 'force-dynamic';
 

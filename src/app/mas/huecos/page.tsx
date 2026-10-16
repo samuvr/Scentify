@@ -7,14 +7,26 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { usuarioActual } from '@/servicios/auth';
-import { candidatosParaRecomendar, listarContextos } from '@/servicios/consultas';
-import { agruparPorContexto, detectarHuecos } from '@/dominio/huecos';
+import {
+  candidatosParaRecomendar,
+  listarContextos,
+  usosPorCombinacion,
+} from '@/servicios/consultas';
+import {
+  agruparPorContexto,
+  detectarHuecos,
+  ponderarHuecos,
+  type Combinacion,
+} from '@/dominio/huecos';
 import { huecosQueCierra } from '@/dominio/recategorizacion';
 import { PropuestasMarcas } from '@/componentes/PropuestasMarcas';
 import { propuestasDeLaColeccion } from '@/servicios/recategorizacion';
-import { hoyIso } from '@/servicios/usos';
+import { desplazarDias, hoyIso } from '@/servicios/usos';
 import { zonaDelUsuario } from '@/servicios/zona';
 import type { Estacion, Momento } from '@/dominio/tipos';
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = { title: 'Huecos' };
 
 export const dynamic = 'force-dynamic';
 
@@ -32,10 +44,13 @@ export default async function PaginaHuecos() {
   if (!userId) redirect('/login');
 
   const hoy = hoyIso(await zonaDelUsuario());
-  const [contextos, coleccion, propuestas] = await Promise.all([
+  // Un año: lo bastante para ver las cuatro estaciones, lo bastante cerca
+  // para que cuente como lo que haces ahora.
+  const [contextos, coleccion, propuestas, usosVividos] = await Promise.all([
     listarContextos(userId),
     candidatosParaRecomendar(userId),
     propuestasDeLaColeccion(userId, hoy),
+    usosPorCombinacion(userId, desplazarDias(hoy, -364)),
   ]);
   const contextoIds = contextos.map((c) => c.id);
 
@@ -52,8 +67,13 @@ export default async function PaginaHuecos() {
     coleccion,
     contextos.map((c) => c.id),
   );
-  const porContexto = agruparPorContexto(resultado.huecos);
+  const ponderados = ponderarHuecos(resultado, usosVividos);
+  const teoricosPorContexto = agruparPorContexto(ponderados.teoricos);
   const nombreContexto = (id: string) => contextos.find((c) => c.id === id)?.nombre ?? '—';
+  const enlaceWishlist = (hueco: Combinacion) =>
+    `/mas/wishlist?hueco=${encodeURIComponent(
+      `${nombreContexto(hueco.contextoId)} + ${NOMBRE_ESTACION[hueco.estacion]} + ${NOMBRE_MOMENTO[hueco.momento]}`,
+    )}`;
 
   const porcentaje = Math.round((100 * resultado.cubiertas) / (resultado.totalCombinaciones || 1));
 
@@ -76,6 +96,12 @@ export default async function PaginaHuecos() {
         <div className="h-2 overflow-hidden bg-superficie-alta">
           <div className="h-full bg-acento" style={{ width: `${porcentaje}%` }} />
         </div>
+        {ponderados.coberturaReal !== null ? (
+          <p className="text-sm text-texto-tenue">
+            Contando lo que haces de verdad: el {ponderados.coberturaReal} % de tus usos del último
+            año fue en una situación que tienes cubierta.
+          </p>
+        ) : null}
       </section>
 
       {cubresSinSaberlo.length > 0 ? (
@@ -100,32 +126,66 @@ export default async function PaginaHuecos() {
           No te falta ninguna combinación. Enhorabuena, y lo siento por tu cartera.
         </p>
       ) : (
-        <section className="space-y-4">
-          {[...porContexto.entries()].map(([contextoId, huecos]) => (
-            <div key={contextoId} className="space-y-2">
-              <h2 className="subtitulo">
-                {nombreContexto(contextoId)}{' '}
-                <span className="font-normal normal-case tracking-normal">
-                  ({huecos.length} sin cubrir)
-                </span>
-              </h2>
-              <ul className="flex flex-wrap gap-2">
-                {huecos.map((hueco) => (
-                  <li key={`${hueco.momento}-${hueco.estacion}`}>
-                    <Link
-                      href={`/mas/wishlist?hueco=${encodeURIComponent(
-                        `${nombreContexto(contextoId)} + ${NOMBRE_ESTACION[hueco.estacion]} + ${NOMBRE_MOMENTO[hueco.momento]}`,
-                      )}`}
-                      className="chip text-id-nula"
-                    >
-                      {NOMBRE_ESTACION[hueco.estacion]} · {NOMBRE_MOMENTO[hueco.momento]}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </section>
+        <>
+          <section className="space-y-2">
+            <h2 className="subtitulo">Los que te encuentras</h2>
+            {ponderados.vividos.length > 0 ? (
+              <>
+                <p className="text-sm text-texto-tenue">
+                  Situaciones en las que has estado este último año sin nada marcado para ellas, de
+                  más a menos veces.
+                </p>
+                <ul className="space-y-1">
+                  {ponderados.vividos.map((hueco) => (
+                    <li key={`${hueco.contextoId}-${hueco.momento}-${hueco.estacion}`}>
+                      <Link href={enlaceWishlist(hueco)} className="fila-toque justify-between">
+                        <span className="min-w-0 flex-1 truncate text-id-nula">
+                          {nombreContexto(hueco.contextoId)} · {NOMBRE_ESTACION[hueco.estacion]} ·{' '}
+                          {NOMBRE_MOMENTO[hueco.momento]}
+                        </span>
+                        <span className="etiqueta text-xs">
+                          {hueco.usos} {hueco.usos === 1 ? 'vez' : 'veces'}
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : (
+              <p className="tarjeta text-sm text-texto-tenue">
+                Ninguno: en el último año, todo lo que has vivido lo tenías cubierto.
+              </p>
+            )}
+          </section>
+
+          {ponderados.teoricos.length > 0 ? (
+            <details className="space-y-4">
+              <summary className="subtitulo cursor-pointer">
+                Combinaciones que no has vivido ({ponderados.teoricos.length})
+              </summary>
+              <p className="mt-2 text-sm text-texto-tenue">
+                Nadie las cubre, pero en el último año no te has visto en ellas: no apremian.
+              </p>
+              {[...teoricosPorContexto.entries()].map(([contextoId, huecos]) => (
+                <div key={contextoId} className="mt-3 space-y-2">
+                  <h3 className="text-sm font-medium">
+                    {nombreContexto(contextoId)}{' '}
+                    <span className="text-texto-tenue">({huecos.length})</span>
+                  </h3>
+                  <ul className="flex flex-wrap gap-2">
+                    {huecos.map((hueco) => (
+                      <li key={`${hueco.momento}-${hueco.estacion}`}>
+                        <Link href={enlaceWishlist(hueco)} className="chip">
+                          {NOMBRE_ESTACION[hueco.estacion]} · {NOMBRE_MOMENTO[hueco.momento]}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </details>
+          ) : null}
+        </>
       )}
 
       {resultado.frageles.length > 0 ? (

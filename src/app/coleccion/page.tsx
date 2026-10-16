@@ -14,6 +14,9 @@ import { formatearFecha } from '@/componentes/BloquePromedios';
 import { tonoDeFamilia } from '@/componentes/tono-familia';
 import { Filtros } from './Filtros';
 import { uuidOVacio } from '@/dominio/navegacion';
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = { title: 'Colección' };
 
 export const dynamic = 'force-dynamic';
 
@@ -52,6 +55,27 @@ export default async function PaginaColeccion({
     listarContextos(userId),
     notasDeLaColeccion(userId),
   ]);
+  // Si no sale nada, ¿lo habria con los archivados? Es la causa mas comun de
+  // «no lo encuentro» y la pantalla no lo decia.
+  const archivadosQueCoinciden =
+    perfumes.length === 0 && !filtros.incluirArchivados
+      ? (await listarColeccion(userId, { ...filtros, incluirArchivados: true })).length
+      : 0;
+  const hayFiltros = Boolean(
+    filtros.estado ||
+      filtros.marca ||
+      filtros.familiaId ||
+      filtros.notaId ||
+      filtros.contextoId ||
+      filtros.estacion ||
+      filtros.momento ||
+      filtros.valoracionMinima,
+  );
+  const conArchivados = new URLSearchParams(
+    Object.entries({ ...p, archivados: '1' }).filter(
+      (par): par is [string, string] => typeof par[1] === 'string',
+    ),
+  ).toString();
   const notaActiva = filtros.notaId ? notas.find((n) => n.id === filtros.notaId) : undefined;
   const familiaActiva = filtros.familiaId
     ? familias.find((f) => f.id === filtros.familiaId)
@@ -127,21 +151,44 @@ export default async function PaginaColeccion({
       </ul>
 
       {perfumes.length === 0 ? (
-        filtros.texto ? (
-          <div className="tarjeta space-y-3 text-sm">
-            <p>No tienes nada que se llame «{filtros.texto}».</p>
-            <Link
-              href={`/coleccion/nuevo?nombre=${encodeURIComponent(filtros.texto)}`}
-              className="boton-secundario px-4 text-sm"
-            >
-              Añadirlo
-            </Link>
-          </div>
-        ) : (
-          <p className="tarjeta text-sm text-texto-tenue">
-            Nada con estos filtros. Prueba a quitar alguno.
+        <div className="tarjeta space-y-3 text-sm">
+          <p>
+            {filtros.texto && !hayFiltros
+              ? `No tienes nada que se llame «${filtros.texto}».`
+              : hayFiltros
+                ? 'Ningún perfume cumple todos estos filtros a la vez.'
+                : 'Todavía no hay perfumes en la colección.'}
+            {archivadosQueCoinciden > 0
+              ? ` ${archivadosQueCoinciden === 1 ? 'Hay 1 archivado que coincide' : `Hay ${archivadosQueCoinciden} archivados que coinciden`}.`
+              : ''}
           </p>
-        )
+          <div className="flex flex-wrap gap-2">
+            {archivadosQueCoinciden > 0 ? (
+              <Link href={`/coleccion?${conArchivados}`} className="boton-secundario px-4 text-sm">
+                Ver archivados
+              </Link>
+            ) : null}
+            {hayFiltros ? (
+              <Link
+                href={filtros.texto ? `/coleccion?q=${encodeURIComponent(filtros.texto)}` : '/coleccion'}
+                className="boton-secundario px-4 text-sm"
+              >
+                Quitar filtros
+              </Link>
+            ) : (
+              <Link
+                href={
+                  filtros.texto
+                    ? `/coleccion/nuevo?nombre=${encodeURIComponent(filtros.texto)}`
+                    : '/coleccion/nuevo'
+                }
+                className="boton-secundario px-4 text-sm"
+              >
+                {filtros.texto ? 'Añadirlo' : 'Añadir un perfume'}
+              </Link>
+            )}
+          </div>
+        </div>
       ) : null}
     </div>
   );
