@@ -642,6 +642,22 @@ export function datosDeUrlFragrantica(url: string): { marca: string; nombre: str
   return marca && nombre ? { marca, nombre } : null;
 }
 
+/**
+ * La primera URL de ficha que haya en unos textos: lo compartido desde el
+ * movil, o lo pegado en el alta, que a veces trae el titulo delante.
+ */
+export function urlDeFichaEn(textos: (string | undefined)[]): string | null {
+  for (const texto of textos) {
+    if (!texto) continue;
+    for (const candidata of texto.match(/https?:\/\/\S+/g) ?? [texto.trim()]) {
+      // Chrome a veces arrastra un parentesis o una coma al final del enlace.
+      const limpia = candidata.replace(/[).,;]+$/, '');
+      if (esUrlDeFichaValida(limpia)) return limpia;
+    }
+  }
+  return null;
+}
+
 function aTexto(segmento: string | undefined): string {
   return decodeURIComponent(segmento ?? '')
     .replace(/-/g, ' ')

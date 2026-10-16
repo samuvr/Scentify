@@ -8,18 +8,23 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { usuarioActual } from '@/servicios/auth';
-import { consultarFicha, leerTextoPegado } from '@/servicios/fragrantica';
+import { consultarFicha, leerTextoPegado, type MotivoFallo } from '@/servicios/fragrantica';
+
+// Leer la ficha a traves de ZenRows abre un navegador y tarda; ver el servicio.
+export const maxDuration = 60;
 
 const esquema = z.union([
   z.object({ url: z.string().min(1) }),
   z.object({ texto: z.string().min(1).max(500_000) }),
 ]);
 
-const MENSAJE: Record<string, string> = {
+const MENSAJE: Record<MotivoFallo, string> = {
   'url-no-valida': 'Esa URL no parece una ficha de Fragrantica.',
   bloqueado: 'Fragrantica ha bloqueado la petición. Pega el texto del bloque a mano.',
   'sin-respuesta': 'No ha respondido. Pega el texto del bloque a mano.',
   'sin-datos': 'No se ha podido leer el bloque. Rellena las casillas a mano.',
+  'lector-rechazado':
+    'ZenRows ha rechazado la petición: revisa la clave o si quedan créditos este mes. Mientras, pega el texto a mano.',
 };
 
 export async function POST(peticion: Request) {

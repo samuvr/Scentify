@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { FormularioPerfume } from '@/componentes/FormularioPerfume';
 import { VALORES_VACIOS } from '@/componentes/valores-perfume';
 import { desempaquetarFicha } from '@/dominio/ficha-compartida';
+import { datosDeUrlFragrantica } from '@/dominio/fragrantica';
 import { esUuid } from '@/dominio/navegacion';
 import { usuarioActual } from '@/servicios/auth';
 import { claudeDisponible } from '@/servicios/claude';
@@ -48,6 +49,8 @@ export default async function PaginaNuevoPerfume({
   const [miFrasco, fichaCatalogo] = fichaDeLaUrl
     ? await Promise.all([miFrascoDeFicha(userId, fichaDeLaUrl), fichaParaAlta(fichaDeLaUrl)])
     : [null, null];
+  // El enlace pegado en el alta llega solo: el nombre y la marca, de el.
+  const desdeUrl = previos.url ? datosDeUrlFragrantica(previos.url) : null;
 
   return (
     <div className="space-y-5">
@@ -67,11 +70,14 @@ export default async function PaginaNuevoPerfume({
         </p>
       ) : null}
       <FormularioPerfume
+        // Pegar un enlace en el alta vuelve aqui con la URL: el formulario se
+        // monta de nuevo, con lo que trae, y lee la ficha al abrirse.
+        key={previos.url ?? ''}
         // Prerrellenado al convertir un deseo de la wishlist (4.5).
         iniciales={{
           ...VALORES_VACIOS,
-          nombre: previos.nombre ?? '',
-          marca: previos.marca ?? '',
+          nombre: previos.nombre || desdeUrl?.nombre || '',
+          marca: previos.marca || desdeUrl?.marca || '',
           fragranticaUrl: previos.url ?? '',
         }}
         contextos={contextos.map((c) => ({ id: c.id, nombre: c.nombre }))}
