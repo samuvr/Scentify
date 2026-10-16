@@ -1,6 +1,7 @@
 /** Autenticacion simple. Las cuentas nuevas se crean en /registro. */
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import { INICIO } from '@/dominio/navegacion';
 import { registroAbierto, usuarioActual } from '@/servicios/auth';
 import { FormularioLogin } from './FormularioLogin';
 
@@ -11,7 +12,7 @@ export default async function PaginaLogin({
 }: {
   searchParams: Promise<{ siguiente?: string }>;
 }) {
-  if (await usuarioActual()) redirect('/');
+  if (await usuarioActual()) redirect(INICIO);
   const { siguiente } = await searchParams;
   return (
     <div className="space-y-6 pt-10">

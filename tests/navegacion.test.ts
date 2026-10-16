@@ -4,7 +4,7 @@
  * redirector abierto si se dejan pasar.
  */
 import { describe, expect, it } from 'vitest';
-import { destinoSeguro, esFechaIso, esUuid, fechaOVacia, uuidOVacio } from '@/dominio/navegacion';
+import { destinoSeguro, esFechaIso, INICIO, esUuid, fechaOVacia, uuidOVacio } from '@/dominio/navegacion';
 
 describe('destinos de vuelta tras el login', () => {
   it.each([
@@ -29,13 +29,13 @@ describe('destinos de vuelta tras el login', () => {
     ['   ', 'solo espacios'],
     ['', 'vacio'],
   ])('manda al inicio %s (%s)', (entrada) => {
-    expect(destinoSeguro(entrada)).toBe('/');
+    expect(destinoSeguro(entrada)).toBe(INICIO);
   });
 
   it.each([[null], [undefined], [42], [{}], [['/coleccion']]])(
     'manda al inicio lo que no es texto: %s',
     (entrada) => {
-      expect(destinoSeguro(entrada)).toBe('/');
+      expect(destinoSeguro(entrada)).toBe(INICIO);
     },
   );
 });
