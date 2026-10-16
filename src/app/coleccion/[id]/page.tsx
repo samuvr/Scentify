@@ -7,6 +7,7 @@ import { BloquePromedios, DURACION_LEGIBLE, formatearFecha } from '@/componentes
 import { DesgloseIdoneidad, InsigniaIdoneidad } from '@/componentes/Idoneidad';
 import { accionArchivar, accionCambiarEstado } from '@/app/acciones';
 import { CompletarUso } from '@/componentes/CompletarUso';
+import { ParecidosFragrantica } from '@/componentes/ParecidosFragrantica';
 import { PropuestasMarcas } from '@/componentes/PropuestasMarcas';
 import { VolverAColeccion } from '@/componentes/VolverAColeccion';
 import { propuestasDeLaColeccion } from '@/servicios/recategorizacion';
@@ -14,6 +15,7 @@ import { hoyIso } from '@/servicios/usos';
 import { zonaDelUsuario } from '@/servicios/zona';
 import type { Estacion } from '@/dominio/tipos';
 import { esUuid } from '@/dominio/navegacion';
+import { fechaEnZona } from '@/dominio/zona';
 import type { Metadata } from 'next';
 
 export async function generateMetadata({
@@ -52,7 +54,8 @@ export default async function PaginaFicha({
   const { id } = await params;
   if (!esUuid(id)) notFound();
   const { historial: verHistorial, guardado } = await searchParams;
-  const hoy = hoyIso(await zonaDelUsuario());
+  const zona = await zonaDelUsuario();
+  const hoy = hoyIso(zona);
   const [ficha, contextos, propuestas] = await Promise.all([
     fichaDePerfume(userId, id),
     listarContextos(userId),
@@ -60,7 +63,7 @@ export default async function PaginaFicha({
   ]);
   if (!ficha) notFound();
 
-  const { perfume, notas, familias, promedios, historial } = ficha;
+  const { perfume, notas, familias, parecidos, promedios, historial } = ficha;
   const todoElHistorial = verHistorial === 'todo';
   const usosVisibles = todoElHistorial ? historial : historial.slice(0, USOS_A_LA_VISTA);
   const disponible = perfume.estado === 'LO_TENGO' && !perfume.archivado;
@@ -151,6 +154,16 @@ export default async function PaginaFicha({
         })}
         {notas.length === 0 ? <p className="text-sm text-texto-tenue">Sin notas.</p> : null}
       </section>
+
+      {parecidos ? (
+        <section className="space-y-2">
+          <h2 className="subtitulo">Esta fragancia me recuerda a</h2>
+          <ParecidosFragrantica
+            perfumes={parecidos.perfumes}
+            leidosEl={fechaEnZona(zona, new Date(parecidos.leidosEn))}
+          />
+        </section>
+      ) : null}
 
       {propuestas.length > 0 ? (
         <section className="space-y-2">

@@ -197,6 +197,8 @@ Los porcentajes y recuentos se muestran **solo en la pantalla de categorización
 
 Se conserva `fragrantica_url` para poder reconsultar bajo demanda desde la ficha.
 
+**Excepción: «Esta fragancia me recuerda a».** Los tres primeros perfumes de ese bloque, con sus votos a favor y en contra, sí se guardan en la ficha (con la fecha de lectura) para mostrarlos en ella junto al porcentaje de votos a favor. No sirven para categorizar y ninguna lógica depende de ellos.
+
 Al probar el parser, hazlo con al menos una ficha muy votada y otra de nicho con pocos votos: el bloque se renderiza distinto cuando hay pocos datos.
 
 ---

@@ -8,6 +8,7 @@
 import 'server-only';
 import { and, asc, desc, eq, gte, ilike, inArray, lte, ne, or, sql } from 'drizzle-orm';
 import { crearDb, schema } from '@/db';
+import { parecidosValidos } from '@/dominio/parecidos';
 import type { PerfumeCandidato } from '@/dominio/recomendacion';
 import type {
   DuracionPercibida,
@@ -634,6 +635,8 @@ export async function fichaDePerfume(userId: string, perfumeId: string) {
     compartidaCon: compartida?.personas ?? 0,
     notas,
     familias,
+    /** «Esta fragancia me recuerda a», tal y como se leyo la ultima vez. */
+    parecidos: parecidosValidos(fila.ficha.parecidos),
     contextos: marcas.contextos.get(perfumeId) ?? [],
     estaciones: marcas.estaciones.get(perfumeId) ?? [],
     momentos: marcas.momentos.get(perfumeId) ?? [],

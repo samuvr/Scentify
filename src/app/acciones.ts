@@ -8,6 +8,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { destinoSeguro, esUuid } from '@/dominio/navegacion';
+import { esquemaParecido, MAXIMO_PARECIDOS } from '@/dominio/parecidos';
 import { cerrarSesion, exigirUsuario, iniciarSesion, registrarUsuario } from '@/servicios/auth';
 import {
   actualizarPerfume,
@@ -353,6 +354,21 @@ const esquemaPerfume = z.object({
   valoracion: z.coerce.number().int().min(1).max(5).nullable().optional(),
   notasPersonales: z.string().max(4000).nullable().optional(),
   fragranticaUrl: z.string().url().max(500).nullable().optional(),
+  /**
+   * «Esta fragancia me recuerda a», si se ha leido la ficha en este alta o
+   * edicion. La fecha de lectura la pone el servidor. Si no tiene la forma
+   * esperada se descarta y se guarda lo demas: Fragrantica no bloquea nunca
+   * un alta (5.2).
+   */
+  parecidos: z
+    .unknown()
+    .optional()
+    .transform((crudo) => {
+      const analisis = z.array(esquemaParecido).max(MAXIMO_PARECIDOS).safeParse(crudo);
+      return analisis.success && analisis.data.length > 0
+        ? { leidosEn: new Date().toISOString(), perfumes: analisis.data }
+        : undefined;
+    }),
   notas: z.array(
     z.object({
       nombre: z.string().min(1).max(80),

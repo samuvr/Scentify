@@ -16,6 +16,7 @@
 import 'server-only';
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { crearDb, schema } from '@/db';
+import type { ParecidosLeidos } from '@/dominio/parecidos';
 import { claveBusqueda, normalizar } from '@/dominio/texto';
 import type { Estacion, Momento } from '@/dominio/tipos';
 
@@ -44,6 +45,12 @@ export interface DatosPerfume {
   valoracion?: number | null;
   notasPersonales?: string | null;
   fragranticaUrl?: string | null;
+  /**
+   * «Esta fragancia me recuerda a», ya validado. Sin el, lo guardado se queda
+   * como estaba: una lectura que no lo trae (la del servidor casi nunca lo
+   * trae) no borra el de una lectura anterior.
+   */
+  parecidos?: ParecidosLeidos | null;
   notas: NotaDeEntrada[];
   familiaIds: string[];
   contextoIds: string[];
@@ -56,7 +63,14 @@ export interface DatosPerfume {
 /** Lo que describe el perfume, comun a todas las cuentas. */
 export type DatosFicha = Pick<
   DatosPerfume,
-  'nombre' | 'marca' | 'concentracion' | 'anioLanzamiento' | 'fragranticaUrl' | 'notas' | 'familiaIds'
+  | 'nombre'
+  | 'marca'
+  | 'concentracion'
+  | 'anioLanzamiento'
+  | 'fragranticaUrl'
+  | 'parecidos'
+  | 'notas'
+  | 'familiaIds'
 >;
 
 export class ErrorValidacion extends Error {}
@@ -138,6 +152,8 @@ function camposFicha(datos: DatosFicha) {
     concentracion: datos.concentracion ?? null,
     anioLanzamiento: datos.anioLanzamiento ?? null,
     fragranticaUrl: datos.fragranticaUrl ?? null,
+    // undefined y no null: drizzle no incluye la columna y lo que hubiera sigue.
+    parecidos: datos.parecidos ?? undefined,
   };
 }
 
@@ -202,7 +218,7 @@ async function sincronizarFicha(fichaId: string, datos: DatosFicha): Promise<voi
  */
 async function completarFicha(fichaId: string, datos: DatosFicha): Promise<void> {
   const db = crearDb();
-  const { anioLanzamiento, fragranticaUrl } = camposFicha(datos);
+  const { anioLanzamiento, fragranticaUrl, parecidos } = camposFicha(datos);
   await db
     .update(schema.ficha)
     .set({
@@ -210,6 +226,12 @@ async function completarFicha(fichaId: string, datos: DatosFicha): Promise<void>
       fragranticaUrl: sql`coalesce(${schema.ficha.fragranticaUrl}, ${fragranticaUrl})`,
     })
     .where(eq(schema.ficha.id, fichaId));
+  if (parecidos) {
+    await db
+      .update(schema.ficha)
+      .set({ parecidos })
+      .where(and(eq(schema.ficha.id, fichaId), isNull(schema.ficha.parecidos)));
+  }
 
   const [tiene] = await db
     .select({
