@@ -260,6 +260,10 @@ Para que tus amigos puedan crearse cuenta hace falta además
 `SCENTIFY_CODIGO_INVITACION` (ver «Cuentas para amigos»). Sin ella el registro está
 cerrado y la app sigue siendo solo tuya.
 
+Para dar de alta un perfume pegando solo el enlace de Fragrantica hace falta
+`ZENROWS_API_KEY` (ver «Leer la ficha con solo el enlace»). Sin ella la app funciona
+igual, pero la lectura por enlace casi siempre choca con Cloudflare.
+
 Para el recordatorio diario hacen falta además `VAPID_PUBLIC_KEY`,
 `VAPID_PRIVATE_KEY`, `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_SUBJECT` y `CRON_SECRET`
 (ver «El recordatorio diario»). Sin ellas el resto de la app funciona igual.
@@ -486,9 +490,43 @@ pantallas 4 (acordes), 9 (votos) y 20 (pirámide). Harían falta tres capturas a
 a mano y luego leer por OCR recuentos como `1.8k`, donde confundirlo con `18k` cambia
 el porcentaje por completo. Más trabajo que copiar el texto, y menos fiable.
 
-**Expectativa realista:** Cloudflare bloquea las IP de centro de datos, así que la
-petición automática desde Vercel fallará a menudo. Los dos fallbacks de la 5.2 están
-implementados y probados, y el de pegar el texto es el que más se va a usar.
+### Leer la ficha con solo el enlace
+
+Fragrantica está detrás de Cloudflare Turnstile, que corta las IP de centro de datos:
+la petición directa desde Vercel casi nunca pasa. Con `ZENROWS_API_KEY` la ficha se
+pide a través de [ZenRows](https://www.zenrows.com), que la abre en un navegador con
+IP residencial y devuelve el HTML ya pintado. Es el mismo HTML que el de los
+fixtures, así que lo lee el parser de siempre, sin un camino aparte.
+
+1. Cuenta gratis en [zenrows.com](https://www.zenrows.com), sin tarjeta.
+2. Copia la clave de la API del panel y ponla en Vercel como `ZENROWS_API_KEY`.
+3. Vuelve a desplegar.
+
+Desde entonces, en «Añadir perfume» basta con pegar el enlace en el primer paso:
+se reconoce al pegarlo, el nombre y la marca salen de la dirección, y la ficha se
+lee sola (la pirámide, los acordes, que marcan las familias, el año y los votos de
+estación y momento) hasta la pantalla de revisión. Si alguien ya dio de alta esa
+misma ficha, se usa la del catálogo y no se gasta ninguna lectura. Compartir la
+página desde el móvil (Android) entra por el mismo camino.
+
+- **Coste.** Cada ficha son 25 créditos (navegador 5 × proxy residencial), y el plan
+  gratuito trae 5.000 al mes: unas 200 fichas. ZenRows no cobra las que fallan.
+- **Se piden los dos parámetros.** Sin el proxy residencial, Turnstile corta igual.
+  El navegador es por prudencia: los fixtures salen del DOM ya pintado (los estilos
+  vienen serializados por el navegador, con los marcadores `<!---->` de Vue), y no
+  está comprobado que el HTML que sirve el servidor traiga ya los votos y los acordes.
+- **Tarda.** Abrir la página en un navegador lleva sus buenos segundos, así que la
+  petición a ZenRows espera hasta 45, la ruta tiene `maxDuration = 60` y la pantalla
+  avisa de que puede tardar.
+- **Si ZenRows falla** (sin créditos, la clave mal o caído), se prueba la petición
+  directa, que no cuesta nada. Si tampoco pasa, el aviso dice si el problema es de
+  la clave y quedan los dos fallbacks de la 5.2: pegar el texto o el botón del
+  navegador.
+- **A ZenRows solo le llegan fichas de Fragrantica**: la URL se valida antes con
+  `esUrlDeFichaValida()`, igual que la petición directa.
+
+Sin la clave todo sigue como antes: se intenta la petición directa, que fallará a
+menudo, y quedan los dos fallbacks de la 5.2, implementados y probados.
 
 ### Sobre el modo viaje
 

@@ -15,11 +15,7 @@
  */
 import 'server-only';
 import { empaquetarFicha } from '@/dominio/ficha-compartida';
-import {
-  datosDeUrlFragrantica,
-  esUrlDeFichaValida,
-  leerFichaFragrantica,
-} from '@/dominio/fragrantica';
+import { datosDeUrlFragrantica, leerFichaFragrantica, urlDeFichaEn } from '@/dominio/fragrantica';
 
 /** Por debajo de esto no es una pagina compartida, es un enlace suelto. */
 const MINIMO_TEXTO_DE_PAGINA = 200;
@@ -35,22 +31,6 @@ export interface Compartido {
   title?: string;
   text?: string;
   url?: string;
-}
-
-/**
- * Chrome no reparte los campos igual segun desde donde se comparta: la URL
- * puede venir en `url`, dentro de `text`, o pegada al titulo. Se miran todos.
- */
-export function urlCompartida(campos: (string | undefined)[]): string | null {
-  for (const campo of campos) {
-    if (!campo) continue;
-    for (const candidata of campo.match(/https?:\/\/\S+/g) ?? [campo.trim()]) {
-      // Chrome a veces arrastra un parentesis o una coma al final del enlace.
-      const limpia = candidata.replace(/[).,;]+$/, '');
-      if (esUrlDeFichaValida(limpia)) return limpia;
-    }
-  }
-  return null;
 }
 
 /** La ficha parseada y empaquetada, si lo compartido era el texto de la pagina. */
@@ -77,7 +57,9 @@ function fichaDelTexto(texto: string | undefined): string | null {
 export function destinoDeCompartido({ title, text, url }: Compartido): string {
   const parametros = new URLSearchParams();
 
-  const direccion = urlCompartida([url, text, title]);
+  // Chrome no reparte los campos igual segun desde donde se comparta: la URL
+  // puede venir en `url`, dentro de `text`, o pegada al titulo.
+  const direccion = urlDeFichaEn([url, text, title]);
   if (direccion) {
     parametros.set('url', direccion);
     const datos = datosDeUrlFragrantica(direccion);
