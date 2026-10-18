@@ -41,7 +41,7 @@ import {
   type ResultadoActualizacion,
 } from '@/servicios/hoja-actualizacion';
 import type { AnalisisHoja } from '@/dominio/hoja-actualizacion';
-import { guardarAjuste, guardarUmbrales } from '@/servicios/ajustes';
+import { guardarAjuste, guardarContextosAtemporales, guardarUmbrales } from '@/servicios/ajustes';
 import { ajustarMarca, rechazarPropuesta } from '@/servicios/recategorizacion';
 import { validarUmbrales } from '@/dominio/estacion';
 import { HORA_MAXIMA_RECORDATORIO } from '@/servicios/recordatorio';
@@ -334,6 +334,23 @@ export async function accionGuardarConfiguracion(datos: FormData) {
       ? '/mas/configuracion?guardado=1'
       : `/mas/configuracion?error=${umbrales.error}`,
   );
+}
+
+/**
+ * Contextos atemporales: en ellos la hora y la estacion no cuentan. Va en un
+ * formulario aparte para que guardarlos no dependa de que los umbrales validen.
+ */
+export async function accionGuardarContextosAtemporales(datos: FormData) {
+  const userId = await exigirUsuario();
+  const ids = datos.getAll('atemporal').map(String).filter(esUuid);
+  await guardarContextosAtemporales(userId, ids);
+
+  revalidatePath('/');
+  revalidatePath('/mas/configuracion');
+  revalidatePath('/recomendacion');
+  revalidatePath('/mas/huecos');
+  revalidatePath('/mas/viaje');
+  redirect('/mas/configuracion?guardado=1');
 }
 
 /* --------------------------------------------------------------- perfumes */

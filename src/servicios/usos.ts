@@ -141,13 +141,14 @@ export async function previsualizarIdoneidad(
   userId: string,
   datos: Pick<DatosUso, 'perfumeId' | 'fecha' | 'momento' | 'contextoId' | 'estacionesForzadas'>,
 ): Promise<{ idoneidad: Idoneidad; estacion: ResultadoEstacionEfectiva }> {
-  await comprobarPropiedad(userId, datos.perfumeId, datos.contextoId);
+  const { contextoAtemporal } = await comprobarPropiedad(userId, datos.perfumeId, datos.contextoId);
   const estacion = await resolverEstacion(userId, datos);
   const marcas = await marcasParaIdoneidad(datos.perfumeId);
   const idoneidad = calcularIdoneidad(marcas, {
     momento: datos.momento,
     contextoId: datos.contextoId,
     estacionesCompatibles: estacion.estaciones,
+    contextoAtemporal,
   });
   return { idoneidad, estacion };
 }
@@ -155,13 +156,14 @@ export async function previsualizarIdoneidad(
 /**
  * El perfume y el contexto tienen que ser del usuario de la sesion. Las claves
  * ajenas solo exigen que existan, asi que sin esto se podria apuntar un uso al
- * perfume de otra cuenta y ver su nombre en el historial propio.
+ * perfume de otra cuenta y ver su nombre en el historial propio. De paso dice
+ * si el contexto es atemporal, que la idoneidad necesita.
  */
 async function comprobarPropiedad(
   userId: string,
   perfumeId: string,
   contextoId: string,
-): Promise<void> {
+): Promise<{ contextoAtemporal: boolean }> {
   const db = crearDb();
   const [perfume, contexto] = await Promise.all([
     db
@@ -170,13 +172,15 @@ async function comprobarPropiedad(
       .where(and(eq(schema.perfume.userId, userId), eq(schema.perfume.id, perfumeId)))
       .limit(1),
     db
-      .select({ id: schema.contexto.id })
+      .select({ id: schema.contexto.id, atemporal: schema.contexto.atemporal })
       .from(schema.contexto)
       .where(and(eq(schema.contexto.userId, userId), eq(schema.contexto.id, contextoId)))
       .limit(1),
   ]);
   if (perfume.length === 0) throw new ErrorValidacion('Perfume no encontrado.');
-  if (contexto.length === 0) throw new ErrorValidacion('Contexto no encontrado.');
+  const [fila] = contexto;
+  if (!fila) throw new ErrorValidacion('Contexto no encontrado.');
+  return { contextoAtemporal: fila.atemporal };
 }
 
 async function resolverEstacion(

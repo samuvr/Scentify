@@ -137,6 +137,12 @@ export const contexto = pgTable(
     nombre: text('nombre').notNull(),
     orden: smallint('orden').notNull().default(0),
     archivado: boolean('archivado').notNull().default(false),
+    /**
+     * Las condiciones no cambian con la hora ni con la estacion (el gimnasio):
+     * ahi la idoneidad, la recomendacion, los huecos y el viaje solo miran si
+     * el perfume esta marcado para el contexto.
+     */
+    atemporal: boolean('atemporal').notNull().default(false),
     creadoEn: timestamp('creado_en', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [unique('uq_contexto_usuario_slug').on(t.userId, t.slug)],

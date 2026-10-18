@@ -2,7 +2,8 @@
  * Seccion 7.2 — "Recomiendame un perfume".
  *
  * Pregunta solo momento y contexto; la estacion la deduce la 7.1 del tiempo
- * real, la enseña con su explicacion y deja sobrescribirla.
+ * real, la enseña con su explicacion y deja sobrescribirla. En un contexto
+ * atemporal (el gimnasio) el momento y la estacion no cuentan y no se enseñan.
  *
  * Con `dia=manana` se planifica el dia siguiente: la estacion sale de la
  * prevision de mañana y lo que se elige se apunta con la fecha de mañana. El
@@ -102,6 +103,7 @@ export default async function PaginaRecomendacion({
         momento,
         contextoId: contextoElegido.id,
         estacionesCompatibles,
+        contextoAtemporal: contextoElegido.atemporal,
         hoy: fecha,
         paraManana,
         descartados,
@@ -125,6 +127,7 @@ export default async function PaginaRecomendacion({
           momento,
           contextoId: contextoElegido.id,
           estacionesCompatibles,
+          contextoAtemporal: contextoElegido.atemporal,
           descartados,
         })
       : null;
@@ -139,13 +142,21 @@ export default async function PaginaRecomendacion({
       <header className="space-y-1">
         <h1 className="titulo">{paraManana ? 'Recomiéndame para mañana' : 'Recomiéndame'}</h1>
         <p className="text-sm text-texto-tenue">
-          {forzadas ? 'Estación elegida a mano.' : estacionCalculada.explicacion}
-          {estacionCalculada.origen === 'CALENDARIO' && !forzadas ? ' Sin conexión con Open-Meteo.' : ''}
+          {contextoElegido?.atemporal ? (
+            `En ${contextoElegido.nombre} da igual la hora y la estación: solo cuenta que lo tengas marcado para ${contextoElegido.nombre}.`
+          ) : (
+            <>
+              {forzadas ? 'Estación elegida a mano.' : estacionCalculada.explicacion}
+              {estacionCalculada.origen === 'CALENDARIO' && !forzadas
+                ? ' Sin conexión con Open-Meteo.'
+                : ''}
+            </>
+          )}
         </p>
       </header>
 
       <SelectorPeticion
-        contextos={contextos.map((c) => ({ id: c.id, nombre: c.nombre }))}
+        contextos={contextos.map((c) => ({ id: c.id, nombre: c.nombre, atemporal: c.atemporal }))}
         paraManana={paraManana}
         momento={momento}
         contextoId={contextoElegido?.id ?? ''}
@@ -223,6 +234,22 @@ function EstadoVacio({
         Has pasado con «Otro» los {causa.descartados} perfumes que tienes. Los descartes valen solo
         para este día: mañana vuelven a salir todos.
       </p>
+    );
+  }
+
+  if (causa.atemporal) {
+    return (
+      <div className="tarjeta space-y-3 text-sm">
+        <p>
+          Ninguno de tus {causa.disponibles} perfumes está marcado para {nombreContexto}. Aquí da
+          igual la hora y la estación: basta con marcarlo para {nombreContexto} en su ficha.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/mas/huecos" className="boton-secundario px-4 text-sm">
+            Ver huecos
+          </Link>
+        </div>
+      </div>
     );
   }
 

@@ -55,14 +55,15 @@ cuando('ajustar un registro sin perderlo', () => {
       perfumeId,
       fecha: '2027-03-01',
       momento: 'NOCHE',
-      contextoId: contextos[1]!,
+      // El segundo es el gimnasio, atemporal: alli la noche no contaria.
+      contextoId: contextos[2]!,
       sprays: 4,
       estacionesForzadas: ['OTONO'],
     });
 
     expect(await leer(viejo.id)).toBeUndefined();
     const fila = await leer(nuevo.id);
-    expect(fila).toMatchObject({ momento: 'NOCHE', contextoId: contextos[1], sprays: 4 });
+    expect(fila).toMatchObject({ momento: 'NOCHE', contextoId: contextos[2], sprays: 4 });
     // Noche y otro contexto no estan marcados: el snapshot es el del nuevo.
     expect(fila?.idoneidadPct).toBe(33);
   });

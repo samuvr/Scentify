@@ -1,7 +1,9 @@
 /**
  * Seccion 7.2 — Motor de recomendacion.
  *
- * Pregunta solo momento y contexto; la estacion viene calculada de la 7.1.
+ * Pregunta solo momento y contexto; la estacion viene calculada de la 7.1. En
+ * un contexto atemporal (el gimnasio) ni el momento ni la estacion cuentan:
+ * entra todo lo marcado para el contexto.
  *
  * Filtros duros: estado = LO_TENGO y no archivado. Un perfume marcado LO_TUVE
  * desaparece de aqui pero no se toca ni un dato de las estadisticas (criterio 9).
@@ -18,7 +20,7 @@ import type {
   DuracionPercibida,
   Estacion,
   EstadoPerfume,
-  EjesIdoneidad,
+  EjeIdoneidad,
   Momento,
   PromediosPerfume,
 } from './tipos';
@@ -44,6 +46,8 @@ export interface PeticionRecomendacion {
   contextoId: string;
   /** Conjunto compatible que devuelve la seccion 7.1. */
   estacionesCompatibles: Estacion[];
+  /** El contexto elegido no depende de la hora ni de la estacion (el gimnasio). */
+  contextoAtemporal?: boolean;
   /** El dia para el que se recomienda: hoy, o mañana si se planifica. */
   hoy: Date | string;
   /** true cuando `hoy` es mañana: cambia como se cuentan los dias en el motivo. */
@@ -69,7 +73,7 @@ export interface Recomendacion {
   parcial: boolean;
   diasSinUsar: number | null;
   /** Que ejes fallan, para marcarlo visualmente. */
-  ejesQueFallan: (keyof EjesIdoneidad)[];
+  ejesQueFallan: EjeIdoneidad[];
   /** La frase completa: por que este, y que esperar de el. */
   explicacion: string;
   /**
@@ -140,11 +144,17 @@ function motivoDeRecomendacion(
 
   if (idoneidad.pct === 100) {
     const estacion = perfume.estaciones.find((e) => peticion.estacionesCompatibles.includes(e));
-    const encaje = [
-      peticion.nombreContexto,
-      MOMENTO_LEGIBLE[peticion.momento],
-      estacion ? ESTACION_LEGIBLE[estacion] : undefined,
-    ].filter((x): x is string => Boolean(x));
+    // En un contexto atemporal, «encaja con Gimnasio, noche y verano» diria
+    // que la noche y el verano importan, y alli no importan.
+    const encaje = (
+      peticion.contextoAtemporal
+        ? [peticion.nombreContexto]
+        : [
+            peticion.nombreContexto,
+            MOMENTO_LEGIBLE[peticion.momento],
+            estacion ? ESTACION_LEGIBLE[estacion] : undefined,
+          ]
+    ).filter((x): x is string => Boolean(x));
     const [ultima, ...primeras] = [...encaje].reverse();
     const listado = primeras.length ? `${primeras.reverse().join(', ')} y ${ultima}` : ultima;
     if (listado) partes.push(`encaja con ${listado}`);
@@ -210,6 +220,7 @@ export function recomendar(peticion: PeticionRecomendacion): ResultadoRecomendac
       momento: peticion.momento,
       contextoId: peticion.contextoId,
       estacionesCompatibles: peticion.estacionesCompatibles,
+      contextoAtemporal: peticion.contextoAtemporal,
     });
     const diasSinUsar = perfume.ultimoUso ? diasEntre(perfume.ultimoUso, peticion.hoy) : null;
     const ejesQueFallan = (['momento', 'contexto', 'estacion'] as const).filter(
@@ -251,12 +262,19 @@ export type SinRecomendacion =
       /** Disponibles marcados para cada eje por separado. */
       marcados: { contexto: number; momento: number; estacion: number };
       disponibles: number;
+      /** Solo cuenta el contexto: el momento y la estacion no se miran. */
+      atemporal: boolean;
     };
 
 export function porQueNoHayRecomendacion(
   peticion: Pick<
     PeticionRecomendacion,
-    'coleccion' | 'momento' | 'contextoId' | 'estacionesCompatibles' | 'descartados'
+    | 'coleccion'
+    | 'momento'
+    | 'contextoId'
+    | 'estacionesCompatibles'
+    | 'contextoAtemporal'
+    | 'descartados'
   >,
 ): SinRecomendacion {
   const enColeccion = peticion.coleccion.filter((p) => p.estado === 'LO_TENGO' && !p.archivado);
@@ -268,13 +286,14 @@ export function porQueNoHayRecomendacion(
     return { causa: 'TODOS_DESCARTADOS', descartados: enColeccion.length };
   }
 
-  const cuantos = (eje: keyof EjesIdoneidad) =>
+  const cuantos = (eje: EjeIdoneidad) =>
     disponibles.filter(
       (p) =>
         calcularIdoneidad(p, {
           momento: peticion.momento,
           contextoId: peticion.contextoId,
           estacionesCompatibles: peticion.estacionesCompatibles,
+          contextoAtemporal: peticion.contextoAtemporal,
         }).detalle[eje],
     ).length;
 
@@ -282,5 +301,6 @@ export function porQueNoHayRecomendacion(
     causa: 'NINGUNO_ENCAJA',
     marcados: { contexto: cuantos('contexto'), momento: cuantos('momento'), estacion: cuantos('estacion') },
     disponibles: disponibles.length,
+    atemporal: Boolean(peticion.contextoAtemporal),
   };
 }

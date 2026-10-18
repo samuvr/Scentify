@@ -91,6 +91,7 @@ export default async function PaginaHoy({
         momento,
         contextoId: contextoAhora.id,
         estacionesCompatibles: estacion.estaciones,
+        contextoAtemporal: contextoAhora.atemporal,
         hoy,
         descartados: [...descartados, ...yaHoy],
         nombreContexto: contextoAhora.nombre,

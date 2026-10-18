@@ -417,6 +417,7 @@ describe('por qué no hay recomendación', () => {
       causa: 'NINGUNO_ENCAJA',
       marcados: { contexto: 0, momento: 0, estacion: 1 },
       disponibles: 2,
+      atemporal: false,
     });
     // Y es coherente con el motor: de verdad no recomienda nada.
     expect(
@@ -430,5 +431,46 @@ describe('por qué no hay recomendación', () => {
         ),
       ).recomendaciones,
     ).toHaveLength(0);
+  });
+});
+
+describe('contexto atemporal (gimnasio)', () => {
+  const GIMNASIO = 'ctx-gimnasio';
+  const enElGimnasio = (coleccion: PerfumeCandidato[], parcial: Partial<PeticionRecomendacion> = {}) =>
+    peticion(coleccion, {
+      contextoId: GIMNASIO,
+      contextoAtemporal: true,
+      nombreContexto: 'Gimnasio',
+      momento: 'NOCHE',
+      estacionesCompatibles: ['INVIERNO'],
+      ...parcial,
+    });
+
+  it('recomienda lo marcado para el gimnasio aunque sea de otra hora y otra estación', () => {
+    const resultado = recomendar(
+      enElGimnasio([
+        usadoHace('Deportivo', 10, { contextos: [GIMNASIO], momentos: ['DIA'], estaciones: ['VERANO'] }),
+        usadoHace('Khamrah', 40),
+      ]),
+    );
+    expect(nombres(resultado.recomendaciones)).toEqual(['Deportivo']);
+    const [r] = resultado.recomendaciones;
+    expect(r?.idoneidad.pct).toBe(100);
+    expect(r?.parcial).toBe(false);
+    expect(r?.ejesQueFallan).toEqual([]);
+  });
+
+  it('el motivo no habla de la hora ni de la estación', () => {
+    const [r] = recomendar(
+      enElGimnasio([usadoHace('Deportivo', 10, { contextos: [GIMNASIO] })]),
+    ).recomendaciones;
+    expect(r?.motivo).toBe('Llevas 10 días sin ponértelo · encaja con Gimnasio.');
+  });
+
+  it('no rellena con parciales: lo que no es de gimnasio no encaja', () => {
+    const resultado = recomendar(enElGimnasio([usadoHace('Khamrah', 40)]));
+    expect(resultado.recomendaciones).toEqual([]);
+    const causa = porQueNoHayRecomendacion(enElGimnasio([usadoHace('Khamrah', 40)]));
+    expect(causa).toMatchObject({ causa: 'NINGUNO_ENCAJA', atemporal: true, marcados: { contexto: 0 } });
   });
 });
