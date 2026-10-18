@@ -23,8 +23,8 @@ import 'server-only';
 import { empaquetarFicha } from '@/dominio/ficha-compartida';
 import {
   datosDeUrlFragrantica,
-  esUrlDeFichaValida,
   leerFichaFragrantica,
+  urlDeFichaEn,
   type FichaFragrantica,
 } from '@/dominio/fragrantica';
 import { parecidosValidos } from '@/dominio/parecidos';
@@ -45,22 +45,6 @@ export interface Compartido {
   title?: string;
   text?: string;
   url?: string;
-}
-
-/**
- * Chrome no reparte los campos igual segun desde donde se comparta: la URL
- * puede venir en `url`, dentro de `text`, o pegada al titulo. Se miran todos.
- */
-export function urlCompartida(campos: (string | undefined)[]): string | null {
-  for (const campo of campos) {
-    if (!campo) continue;
-    for (const candidata of campo.match(/https?:\/\/\S+/g) ?? [campo.trim()]) {
-      // Chrome a veces arrastra un parentesis o una coma al final del enlace.
-      const limpia = candidata.replace(/[).,;]+$/, '');
-      if (esUrlDeFichaValida(limpia)) return limpia;
-    }
-  }
-  return null;
 }
 
 /** La ficha leida, si lo compartido era el texto de la pagina. */
@@ -92,7 +76,9 @@ export async function destinoDeCompartido(
 ): Promise<string> {
   const parametros = new URLSearchParams();
 
-  const direccion = urlCompartida([url, text, title]);
+  // Chrome no reparte los campos igual segun desde donde se comparta: la URL
+  // puede venir en `url`, dentro de `text`, o pegada al titulo.
+  const direccion = urlDeFichaEn([url, text, title]);
   const ficha = fichaDelTexto(text);
 
   const mio = direccion ? await miFrascoDeFragrantica(userId, direccion) : null;

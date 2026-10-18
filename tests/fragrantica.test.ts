@@ -10,7 +10,12 @@
  */
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { datosDeUrlFragrantica, esUrlDeFichaValida, leerFichaFragrantica } from '@/dominio/fragrantica';
+import {
+  datosDeUrlFragrantica,
+  esUrlDeFichaValida,
+  leerFichaFragrantica,
+  urlDeFichaEn,
+} from '@/dominio/fragrantica';
 import { FICHA_EN_INGLES, PAGINA_SIN_DATOS, TEXTO_PEGADO } from './fixtures/fragrantica';
 
 const fixture = (nombre: string) =>
@@ -355,5 +360,27 @@ describe('marca y nombre salen de la URL de la ficha', () => {
     expect(
       datosDeUrlFragrantica('https://www.fragrantica.es/perfume/Armaf/Club-De-Nuit.html'),
     ).toBeNull();
+  });
+});
+
+describe('urlDeFichaEn: el enlace dentro de lo pegado o compartido', () => {
+  const ficha = 'https://www.fragrantica.es/perfume/Armaf/Club-De-Nuit-Urban-Elixir-77860.html';
+
+  it('acepta el enlace solo, con espacios alrededor', () => {
+    expect(urlDeFichaEn([`  ${ficha}\n`])).toBe(ficha);
+  });
+
+  it('lo encuentra detras del titulo y sin la puntuacion que arrastra Chrome', () => {
+    expect(urlDeFichaEn([`Club De Nuit Urban Elixir Armaf (${ficha}),`])).toBe(ficha);
+  });
+
+  it('mira los campos en orden y salta los vacios', () => {
+    expect(urlDeFichaEn([undefined, '', 'sin enlace', ficha])).toBe(ficha);
+  });
+
+  it('devuelve null si no hay ficha: otra pagina de Fragrantica no vale', () => {
+    expect(urlDeFichaEn(['https://www.fragrantica.es/news/algo.html'])).toBeNull();
+    expect(urlDeFichaEn(['http://www.fragrantica.es/perfume/Armaf/Club-77860.html'])).toBeNull();
+    expect(urlDeFichaEn(['Sauvage de Dior'])).toBeNull();
   });
 });

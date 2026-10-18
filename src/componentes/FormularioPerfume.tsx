@@ -17,12 +17,12 @@
  * todas las cuentas. Al escribir el nombre se busca en ese catalogo, y elegir
  * una ficha rellena todo eso de golpe: solo queda lo personal.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { accionGuardarPerfume, type RespuestaPerfume } from '@/app/acciones';
 import type { Estacion, Momento } from '@/dominio/tipos';
 import { familiasDeAcordes } from '@/dominio/familias';
-import type { FichaFragrantica, VotoEje } from '@/dominio/fragrantica';
+import { urlDeFichaEn, type FichaFragrantica, type VotoEje } from '@/dominio/fragrantica';
 import { masVotadas } from '@/dominio/votos';
 import type { FichaParaAlta } from '@/servicios/consultas';
 import { contextosQueEncajan, type SugerenciaContextos } from '@/dominio/sugerencia-contextos';
@@ -212,6 +212,9 @@ export function FormularioPerfume({
   const [avisoFragrantica, setAvisoFragrantica] = useState<string | null>(null);
   const [textoPegado, setTextoPegado] = useState('');
   const [consultando, setConsultando] = useState(false);
+  const [enlace, setEnlace] = useState('');
+  const [errorEnlace, setErrorEnlace] = useState<string | null>(null);
+  const [abriendoEnlace, abrirConTransicion] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
   /** El frasco que ya tengo de este perfume, si el servidor lo ha encontrado. */
@@ -309,6 +312,26 @@ export function FormularioPerfume({
     // Solo al montar: `compartida` se calcula de los valores iniciales.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /**
+   * El enlace pegado al empezar un alta. Se vuelve a la pagina con la URL,
+   * igual que al compartir desde el movil: el servidor mira si la ficha ya
+   * esta en el catalogo, saca el nombre y la marca de la direccion, y el
+   * formulario se abre leyendo la ficha.
+   */
+  function abrirEnlace(texto: string, avisar = true) {
+    const url = urlDeFichaEn([texto]);
+    if (!url) {
+      if (avisar) {
+        setErrorEnlace('Ese enlace no es de una ficha: tiene que ser de fragrantica.es/perfume/… o .com.');
+      }
+      return;
+    }
+    setErrorEnlace(null);
+    const parametros = new URLSearchParams({ url });
+    if (deseoId) parametros.set('deseo', deseoId);
+    abrirConTransicion(() => router.push(`/coleccion/nuevo?${parametros}`));
+  }
 
   /**
    * Mientras se escribe el nombre se mira si alguien lo ha dado de alta ya.
@@ -530,6 +553,45 @@ export function FormularioPerfume({
 
   const seccionNombre = () => (
       <section className="space-y-4">
+        {/* Si ya llego con la URL, el enlace esta puesto en el paso de Fragrantica. */}
+        {!perfumeId && !fichaId && !iniciales?.fragranticaUrl ? (
+          <div className="tarjeta space-y-3">
+            <div>
+              <label htmlFor="enlace">Enlace de Fragrantica</label>
+              <p className="mt-1 text-sm text-texto-tenue">
+                Pégalo y se rellena todo: nombre, marca, año, notas, familias y los votos de
+                estación y momento. Si no lo tienes, escribe el nombre y la marca debajo.
+              </p>
+            </div>
+            <input
+              id="enlace"
+              type="url"
+              inputMode="url"
+              placeholder="https://www.fragrantica.es/perfume/…"
+              value={enlace}
+              onChange={(e) => {
+                setEnlace(e.target.value);
+                setErrorEnlace(null);
+              }}
+              // Pegar un enlace de ficha basta; si lo pegado no lo es, se
+              // espera al boton para no regañar a medio escribir.
+              onPaste={(e) => abrirEnlace(e.clipboardData.getData('text'), false)}
+            />
+            {errorEnlace ? (
+              <p className="aviso-error" role="alert">
+                {errorEnlace}
+              </p>
+            ) : null}
+            <button
+              type="button"
+              disabled={abriendoEnlace || !enlace.trim()}
+              onClick={() => abrirEnlace(enlace)}
+              className="boton-primario w-full"
+            >
+              {abriendoEnlace ? 'Abriendo la ficha…' : 'Leer la ficha'}
+            </button>
+          </div>
+        ) : null}
         <div>
           <label htmlFor="nombre">Nombre</label>
           <input
@@ -612,6 +674,11 @@ export function FormularioPerfume({
         >
           {consultando ? 'Consultando…' : 'Consultar ficha'}
         </button>
+        {consultando ? (
+          <p className="text-sm text-texto-tenue" role="status">
+            Leyendo la ficha en Fragrantica. Puede tardar hasta medio minuto.
+          </p>
+        ) : null}
 
         {ficha ? (
           <p className="aviso-hecho">

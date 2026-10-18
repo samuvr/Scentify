@@ -800,6 +800,22 @@ export function datosDeUrlFragrantica(url: string): { marca: string; nombre: str
 }
 
 /**
+ * La primera URL de ficha que haya en unos textos: lo compartido desde el
+ * movil, o lo pegado en el alta, que a veces trae el titulo delante.
+ */
+export function urlDeFichaEn(textos: (string | undefined)[]): string | null {
+  for (const texto of textos) {
+    if (!texto) continue;
+    for (const candidata of texto.match(/https?:\/\/\S+/g) ?? [texto.trim()]) {
+      // Chrome a veces arrastra un parentesis o una coma al final del enlace.
+      const limpia = candidata.replace(/[).,;]+$/, '');
+      if (esUrlDeFichaValida(limpia)) return limpia;
+    }
+  }
+  return null;
+}
+
+/**
  * El numero de la ficha, el del final de la URL: `.../Fakhar-Black-70465.html`
  * -> '70465'. Es el mismo en fragrantica.es y en fragrantica.com, asi que sirve
  * para reconocer un perfume aunque se haya guardado con el otro dominio.
