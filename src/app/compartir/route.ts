@@ -50,7 +50,8 @@ async function manejar(peticion: Request): Promise<Response> {
 
   const a = (ruta: string) => NextResponse.redirect(new URL(ruta, origen), 303);
 
-  if (!(await usuarioActual())) {
+  const userId = await usuarioActual();
+  if (!userId) {
     // Sin sesion no se pierde lo compartido... salvo el texto largo, que no
     // cabe en una URL de vuelta. Se avisa en vez de fingir que sigue ahi.
     const pendiente = new URLSearchParams();
@@ -60,7 +61,7 @@ async function manejar(peticion: Request): Promise<Response> {
     return a(`/login?siguiente=${encodeURIComponent(destino)}`);
   }
 
-  return a(destinoDeCompartido({ title, text, url }));
+  return a(await destinoDeCompartido(userId, { title, text, url }));
 }
 
 export async function POST(peticion: Request) {

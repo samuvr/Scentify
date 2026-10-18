@@ -133,3 +133,23 @@ export async function guardarUmbrales(
     await guardarAjuste(userId, clave, umbrales[campo]);
   }
 }
+
+/**
+ * Marca como atemporales justo los contextos de `ids` y desmarca los demas del
+ * usuario. Son media docena de filas: se toca solo la que cambia.
+ */
+export async function guardarContextosAtemporales(userId: string, ids: string[]): Promise<void> {
+  const db = crearDb();
+  const elegidos = new Set(ids);
+  const contextos = await db
+    .select({ id: schema.contexto.id, atemporal: schema.contexto.atemporal })
+    .from(schema.contexto)
+    .where(eq(schema.contexto.userId, userId));
+  for (const { id, atemporal } of contextos) {
+    if (atemporal === elegidos.has(id)) continue;
+    await db
+      .update(schema.contexto)
+      .set({ atemporal: !atemporal })
+      .where(and(eq(schema.contexto.userId, userId), eq(schema.contexto.id, id)));
+  }
+}

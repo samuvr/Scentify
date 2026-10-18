@@ -197,3 +197,41 @@ describe('el snapshot es inmune a cambios posteriores (criterio 10)', () => {
     expect(recalculado.pct).toBe(67);
   });
 });
+
+describe('contexto atemporal (gimnasio)', () => {
+  // Solo de día y de verano, pero marcado para el gimnasio.
+  const deportivo: PerfumeIdoneidad = {
+    momentos: ['DIA'],
+    contextos: [GIMNASIO],
+    estaciones: ['VERANO'],
+  };
+  const enElGimnasio = (parcial: Partial<CondicionesUso> = {}) =>
+    condiciones({ contextoId: GIMNASIO, contextoAtemporal: true, ...parcial });
+
+  it('ni la hora ni la estación cuentan: de noche y en invierno sigue siendo total', () => {
+    const r = calcularIdoneidad(
+      deportivo,
+      enElGimnasio({ momento: 'NOCHE', estacionesCompatibles: ['INVIERNO'] }),
+    );
+    expect(r.pct).toBe(100);
+    expect(r.etiqueta).toBe('Total');
+    expect(r.detalle).toEqual({ momento: true, contexto: true, estacion: true, atemporal: true });
+    expect(r.explicacion).toMatch(/ni el momento ni la estación cuentan/);
+  });
+
+  it('sin el contexto marcado es nula, aunque la hora y la estación encajen', () => {
+    const r = calcularIdoneidad(khamrah, enElGimnasio({ momento: 'NOCHE' }));
+    expect(r.pct).toBe(0);
+    expect(r.detalle.contexto).toBe(false);
+    expect(r.explicacion).toMatch(/^No encaja: no lo tienes marcado para este contexto/);
+  });
+
+  it('el mismo perfume en un contexto normal sigue mirando los tres ejes', () => {
+    const r = calcularIdoneidad(
+      deportivo,
+      condiciones({ contextoId: GIMNASIO, momento: 'NOCHE', estacionesCompatibles: ['INVIERNO'] }),
+    );
+    expect(r.pct).toBe(33);
+    expect(r.detalle.atemporal).toBeUndefined();
+  });
+});

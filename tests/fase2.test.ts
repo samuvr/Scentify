@@ -42,6 +42,45 @@ function perfume(
 
 /* ------------------------------------------------------- 10.1 huecos */
 
+describe('huecos con un contexto atemporal', () => {
+  it('el gimnasio es una sola casilla, sin momento ni estación', () => {
+    const resultado = detectarHuecos([], TODOS_LOS_CONTEXTOS, [GIMNASIO]);
+    // 2 contextos x 2 momentos x 4 estaciones + 1 del gimnasio
+    expect(resultado.totalCombinaciones).toBe(17);
+    expect(resultado.huecos).toContainEqual({ contextoId: GIMNASIO, momento: null, estacion: null });
+    expect(resultado.huecos.filter((h) => h.contextoId === GIMNASIO)).toHaveLength(1);
+  });
+
+  it('cualquier perfume marcado para el gimnasio la cubre, sea de la hora que sea', () => {
+    const resultado = detectarHuecos(
+      [perfume('Deportivo', { contextos: [GIMNASIO], momentos: ['DIA'], estaciones: ['VERANO'] })],
+      [GIMNASIO],
+      [GIMNASIO],
+    );
+    expect(resultado).toMatchObject({ totalCombinaciones: 1, cubiertas: 1, huecos: [] });
+    expect(resultado.frageles).toEqual([
+      { contextoId: GIMNASIO, momento: null, estacion: null, cuantos: 1 },
+    ]);
+  });
+
+  it('todos los usos del gimnasio caen en su única casilla', () => {
+    const huecos = detectarHuecos([], [GIMNASIO], [GIMNASIO]);
+    const ponderados = ponderarHuecos(
+      huecos,
+      [
+        { contextoId: GIMNASIO, momento: 'DIA', estacion: 'VERANO', usos: 4 },
+        { contextoId: GIMNASIO, momento: 'NOCHE', estacion: 'INVIERNO', usos: 3 },
+      ],
+      [GIMNASIO],
+    );
+    expect(ponderados.vividos).toEqual([
+      { contextoId: GIMNASIO, momento: null, estacion: null, usos: 7 },
+    ]);
+    expect(ponderados.teoricos).toEqual([]);
+    expect(ponderados.coberturaReal).toBe(0);
+  });
+});
+
 describe('detección de huecos', () => {
   it('con la colección vacía, todo son huecos', () => {
     const resultado = detectarHuecos([], TODOS_LOS_CONTEXTOS);
@@ -201,6 +240,22 @@ describe('solapamiento en la wishlist', () => {
 
 describe('modo viaje', () => {
   const estaciones: Estacion[] = ['VERANO'];
+
+  it('el gimnasio es un solo requisito y lo cubre cualquier perfume de gimnasio', () => {
+    const resultado = resolverViaje({
+      coleccion: [
+        perfume('Deportivo', { contextos: [GIMNASIO], momentos: ['DIA'], estaciones: ['INVIERNO'] }),
+      ],
+      contextosPorMomento: { DIA: [GIMNASIO], NOCHE: [GIMNASIO] },
+      estacionesCompatibles: estaciones,
+      estacionesPorMomento: { DIA: [['VERANO'], ['OTONO']] },
+      contextosAtemporales: [GIMNASIO],
+    });
+    expect(resultado.frascos).toEqual([
+      expect.objectContaining({ cubre: [{ contextoId: GIMNASIO, momento: null }] }),
+    ]);
+    expect(resultado.sinCubrir).toEqual([]);
+  });
 
   it('un frasco que lo cubre todo va solo', () => {
     const resultado = resolverViaje({

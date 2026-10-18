@@ -8,6 +8,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { destinoSeguro, esUuid } from '@/dominio/navegacion';
+import { esquemaParecido, MAXIMO_PARECIDOS } from '@/dominio/parecidos';
 import { cerrarSesion, exigirUsuario, iniciarSesion, registrarUsuario } from '@/servicios/auth';
 import {
   actualizarPerfume,
@@ -40,7 +41,7 @@ import {
   type ResultadoActualizacion,
 } from '@/servicios/hoja-actualizacion';
 import type { AnalisisHoja } from '@/dominio/hoja-actualizacion';
-import { guardarAjuste, guardarUmbrales } from '@/servicios/ajustes';
+import { guardarAjuste, guardarContextosAtemporales, guardarUmbrales } from '@/servicios/ajustes';
 import { ajustarMarca, rechazarPropuesta } from '@/servicios/recategorizacion';
 import { validarUmbrales } from '@/dominio/estacion';
 import { HORA_MAXIMA_RECORDATORIO } from '@/servicios/recordatorio';
@@ -335,6 +336,23 @@ export async function accionGuardarConfiguracion(datos: FormData) {
   );
 }
 
+/**
+ * Contextos atemporales: en ellos la hora y la estacion no cuentan. Va en un
+ * formulario aparte para que guardarlos no dependa de que los umbrales validen.
+ */
+export async function accionGuardarContextosAtemporales(datos: FormData) {
+  const userId = await exigirUsuario();
+  const ids = datos.getAll('atemporal').map(String).filter(esUuid);
+  await guardarContextosAtemporales(userId, ids);
+
+  revalidatePath('/');
+  revalidatePath('/mas/configuracion');
+  revalidatePath('/recomendacion');
+  revalidatePath('/mas/huecos');
+  revalidatePath('/mas/viaje');
+  redirect('/mas/configuracion?guardado=1');
+}
+
 /* --------------------------------------------------------------- perfumes */
 
 const esquemaPerfume = z.object({
@@ -353,6 +371,21 @@ const esquemaPerfume = z.object({
   valoracion: z.coerce.number().int().min(1).max(5).nullable().optional(),
   notasPersonales: z.string().max(4000).nullable().optional(),
   fragranticaUrl: z.string().url().max(500).nullable().optional(),
+  /**
+   * «Esta fragancia me recuerda a», si se ha leido la ficha en este alta o
+   * edicion. La fecha de lectura la pone el servidor. Si no tiene la forma
+   * esperada se descarta y se guarda lo demas: Fragrantica no bloquea nunca
+   * un alta (5.2).
+   */
+  parecidos: z
+    .unknown()
+    .optional()
+    .transform((crudo) => {
+      const analisis = z.array(esquemaParecido).max(MAXIMO_PARECIDOS).safeParse(crudo);
+      return analisis.success && analisis.data.length > 0
+        ? { leidosEn: new Date().toISOString(), perfumes: analisis.data }
+        : undefined;
+    }),
   notas: z.array(
     z.object({
       nombre: z.string().min(1).max(80),

@@ -14,14 +14,17 @@
  * no garantiza el minimo pero no se cuelga.
  *
  * "Cubrir" es idoneidad 100 (6.2): mismo criterio que la recomendacion y que la
- * deteccion de huecos, para que las tres pantallas no se contradigan.
+ * deteccion de huecos, para que las tres pantallas no se contradigan. Un
+ * contexto atemporal (el gimnasio) es un solo requisito, sin momento ni
+ * estacion, por muchos momentos o tramos de tiempo en que aparezca.
  */
 import type { PerfumeCandidato } from './recomendacion';
 import type { Estacion, Momento } from './tipos';
 
 export interface RequisitoViaje {
   contextoId: string;
-  momento: Momento;
+  /** null en un contexto atemporal: vale cualquier momento. */
+  momento: Momento | null;
   /**
    * Solo cuando el tiempo cambia a lo largo del viaje: el conjunto de
    * estaciones de ese tramo. Sin el, vale `estacionesCompatibles`.
@@ -43,6 +46,8 @@ export interface PeticionViaje {
   momentos?: Momento[];
   /** Estaciones compatibles EN EL DESTINO, no en casa (7.1). */
   estacionesCompatibles: Estacion[];
+  /** Ids de los contextos atemporales (el gimnasio). */
+  contextosAtemporales?: string[];
   /**
    * Si el viaje dura varios dias, los conjuntos de estaciones DISTINTOS que van
    * saliendo para cada momento. Cada uno es un requisito aparte: un frasco de
@@ -135,12 +140,17 @@ function construirRequisitos(peticion: PeticionViaje): RequisitoViaje[] {
       ]),
     );
 
+  const atemporales = new Set(peticion.contextosAtemporales ?? []);
   const requisitos: RequisitoViaje[] = [];
   for (const momento of MOMENTOS_POR_DEFECTO) {
     const contextoIds = [...new Set(porMomento[momento] ?? [])];
     const tramos = peticion.estacionesPorMomento?.[momento]?.filter((e) => e.length > 0);
     for (const contextoId of contextoIds) {
-      if (tramos && tramos.length > 0) {
+      if (atemporales.has(contextoId)) {
+        if (!requisitos.some((r) => r.contextoId === contextoId)) {
+          requisitos.push({ contextoId, momento: null });
+        }
+      } else if (tramos && tramos.length > 0) {
         for (const estaciones of tramos) requisitos.push({ contextoId, momento, estaciones });
       } else {
         requisitos.push({ contextoId, momento });
@@ -164,8 +174,9 @@ export function resolverViaje(peticion: PeticionViaje): ResultadoViaje {
 
   const cubreRequisito = (p: PerfumeCandidato, r: RequisitoViaje) =>
     p.contextos.includes(r.contextoId) &&
-    p.momentos.includes(r.momento) &&
-    p.estaciones.some((e) => (r.estaciones ?? peticion.estacionesCompatibles).includes(e));
+    (r.momento === null ||
+      (p.momentos.includes(r.momento) &&
+        p.estaciones.some((e) => (r.estaciones ?? peticion.estacionesCompatibles).includes(e))));
 
   const mascaras = candidatos.map((p) =>
     requisitos.reduce((m, r, i) => (cubreRequisito(p, r) ? m | (1 << i) : m), 0),

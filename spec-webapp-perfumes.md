@@ -197,6 +197,8 @@ Los porcentajes y recuentos se muestran **solo en la pantalla de categorización
 
 Se conserva `fragrantica_url` para poder reconsultar bajo demanda desde la ficha.
 
+**Excepción: «Esta fragancia me recuerda a».** Los tres primeros perfumes de ese bloque, con sus votos a favor y en contra, sí se guardan en la ficha (con la fecha de lectura) para mostrarlos en ella junto al porcentaje de votos a favor. No sirven para categorizar y ninguna lógica depende de ellos.
+
 Al probar el parser, hazlo con al menos una ficha muy votada y otra de nicho con pocos votos: el bloque se renderiza distinto cuando hay pocos datos.
 
 ---
@@ -236,6 +238,8 @@ idoneidad = round(100 × aciertos / 3)
 | 0 | Nula | rojo |
 
 **La idoneidad informa, nunca bloquea el registro.** Y siempre se muestra el desglose por eje, no solo el número: *"Encaja en contexto y en estación, pero lo tienes marcado solo para noche."*
+
+**Contextos atemporales.** En algunos contextos las condiciones no cambian con la hora ni con la estación: en el gimnasio hace el mismo calor, con la misma humedad y el mismo sudor, en enero que en agosto y de día que de noche. En ellos el momento y la estación no cuentan: la idoneidad es 100 si el perfume está marcado para el contexto y 0 si no, y el desglose enseña esos dos ejes como «no cuenta». Por defecto solo el gimnasio es atemporal; se cambia desde configuración. La recomendación, los huecos (una sola casilla por contexto atemporal) y el modo viaje (un solo requisito) siguen el mismo criterio.
 
 ---
 
@@ -325,7 +329,7 @@ No es opcional: se introduce mucha información a mano y perderla sería inacept
 ## 10. Funcionalidad — Fase 2
 
 ### 10.1 Detección de huecos
-Cruce de contextos × momentos × estaciones contra la colección, listando las combinaciones sin cobertura: *"No tienes ningún perfume marcado para Oficina + Verano + Día."* Cada hueco enlaza a crear una entrada de wishlist.
+Cruce de contextos × momentos × estaciones contra la colección, listando las combinaciones sin cobertura: *"No tienes ningún perfume marcado para Oficina + Verano + Día."* Cada hueco enlaza a crear una entrada de wishlist. Un contexto atemporal (6.2) es una sola casilla: *"No tienes ningún perfume marcado para Gimnasio."*
 
 ### 10.2 Solapamiento en wishlist
 Al añadir un deseo, si comparte 3 o más notas de fondo con perfumes que ya tengo, aviso sin bloquear: *"Se parece a X e Y que ya tienes."*

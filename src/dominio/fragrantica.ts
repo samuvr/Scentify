@@ -13,6 +13,7 @@
  * segun haya muchos votos o pocos, y en la ficha conviven el numero visible y
  * el `style="width:X%"` de la barra: se extraen los dos y se usa el que haya.
  */
+import { MAXIMO_PARECIDOS, type Parecido } from './parecidos';
 import type { Estacion, Momento } from './tipos';
 
 export interface VotoEje {
@@ -37,6 +38,8 @@ export interface FichaFragrantica {
   marca: string | null;
   anio: number | null;
   acordes: string[];
+  /** Los primeros de «Esta fragancia me recuerda a», en el orden de la ficha. */
+  parecidos: Parecido[];
 }
 
 /** Etiquetas de cada eje, en ingles y en español. */
@@ -574,6 +577,159 @@ function extraerAcordes(fuente: string): string[] {
   return [...new Set(acordes)];
 }
 
+/* ----------------------------------------- esta fragancia me recuerda a */
+
+const INICIO_PARECIDOS = [
+  'esta fragancia me recuerda a',
+  'este perfume me recuerda a',
+  'this perfume reminds me of',
+  'this fragrance reminds me of',
+];
+
+/**
+ * Lo que puede venir detras del bloque. Solo importa si trae menos de tres
+ * perfumes: con tres ya se ha parado. Se comparan contra el principio de cada
+ * linea, asi que «Reseñas (208)» cuenta como «reseñas».
+ */
+const FIN_PARECIDOS = [
+  'a los usuarios que les gusta esta fragancia',
+  'people who like this also like',
+  'encuentra más recomendaciones',
+  'find more recommendations',
+  'agrega tu reseña',
+  'add your review',
+  'reseñas',
+  'reviews',
+  'colecciones',
+  'diseñador',
+  'designer',
+  'fotos de fragram',
+  'fragram photos',
+  'composición de la fragancia',
+  'pirámide del perfume',
+  'fragrance pyramid',
+  'votar por ingredientes',
+  'vote for ingredients',
+  'cuándo usarlo',
+  'when to wear',
+  'valoraciones de usuarios',
+  'perfume rating',
+  'fragancias que he visto recientemente',
+];
+
+/** Botones y rotulos de las tarjetas que no son ni nombre ni voto. */
+const RUIDO_PARECIDOS = new Set([
+  'comparar',
+  'compare',
+  'votar',
+  'vote',
+  'ver más',
+  'ver todo',
+  'mostrar más',
+  'show more',
+  'see all',
+  'me gusta',
+  'no me gusta',
+  'like',
+  'dislike',
+]);
+
+/** Por si el bloque no cierra con nada conocido: veinte tarjetas sobran. */
+const LINEAS_MAXIMAS_PARECIDOS = 200;
+
+const NUMERO_GLOBAL = new RegExp(NUMERO, 'g');
+
+/** La fuente partida en lineas de texto, sea HTML o texto pegado. */
+function lineasDeTexto(fuente: string): string[] {
+  const lineas = pareceHtml(fuente) ? limpiarTexto(fuente) : fuente.split(/\r?\n/);
+  return lineas.map((l) => l.replace(/\s+/g, ' ').trim()).filter(Boolean);
+}
+
+/**
+ * Lee las tarjetas de un bloque. Cada una es la marca, el nombre y los dos
+ * recuentos, a favor y en contra, en ese orden:
+ *
+ *   Versace / Eros / 1.2k / 87
+ *
+ * Los votos se cierran al llegar el texto de la tarjeta siguiente, y son los
+ * dos ULTIMOS numeros: hay perfumes que se llaman con un numero («212», «28»),
+ * y ese va delante, con el nombre. De lo que queda delante valen las dos
+ * ultimas lineas, marca y nombre: lo anterior es algun rotulo suelto, y
+ * arrastrarlo daria un nombre largo que la validacion rechazaria.
+ */
+function tarjetasDeParecidos(lineas: string[]): Parecido[] {
+  const parecidos: Parecido[] = [];
+  let textos: string[] = [];
+  let numeros: { crudo: string; valor: number }[] = [];
+
+  const cerrar = () => {
+    if (textos.length > 0 && numeros.length >= 2) {
+      const [positivos, negativos] = numeros.slice(-2).map((n) => n.valor) as [number, number];
+      const partes = [...textos, ...numeros.slice(0, -2).map((n) => n.crudo)].slice(-2);
+      parecidos.push({
+        nombre: partes.at(-1)!,
+        marca: partes.length > 1 ? partes[0]! : null,
+        positivos,
+        negativos,
+      });
+      textos = [];
+    } else if (numeros.length === 1 && textos.length > 0) {
+      // Un numero suelto entre textos no es un voto: es parte del nombre.
+      textos.push(numeros[0]!.crudo);
+    }
+    numeros = [];
+  };
+
+  for (const linea of lineas.slice(0, LINEAS_MAXIMAS_PARECIDOS)) {
+    const clave = linea.toLowerCase();
+    if (FIN_PARECIDOS.some((fin) => clave.startsWith(fin))) break;
+
+    // Porcentajes, iconos y botones: ni nombre ni voto.
+    if (linea.includes('%') || !/[\p{L}\d]/u.test(linea) || RUIDO_PARECIDOS.has(clave)) continue;
+
+    // Solo cifras, con algun icono alrededor: votos. Cubre tambien los dos
+    // recuentos en una misma linea («👍 1.2k 👎 87»).
+    if (!/\p{L}/u.test(linea.replace(NUMERO_GLOBAL, ''))) {
+      for (const [crudo, cifra, sufijo] of linea.matchAll(NUMERO_GLOBAL)) {
+        const valor = aNumero(cifra!, sufijo);
+        if (valor !== null) numeros.push({ crudo: crudo.trim(), valor });
+      }
+      continue;
+    }
+    // Una frase no es un nombre: es la explicacion del bloque o lo que venga.
+    if (linea.length > 80) continue;
+
+    if (numeros.length > 0) cerrar();
+    if (parecidos.length >= MAXIMO_PARECIDOS) return parecidos;
+    textos.push(linea);
+  }
+  cerrar();
+  return parecidos.slice(0, MAXIMO_PARECIDOS);
+}
+
+/**
+ * «Esta fragancia me recuerda a»: los perfumes que los usuarios han votado
+ * como parecidos, con sus votos a favor y en contra.
+ *
+ * Fragrantica lo pinta en el navegador, despues de cargar la pagina, asi que
+ * la peticion del servidor no suele traerlo; el texto que manda el boton
+ * «Enviar a Scentify», o el que se pega, si. Por eso se lee por lineas de
+ * texto, que es lo que tienen en comun las dos fuentes.
+ *
+ * Si el rotulo sale mas de una vez (un indice, un enlace), vale el primero que
+ * traiga tarjetas.
+ */
+function extraerParecidos(fuente: string): Parecido[] {
+  const lineas = lineasDeTexto(fuente);
+  for (let i = 0; i < lineas.length; i++) {
+    const clave = lineas[i]!.toLowerCase();
+    if (!INICIO_PARECIDOS.some((inicio) => clave.startsWith(inicio))) continue;
+    const parecidos = tarjetasDeParecidos(lineas.slice(i + 1));
+    if (parecidos.length > 0) return parecidos;
+  }
+  return [];
+}
+
 /* ------------------------------------------------------------------ entrada */
 
 /**
@@ -599,6 +755,7 @@ export function leerFichaFragrantica(fuente: string): FichaFragrantica {
     marca: extraerMarca(fuente),
     anio: extraerAnio(fuente),
     acordes: extraerAcordes(fuente),
+    parecidos: extraerParecidos(fuente),
   };
 }
 
@@ -656,6 +813,29 @@ export function urlDeFichaEn(textos: (string | undefined)[]): string | null {
     }
   }
   return null;
+}
+
+/**
+ * El numero de la ficha, el del final de la URL: `.../Fakhar-Black-70465.html`
+ * -> '70465'. Es el mismo en fragrantica.es y en fragrantica.com, asi que sirve
+ * para reconocer un perfume aunque se haya guardado con el otro dominio.
+ */
+export function idDeFichaFragrantica(url: string): string | null {
+  if (!esUrlDeFichaValida(url)) return null;
+  try {
+    return new URL(url).pathname.match(/-(\d+)\.html$/i)?.[1] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Para un perfume sin URL guardada: una busqueda web acotada a Fragrantica,
+ * que lleva a su ficha en un toque.
+ */
+export function busquedaEnFragrantica(nombre: string, marca: string): string {
+  const consulta = `site:fragrantica.es ${marca} ${nombre}`.replace(/\s+/g, ' ').trim();
+  return `https://www.google.com/search?q=${encodeURIComponent(consulta)}`;
 }
 
 function aTexto(segmento: string | undefined): string {

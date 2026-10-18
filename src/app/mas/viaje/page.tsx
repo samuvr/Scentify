@@ -120,6 +120,7 @@ export default async function PaginaViaje({
           coleccion,
           contextosPorMomento: { DIA: contextosDia, NOCHE: contextosNoche },
           estacionesCompatibles: porDia.DIA[0]?.estaciones ?? [],
+          contextosAtemporales: contextos.filter((c) => c.atemporal).map((c) => c.id),
           estacionesPorMomento: tramos,
           minimoFrascos: minimo,
           maximoFrascos: tope,
@@ -144,9 +145,12 @@ export default async function PaginaViaje({
   })();
 
   // Con mas de un tramo de tiempo en un momento, cada requisito dice el suyo.
-  const describirRequisito = (r: { contextoId: string; momento: Momento; estaciones?: Estacion[] }) =>
-    `${nombreContexto(r.contextoId)} ${NOMBRE_MOMENTO[r.momento]}` +
-    (r.estaciones && (tramos?.[r.momento].length ?? 0) > 1 ? ` (${nombrarEstaciones(r.estaciones)})` : '');
+  // Un contexto atemporal no tiene momento: se nombra solo.
+  const describirRequisito = (r: { contextoId: string; momento: Momento | null; estaciones?: Estacion[] }) =>
+    r.momento === null
+      ? nombreContexto(r.contextoId)
+      : `${nombreContexto(r.contextoId)} ${NOMBRE_MOMENTO[r.momento]}` +
+        (r.estaciones && (tramos?.[r.momento].length ?? 0) > 1 ? ` (${nombrarEstaciones(r.estaciones)})` : '');
 
 
   return (

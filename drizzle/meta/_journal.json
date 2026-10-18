@@ -50,6 +50,20 @@
       "when": 1792067267133,
       "tag": "0006_temperatura_y_descartes",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1792189079681,
+      "tag": "0007_parecidos",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792400000000,
+      "tag": "0008_contextos_atemporales",
+      "breakpoints": true
     }
   ]
 }

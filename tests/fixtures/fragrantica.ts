@@ -111,3 +111,70 @@ export const PAGINA_SIN_DATOS = `
 <html><head><title>Error 403</title></head>
 <body><h1>Attention Required</h1><p>Please enable cookies.</p></body></html>
 `;
+
+/*
+ * «Esta fragancia me recuerda a». Ninguna de las capturas reales lo trae:
+ * Fragrantica lo pinta en el navegador despues de cargar, y las dos fichas
+ * HTML se recortaron del HTML del servidor. Estos bloques son SINTETICOS,
+ * con la forma de las tarjetas vecinas («A los usuarios que les gusta…»):
+ * la marca, el nombre y, debajo, los votos a favor y en contra.
+ */
+
+/** Tal y como sale en el texto de la pagina, con cuatro tarjetas. */
+export const PARECIDOS_TEXTO = `Esta fragancia me recuerda a:
+Armaf
+Club de Nuit Intense Man
+1.2k
+87
+Versace
+Eros
+640
+112
+Rasasi
+Hawas for Him
+95
+41
+Afnan
+9pm
+30
+12
+`;
+
+/** El mismo bloque en HTML, con iconos y botones entre los recuentos. */
+export const PARECIDOS_HTML = `
+<!doctype html>
+<html><head><title>Fakhar Black Lattafa Perfumes</title></head>
+<body>
+  <h3 class="text-lg font-semibold">Esta fragancia me recuerda a</h3>
+  <div class="flex gap-4 overflow-x-auto">
+    <div class="w-36 shrink-0">
+      <a href="/perfume/Armaf/Club-de-Nuit-Intense-Man-34696.html">
+        <img src="https://fimgs.net/mdimg/perfume/m.34696.jpg" alt="Club de Nuit Intense Man Armaf">
+      </a>
+      <span class="block text-xs">Armaf</span>
+      <span class="block text-sm font-medium">Club de Nuit Intense Man</span>
+      <div class="flex items-center justify-between">
+        <button aria-label="Me recuerda"><svg viewBox="0 0 24 24"><path d="M1 21h4V9H1v12z"></path></svg></button>
+        <span class="text-xs">1.2k</span>
+        <button aria-label="No me recuerda"><svg viewBox="0 0 24 24"><path d="M15 3H6"></path></svg></button>
+        <span class="text-xs">87</span>
+      </div>
+    </div>
+    <div class="w-36 shrink-0">
+      <a href="/perfume/Versace/Eros-16657.html"><img src="m.16657.jpg" alt="Eros Versace"></a>
+      <span class="block text-xs">Versace</span>
+      <span class="block text-sm font-medium">Eros</span>
+      <div class="flex"><button><svg></svg></button><span>640</span><button><svg></svg></button><span>112</span></div>
+    </div>
+    <div class="w-36 shrink-0">
+      <a href="/perfume/Rasasi/Hawas-for-Him-31455.html"><img src="m.31455.jpg" alt="Hawas for Him Rasasi"></a>
+      <span class="block text-xs">Rasasi</span>
+      <span class="block text-sm font-medium">Hawas for Him</span>
+      <div class="flex"><button><svg></svg></button><span>95</span><button><svg></svg></button><span>41</span></div>
+    </div>
+  </div>
+  <h3>A los usuarios que les gusta esta fragancia, también les gusta:</h3>
+  <div><span>Versace</span><span>Eros</span><button>Comparar</button></div>
+</body>
+</html>
+`;

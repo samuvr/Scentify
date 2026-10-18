@@ -29,7 +29,15 @@ export interface EjesIdoneidad {
   momento: boolean;
   contexto: boolean;
   estacion: boolean;
+  /**
+   * El contexto era atemporal (el gimnasio): el momento y la estacion no
+   * contaron y van a true. Se guarda para que el historico lo diga.
+   */
+  atemporal?: true;
 }
+
+/** Los tres ejes que puntuan, sin la marca de contexto atemporal. */
+export type EjeIdoneidad = Exclude<keyof EjesIdoneidad, 'atemporal'>;
 
 /** Promedios historicos de un perfume (seccion 4.3). */
 export interface PromediosPerfume {
@@ -57,4 +65,9 @@ export interface CondicionesUso {
   contextoId: string;
   /** Conjunto compatible que devuelve la seccion 7.1, no una sola estacion. */
   estacionesCompatibles: Estacion[];
+  /**
+   * El contexto no depende de la hora ni de la estacion (el gimnasio): solo
+   * cuenta si el perfume esta marcado para el.
+   */
+  contextoAtemporal?: boolean;
 }

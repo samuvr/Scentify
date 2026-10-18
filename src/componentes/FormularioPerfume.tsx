@@ -9,7 +9,9 @@
  * solo añade sugerencias encima.
  *
  * Los votos que llegan de Fragrantica se pintan junto a cada casilla y mueren
- * aqui: lo que se envia al servidor son unicamente mis selecciones (5.3).
+ * aqui: lo que se envia al servidor son unicamente mis selecciones (5.3). La
+ * excepcion es «Esta fragancia me recuerda a», que se guarda en la ficha para
+ * enseñarlo alli.
  *
  * La ficha (nombre, marca, notas, familias, concentracion, anio) es comun a
  * todas las cuentas. Al escribir el nombre se busca en ese catalogo, y elegir
@@ -25,6 +27,7 @@ import { masVotadas } from '@/dominio/votos';
 import type { FichaParaAlta } from '@/servicios/consultas';
 import { contextosQueEncajan, type SugerenciaContextos } from '@/dominio/sugerencia-contextos';
 import { VALORES_VACIOS, type Nivel, type ValoresPerfume } from '@/componentes/valores-perfume';
+import { ParecidosFragrantica } from '@/componentes/ParecidosFragrantica';
 
 const NIVELES: { clave: Nivel; titulo: string }[] = [
   { clave: 'SALIDA', titulo: 'Salida' },
@@ -490,6 +493,8 @@ export function FormularioPerfume({
         valoracion: v.valoracion || null,
         notasPersonales: v.notasPersonales || null,
         fragranticaUrl: v.fragranticaUrl || null,
+        // Solo si esta lectura los trae: si no, se quedan los que hubiera.
+        parecidos: ficha && ficha.parecidos.length > 0 ? ficha.parecidos : undefined,
         notas: notas.map((n, orden) => ({ ...n, orden })),
         familiaIds: v.familiaIds,
         contextoIds: v.contextoIds,
@@ -679,6 +684,14 @@ export function FormularioPerfume({
           <p className="aviso-hecho">
             Ficha leída. Los votos aparecen en los pasos de estaciones y momento.
           </p>
+        ) : null}
+
+        {ficha && ficha.parecidos.length > 0 ? (
+          <div className="space-y-2">
+            <h2 className="subtitulo">Esta fragancia me recuerda a</h2>
+            <ParecidosFragrantica perfumes={ficha.parecidos} />
+            <p className="text-xs text-texto-tenue">Se guarda en la ficha al terminar.</p>
+          </div>
         ) : null}
 
         {avisoFragrantica ? (
@@ -1071,6 +1084,13 @@ export function FormularioPerfume({
               Editar
             </button>
           </div>
+          {/* Recien leido: se guarda en la ficha con sus votos. */}
+          {ficha && ficha.parecidos.length > 0 ? (
+            <p className="text-sm">
+              <span className="text-texto-tenue">Me recuerda a: </span>
+              {ficha.parecidos.map((p) => p.nombre).join(', ')}
+            </p>
+          ) : null}
           {perfumeId ? (
             <button type="button" onClick={() => irAPaso(1)} className="text-sm underline">
               {v.fragranticaUrl ? 'Volver a consultar Fragrantica' : 'Consultar Fragrantica'}
