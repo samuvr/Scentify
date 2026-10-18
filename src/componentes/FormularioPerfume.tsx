@@ -158,6 +158,7 @@ export function FormularioPerfume({
   compartidaCon = 0,
   sugerirConIa = false,
   consultarAlAbrir = false,
+  yaLoTengo = false,
   deseoId,
 }: {
   perfumeId?: string;
@@ -168,6 +169,12 @@ export function FormularioPerfume({
    * consulta con la direccion guardada, en vez de dejar en el paso 1.
    */
   consultarAlAbrir?: boolean;
+  /**
+   * El enlace es de un perfume que ya esta en mi coleccion: la pagina lo
+   * avisa, y leer la ficha sola gastaria una lectura de ZenRows para nada.
+   * El boton de consultar sigue ahi.
+   */
+  yaLoTengo?: boolean;
   iniciales?: ValoresPerfume;
   /**
    * Ficha del catalogo que ya encaja con lo que llega, p. ej. la misma URL de
@@ -321,6 +328,7 @@ export function FormularioPerfume({
       aplicarFicha(fichaInicial);
       return;
     }
+    if (yaLoTengo) return;
     void consultarFragrantica({ url: iniciales?.fragranticaUrl ?? '' });
     // Solo al montar: `compartida` se calcula de los valores iniciales.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -416,16 +424,27 @@ export function FormularioPerfume({
     setConsultando(true);
     setAvisoFragrantica(null);
     try {
-      const r = await fetch('/api/fragrantica', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(cuerpo),
-      });
-      const datos = await r.json();
-      if (datos.ok) aplicarFicha(datos.ficha);
-      else setAvisoFragrantica(datos.mensaje ?? 'No se ha podido leer la ficha.');
-    } catch {
-      setAvisoFragrantica('No hay conexión. Sigue a mano: no pierdes nada de lo escrito.');
+      let r: Response;
+      try {
+        r = await fetch('/api/fragrantica', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(cuerpo),
+        });
+      } catch {
+        setAvisoFragrantica('No hay conexión. Sigue a mano: no pierdes nada de lo escrito.');
+        return;
+      }
+      // Una respuesta sin JSON es del servidor (un fallo, o la funcion que se
+      // ha pasado de tiempo), no de la red: decir «no hay conexión» engañaba.
+      const datos = await r.json().catch(() => null);
+      if (datos?.ok) aplicarFicha(datos.ficha);
+      else if (datos?.mensaje) setAvisoFragrantica(datos.mensaje);
+      else {
+        setAvisoFragrantica(
+          `El servidor no ha podido leer la ficha (error ${r.status}). Inténtalo otra vez o pega el texto de la página.`,
+        );
+      }
     } finally {
       setConsultando(false);
     }

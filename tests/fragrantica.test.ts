@@ -315,6 +315,14 @@ describe('solo se aceptan URLs de ficha', () => {
     ['http://www.fragrantica.com/perfume/x/y.html', false],
     ['https://fragrantica.com.ataque.example/perfume/x.html', false],
     ['no es una url', false],
+    // Con «/perfume/» en la ruta no basta: tiene que ser la de una ficha.
+    ['https://www.fragrantica.com/perfume/', false],
+    ['https://www.fragrantica.com/perfume/Lattafa/', false],
+    ['https://www.fragrantica.com/news/perfume/Lattafa/Khamrah-77777.html', false],
+    ['https://www.fragrantica.com/perfume/Lattafa/Khamrah.html', false],
+    ['https://www.fragrantica.com/perfume/Lattafa/Khamrah-77777.html?x=1#reviews', true],
+    ['https://www.fragrantica.com:8443/perfume/Lattafa/Khamrah-77777.html', false],
+    ['https://yo:clave@www.fragrantica.com/perfume/Lattafa/Khamrah-77777.html', false],
   ])('%s -> %s', (url, valida) => {
     expect(esUrlDeFichaValida(url)).toBe(valida);
   });

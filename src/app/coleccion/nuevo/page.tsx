@@ -85,6 +85,7 @@ export default async function PaginaNuevoPerfume({
         notasConocidas={notas.map((n) => n.nombre)}
         fichaInicial={desempaquetarFicha(previos.ficha)}
         fichaCatalogo={miFrasco ? null : fichaCatalogo}
+        yaLoTengo={Boolean(miFrasco)}
         sugerirConIa={claudeDisponible()}
         deseoId={esUuid(previos.deseo) ? previos.deseo : undefined}
       />

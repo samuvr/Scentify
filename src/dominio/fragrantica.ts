@@ -854,11 +854,17 @@ export function esUrlDeFichaValida(url: string): boolean {
     const etiquetasDominio = analizada.hostname.toLowerCase().split('.');
     const registrable = etiquetasDominio.at(-2);
 
+    // La ruta, entera: /perfume/<Marca>/<Nombre>-<id>.html. Con solo exigir
+    // «/perfume/» pasaban el indice o una noticia, y cada una es una lectura
+    // de ZenRows cobrada para nada. Sin puerto ni credenciales en la URL.
     return (
       analizada.protocol === 'https:' &&
+      analizada.port === '' &&
+      !analizada.username &&
+      !analizada.password &&
       etiquetasDominio.length >= 2 &&
       registrable === 'fragrantica' &&
-      /\/perfume\//i.test(analizada.pathname)
+      /^\/perfume\/[^/]+\/[^/]+-\d+\.html$/i.test(analizada.pathname)
     );
   } catch {
     return false;
