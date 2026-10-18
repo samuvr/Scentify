@@ -93,6 +93,19 @@ function AcordesDeFragrantica({
   );
 }
 
+/**
+ * La ficha se ha leido pero sin los votos de este eje: se dice, para que no
+ * parezca que faltan las barras por un fallo de la pantalla.
+ */
+function SinVotos({ ficha, eje }: { ficha: FichaFragrantica | null; eje: 'estaciones' | 'momentos' }) {
+  if (!ficha || ficha[eje]) return null;
+  return (
+    <p className="text-xs text-texto-tenue">
+      La lectura de Fragrantica no ha traído los votos de {eje === 'estaciones' ? 'estación' : 'día y noche'}.
+    </p>
+  );
+}
+
 /** Barra de apoyo con el voto de Fragrantica. Solo visual: no decide nada. */
 function BarraVoto({ voto }: { voto: VotoEje | undefined }) {
   if (!voto) return null;
@@ -834,6 +847,7 @@ export function FormularioPerfume({
         <p className="text-sm text-texto-tenue">
           Marca las estaciones. Los votos son solo una referencia: manda lo que marques tú.
         </p>
+        <SinVotos ficha={ficha} eje="estaciones" />
         <MarcarSegunVotos
           propuesta={masVotadas(ficha?.estaciones)}
           actual={v.estaciones}
@@ -860,6 +874,7 @@ export function FormularioPerfume({
   const seccionMomento = () => (
       <section className="space-y-3">
         <p className="text-sm text-texto-tenue">Día, noche o ambos. Mínimo uno.</p>
+        <SinVotos ficha={ficha} eje="momentos" />
         <MarcarSegunVotos
           propuesta={masVotadas(ficha?.momentos)}
           actual={v.momentos}
