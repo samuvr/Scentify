@@ -492,9 +492,10 @@ ayuda a marcar casillas, se enseña en la ficha, y ninguna lógica decide con el
 guarda en `ficha.parecidos` (JSON, con la fecha de lectura, porque en Fragrantica los
 votos siguen moviéndose) y es común a todas las cuentas, como la pirámide.
 
-- Fragrantica lo pinta en el navegador después de cargar, así que la petición del
-  servidor no suele traerlo; el botón «Enviar a Scentify», compartir la selección y
-  pegar el texto, sí. Por eso se lee por líneas de texto, que es lo que tienen en común
+- Fragrantica lo pinta en el navegador después de cargar, así que la petición
+  directa del servidor no suele traerlo; el botón «Enviar a Scentify», compartir la
+  selección y pegar el texto, sí. A través de ZenRows, que también pinta la página,
+  debería llegar, pero no está comprobado con una ficha real. Por eso se lee por líneas de texto, que es lo que tienen en común
   el HTML y lo pegado.
 - Cada tarjeta es marca, nombre y los dos recuentos. Los votos son los dos **últimos**
   números antes de la tarjeta siguiente: hay perfumes que se llaman con un número
@@ -555,9 +556,13 @@ página desde el móvil (Android) entra por el mismo camino.
   petición a ZenRows espera hasta 45, la ruta tiene `maxDuration = 60` y la pantalla
   avisa de que puede tardar.
 - **Si ZenRows falla** (sin créditos, la clave mal o caído), se prueba la petición
-  directa, que no cuesta nada. Si tampoco pasa, el aviso dice si el problema es de
-  la clave y quedan los dos fallbacks de la 5.2: pegar el texto o el botón del
-  navegador.
+  directa, que no cuesta nada. Si tampoco pasa, quedan los dos fallbacks de la 5.2:
+  pegar el texto o el botón del navegador.
+- **El aviso dice qué arreglar.** Sin la clave, que falta `ZENROWS_API_KEY`. Con
+  ella, lo que ha contestado ZenRows, con su código de error (`ZenRows 422 RESP001`,
+  `ZenRows 402 …`), que es lo que se busca en su documentación. El mismo detalle
+  queda en los logs de la función en Vercel, nunca con la clave. Antes, «Fragrantica
+  ha bloqueado la petición» salía igual con la clave que sin ella.
 - **A ZenRows solo le llegan fichas de Fragrantica**: la URL se valida antes con
   `esUrlDeFichaValida()`, igual que la petición directa.
 

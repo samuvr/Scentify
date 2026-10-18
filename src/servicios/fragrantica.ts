@@ -36,26 +36,44 @@ const CABECERAS = {
 
 export type MotivoFallo = 'url-no-valida' | 'bloqueado' | 'sin-respuesta' | 'sin-datos' | 'lector-rechazado';
 
-export type ResultadoConsulta = { ok: true; ficha: FichaFragrantica } | { ok: false; motivo: MotivoFallo };
+/**
+ * Un fallo dice ademas si se ha pasado por ZenRows y que ha contestado. Sin
+ * eso, «Fragrantica ha bloqueado la petición» era igual con la clave puesta
+ * que sin ella, y no habia forma de saber cual de las dos cosas arreglar.
+ */
+export type Fallo = {
+  ok: false;
+  motivo: MotivoFallo;
+  /** Si el servidor tiene `ZENROWS_API_KEY`. */
+  conLector: boolean;
+  /** Lo que ha respondido ZenRows, p. ej. «ZenRows 422 RESP001». */
+  detalle?: string;
+};
 
-type Descarga = { ok: true; html: string } | { ok: false; motivo: MotivoFallo };
+export type ResultadoConsulta = { ok: true; ficha: FichaFragrantica } | Fallo;
+
+type Descarga =
+  | { ok: true; html: string }
+  | { ok: false; motivo: MotivoFallo; detalle?: string };
 
 function claveLector(): string | null {
   return process.env.ZENROWS_API_KEY?.trim() || null;
 }
 
 export async function consultarFicha(url: string): Promise<ResultadoConsulta> {
-  if (!esUrlDeFichaValida(url)) return { ok: false, motivo: 'url-no-valida' };
-
   const clave = claveLector();
-  if (!clave) return leerDescarga(await descargarDirecto(url));
+  const conLector = clave !== null;
+  if (!esUrlDeFichaValida(url)) return { ok: false, motivo: 'url-no-valida', conLector };
 
-  const lector = leerDescarga(await descargarConLector(url, clave));
+  if (!clave) return leerDescarga(await descargarDirecto(url), conLector);
+
+  const lector = leerDescarga(await descargarConLector(url, clave), conLector);
   if (lector.ok) return lector;
+  console.warn('[fragrantica] ZenRows no ha traido la ficha:', lector.detalle ?? lector.motivo, url);
 
   // Sin creditos o con el servicio caido, la directa no cuesta nada y a veces
   // pasa. Si tampoco, se cuenta el fallo del lector, que es el que se arregla.
-  const directa = leerDescarga(await descargarDirecto(url));
+  const directa = leerDescarga(await descargarDirecto(url), conLector);
   return directa.ok ? directa : lector;
 }
 
@@ -102,22 +120,45 @@ async function descargarConLector(url: string, clave: string): Promise<Descarga>
   let respuesta: Response;
   try {
     respuesta = await fetch(peticion, { signal: AbortSignal.timeout(TIMEOUT_LECTOR_MS) });
-  } catch {
-    return { ok: false, motivo: 'sin-respuesta' };
+  } catch (error) {
+    const agotado = error instanceof Error && error.name === 'TimeoutError';
+    return {
+      ok: false,
+      motivo: 'sin-respuesta',
+      detalle: agotado ? `ZenRows, sin respuesta en ${TIMEOUT_LECTOR_MS / 1000} s` : 'ZenRows, error de red',
+    };
   }
 
-  // 401 es la clave, 402 los creditos del mes y 403 lo que el plan no
-  // incluye: todo se arregla en ZenRows, no reintentando.
-  if ([401, 402, 403].includes(respuesta.status)) return { ok: false, motivo: 'lector-rechazado' };
-  // 422 es que ni con todo ha conseguido la pagina.
-  if (respuesta.status === 422) return { ok: false, motivo: 'bloqueado' };
-  if (!respuesta.ok) return { ok: false, motivo: 'sin-respuesta' };
+  if (!respuesta.ok) {
+    const detalle = `ZenRows ${respuesta.status}${await codigoDeError(respuesta)}`;
+    // 401 es la clave, 402 los creditos del mes y 403 lo que el plan no
+    // incluye: todo se arregla en ZenRows, no reintentando.
+    if ([401, 402, 403].includes(respuesta.status)) return { ok: false, motivo: 'lector-rechazado', detalle };
+    // 422 es que ni con todo ha conseguido la pagina.
+    if (respuesta.status === 422) return { ok: false, motivo: 'bloqueado', detalle };
+    return { ok: false, motivo: 'sin-respuesta', detalle };
+  }
 
-  return { ok: true, html: (await respuesta.text()).slice(0, MAX_BYTES) };
+  const html = (await respuesta.text()).slice(0, MAX_BYTES);
+  return { ok: true, html };
 }
 
-function leerDescarga(descarga: Descarga): ResultadoConsulta {
-  if (!descarga.ok) return descarga;
+/**
+ * El codigo de error que ZenRows manda en el cuerpo (`RESP001`, `AUTH002`…),
+ * que es lo que dice su documentacion de cada fallo. Vacio si no viene.
+ */
+async function codigoDeError(respuesta: Response): Promise<string> {
+  try {
+    const cuerpo: unknown = await respuesta.json();
+    const codigo = (cuerpo as { code?: unknown } | null)?.code;
+    return typeof codigo === 'string' && /^[A-Z]{2,8}\d{2,6}$/.test(codigo) ? ` ${codigo}` : '';
+  } catch {
+    return '';
+  }
+}
+
+function leerDescarga(descarga: Descarga, conLector: boolean): ResultadoConsulta {
+  if (!descarga.ok) return { ...descarga, conLector };
   const ficha = leerFichaFragrantica(descarga.html);
 
   // Si no se ha sacado ni un eje ni una nota, es que no hemos llegado a la
@@ -128,12 +169,45 @@ function leerDescarga(descarga: Descarga): ResultadoConsulta {
     ficha.notas.salida.length === 0 &&
     ficha.notas.fondo.length === 0;
 
-  return vacia ? { ok: false, motivo: 'sin-datos' } : { ok: true, ficha };
+  if (!vacia) return { ok: true, ficha };
+  // Lo tipico es la pagina de reto de Cloudflare: su titulo lo dice.
+  const titulo = descarga.html.match(/<title>([^<]{0,80})/i)?.[1]?.trim();
+  return { ok: false, motivo: 'sin-datos', conLector, detalle: titulo ? `página «${titulo}»` : undefined };
+}
+
+/** Sin ZenRows configurado: la peticion sale de Vercel y Cloudflare la corta. */
+const SIN_LECTOR: Record<MotivoFallo, string> = {
+  'url-no-valida': 'Esa URL no parece una ficha de Fragrantica.',
+  bloqueado: 'Fragrantica ha bloqueado la petición.',
+  'sin-respuesta': 'Fragrantica no ha respondido.',
+  'sin-datos': 'No se ha podido leer la ficha.',
+  'lector-rechazado': 'ZenRows ha rechazado la petición.',
+};
+
+/** Con ZenRows configurado: lo ha intentado y no ha traido la ficha. */
+const CON_LECTOR: Record<MotivoFallo, string> = {
+  'url-no-valida': 'Esa URL no parece una ficha de Fragrantica.',
+  bloqueado: 'Ni a través de ZenRows se ha podido abrir la ficha: Cloudflare la ha bloqueado.',
+  'sin-respuesta': 'ZenRows no ha respondido a tiempo.',
+  'sin-datos': 'ZenRows ha abierto la página, pero no traía la ficha.',
+  'lector-rechazado': 'ZenRows ha rechazado la petición: revisa la clave o si quedan créditos este mes.',
+};
+
+/**
+ * El aviso dice que ha fallado y que arreglar: sin la clave, falta ponerla;
+ * con ella, lo que ha contestado ZenRows. Despues, el fallback de la 5.2.
+ */
+export function mensajeDeFallo({ motivo, conLector, detalle }: Fallo): string {
+  if (motivo === 'url-no-valida') return SIN_LECTOR[motivo];
+  const que = conLector
+    ? `${CON_LECTOR[motivo]}${detalle ? ` (${detalle})` : ''}`
+    : `${SIN_LECTOR[motivo]} El servidor no tiene ZenRows configurado (ZENROWS_API_KEY), que es lo que evita el bloqueo.`;
+  return `${que} Mientras, pega el texto de la página.`;
 }
 
 /** Fallback 1 de la 5.2: el usuario pega el texto copiado del navegador. */
 export function leerTextoPegado(texto: string): ResultadoConsulta {
   const ficha = leerFichaFragrantica(texto);
   const vacia = !ficha.estaciones && !ficha.momentos && ficha.notas.salida.length === 0;
-  return vacia ? { ok: false, motivo: 'sin-datos' } : { ok: true, ficha };
+  return vacia ? { ok: false, motivo: 'sin-datos', conLector: false } : { ok: true, ficha };
 }
