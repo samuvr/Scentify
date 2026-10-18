@@ -8,10 +8,15 @@
  *
  * La idoneidad informa, nunca bloquea: ante cualquier entrada, incluso vacia,
  * devuelve un resultado valido con su desglose en vez de lanzar.
+ *
+ * Excepcion: en un contexto atemporal (el gimnasio, donde hace el mismo calor
+ * en enero que en agosto y de dia que de noche) el momento y la estacion no
+ * dicen nada. Ahi solo cuenta el contexto: 100 si esta marcado, 0 si no.
  */
 import type {
   ColorIdoneidad,
   CondicionesUso,
+  EjeIdoneidad,
   EjesIdoneidad,
   EtiquetaIdoneidad,
   Momento,
@@ -37,7 +42,7 @@ const ESCALA: Record<PorcentajeIdoneidad, { etiqueta: EtiquetaIdoneidad; color: 
 
 const MOMENTO_LEGIBLE: Record<Momento, string> = { DIA: 'día', NOCHE: 'noche' };
 
-const EJE_LEGIBLE: Record<keyof EjesIdoneidad, string> = {
+const EJE_LEGIBLE: Record<EjeIdoneidad, string> = {
   momento: 'momento',
   contexto: 'contexto',
   estacion: 'estación',
@@ -53,6 +58,8 @@ export function calcularIdoneidad(
   perfume: PerfumeIdoneidad,
   condiciones: CondicionesUso,
 ): Idoneidad {
+  if (condiciones.contextoAtemporal) return idoneidadAtemporal(perfume, condiciones.contextoId);
+
   const detalle: EjesIdoneidad = {
     momento: perfume.momentos.includes(condiciones.momento),
     contexto: perfume.contextos.includes(condiciones.contextoId),
@@ -66,8 +73,23 @@ export function calcularIdoneidad(
   return { pct, detalle, etiqueta, color, explicacion: explicar(perfume, detalle) };
 }
 
+function idoneidadAtemporal(perfume: PerfumeIdoneidad, contextoId: string): Idoneidad {
+  const contexto = perfume.contextos.includes(contextoId);
+  const pct: PorcentajeIdoneidad = contexto ? 100 : 0;
+  const { etiqueta, color } = ESCALA[pct];
+  return {
+    pct,
+    detalle: { momento: true, contexto, estacion: true, atemporal: true },
+    etiqueta,
+    color,
+    explicacion: contexto
+      ? 'Encaja en el contexto, y aquí ni el momento ni la estación cuentan.'
+      : `No encaja: ${motivoDelFallo(perfume, 'contexto')}. Aquí ni el momento ni la estación cuentan.`,
+  };
+}
+
 /** Por que falla cada eje, con el detalle util: "lo tienes marcado solo para noche". */
-function motivoDelFallo(perfume: PerfumeIdoneidad, eje: keyof EjesIdoneidad): string {
+function motivoDelFallo(perfume: PerfumeIdoneidad, eje: EjeIdoneidad): string {
   switch (eje) {
     case 'momento': {
       const [unico] = perfume.momentos;

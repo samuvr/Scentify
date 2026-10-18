@@ -323,14 +323,15 @@ export function huecosQueCierra(
   coleccion: PerfumeCandidato[],
   contextoIds: string[],
   propuesta: Pick<PropuestaMarca, 'eje' | 'valor' | 'accion'> & { perfumeId: string },
+  atemporales: readonly string[] = [],
 ): number {
   if (propuesta.accion !== 'añadir') return 0;
-  const antes = detectarHuecos(coleccion, contextoIds).huecos.length;
+  const antes = detectarHuecos(coleccion, contextoIds, atemporales).huecos.length;
   const modificada = coleccion.map((p) => {
     if (p.id !== propuesta.perfumeId) return p;
     if (propuesta.eje === 'contexto') return { ...p, contextos: [...p.contextos, propuesta.valor] };
     if (propuesta.eje === 'momento') return { ...p, momentos: [...p.momentos, propuesta.valor as Momento] };
     return { ...p, estaciones: [...p.estaciones, propuesta.valor as Estacion] };
   });
-  return antes - detectarHuecos(modificada, contextoIds).huecos.length;
+  return antes - detectarHuecos(modificada, contextoIds, atemporales).huecos.length;
 }

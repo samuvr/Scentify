@@ -53,27 +53,28 @@ export default async function PaginaHuecos() {
     usosPorCombinacion(userId, desplazarDias(hoy, -364)),
   ]);
   const contextoIds = contextos.map((c) => c.id);
+  const atemporales = contextos.filter((c) => c.atemporal).map((c) => c.id);
 
   // «Ya lo cubres sin saberlo»: marcas que tus usos respaldan y que cerrarian
   // huecos. Antes la pantalla pedia comprar lo que ya tenias.
   const cubresSinSaberlo = propuestas
     .filter((p) => p.accion === 'añadir')
-    .map((p) => ({ ...p, cierra: huecosQueCierra(coleccion, contextoIds, p) }))
+    .map((p) => ({ ...p, cierra: huecosQueCierra(coleccion, contextoIds, p, atemporales) }))
     .filter((p) => p.cierra > 0)
     .sort((a, b) => b.cierra - a.cierra)
     .slice(0, 5);
 
-  const resultado = detectarHuecos(
-    coleccion,
-    contextos.map((c) => c.id),
-  );
-  const ponderados = ponderarHuecos(resultado, usosVividos);
+  const resultado = detectarHuecos(coleccion, contextoIds, atemporales);
+  const ponderados = ponderarHuecos(resultado, usosVividos, atemporales);
   const teoricosPorContexto = agruparPorContexto(ponderados.teoricos);
   const nombreContexto = (id: string) => contextos.find((c) => c.id === id)?.nombre ?? '—';
+  // Un contexto atemporal no tiene momento ni estacion: es una casilla sola.
+  const momentoYEstacion = (c: Combinacion) =>
+    c.estacion && c.momento ? [NOMBRE_ESTACION[c.estacion], NOMBRE_MOMENTO[c.momento]] : [];
+  const describir = (c: Combinacion, separador = ' · ') =>
+    [nombreContexto(c.contextoId), ...momentoYEstacion(c)].join(separador);
   const enlaceWishlist = (hueco: Combinacion) =>
-    `/mas/wishlist?hueco=${encodeURIComponent(
-      `${nombreContexto(hueco.contextoId)} + ${NOMBRE_ESTACION[hueco.estacion]} + ${NOMBRE_MOMENTO[hueco.momento]}`,
-    )}`;
+    `/mas/wishlist?hueco=${encodeURIComponent(describir(hueco, ' + '))}`;
 
   const porcentaje = Math.round((100 * resultado.cubiertas) / (resultado.totalCombinaciones || 1));
 
@@ -140,8 +141,7 @@ export default async function PaginaHuecos() {
                     <li key={`${hueco.contextoId}-${hueco.momento}-${hueco.estacion}`}>
                       <Link href={enlaceWishlist(hueco)} className="fila-toque justify-between">
                         <span className="min-w-0 flex-1 truncate text-id-nula">
-                          {nombreContexto(hueco.contextoId)} · {NOMBRE_ESTACION[hueco.estacion]} ·{' '}
-                          {NOMBRE_MOMENTO[hueco.momento]}
+                          {describir(hueco)}
                         </span>
                         <span className="etiqueta text-xs">
                           {hueco.usos} {hueco.usos === 1 ? 'vez' : 'veces'}
@@ -176,7 +176,7 @@ export default async function PaginaHuecos() {
                     {huecos.map((hueco) => (
                       <li key={`${hueco.momento}-${hueco.estacion}`}>
                         <Link href={enlaceWishlist(hueco)} className="chip">
-                          {NOMBRE_ESTACION[hueco.estacion]} · {NOMBRE_MOMENTO[hueco.momento]}
+                          {momentoYEstacion(hueco).join(' · ') || 'Cualquier día y estación'}
                         </Link>
                       </li>
                     ))}
@@ -200,8 +200,7 @@ export default async function PaginaHuecos() {
                 key={`${c.contextoId}-${c.momento}-${c.estacion}`}
                 className="etiqueta text-sm text-id-parcial"
               >
-                {nombreContexto(c.contextoId)} · {NOMBRE_ESTACION[c.estacion]} ·{' '}
-                {NOMBRE_MOMENTO[c.momento]}
+                {describir(c)}
               </li>
             ))}
           </ul>

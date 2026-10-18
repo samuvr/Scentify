@@ -2,7 +2,7 @@
  * Seccion 6.2 — La idoneidad nunca se enseña como un numero suelto: siempre con
  * su etiqueta, su color y el desglose por eje.
  */
-import type { EjesIdoneidad, PorcentajeIdoneidad } from '@/dominio/tipos';
+import type { EjeIdoneidad, EjesIdoneidad, PorcentajeIdoneidad } from '@/dominio/tipos';
 
 const ESTILO: Record<PorcentajeIdoneidad, { etiqueta: string; clase: string }> = {
   100: { etiqueta: 'Total', clase: 'bg-id-total/15 text-id-total' },
@@ -11,7 +11,7 @@ const ESTILO: Record<PorcentajeIdoneidad, { etiqueta: string; clase: string }> =
   0: { etiqueta: 'Nula', clase: 'bg-id-nula/15 text-id-nula' },
 };
 
-const NOMBRE_EJE: Record<keyof EjesIdoneidad, string> = {
+const NOMBRE_EJE: Record<EjeIdoneidad, string> = {
   momento: 'Momento',
   contexto: 'Contexto',
   estacion: 'Estación',
@@ -42,20 +42,30 @@ export function DesgloseIdoneidad({
   return (
     <div className="space-y-2">
       <ul className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-        {(['momento', 'contexto', 'estacion'] as const).map((eje) => (
-          <li
-            key={eje}
-            className={`inline-flex items-center gap-1.5 ${
-              detalle[eje] ? 'text-texto-tenue' : 'font-semibold text-id-nula'
-            }`}
-          >
-            <span aria-hidden="true" className={detalle[eje] ? 'text-id-total' : ''}>
-              {detalle[eje] ? '✓' : '✕'}
-            </span>
-            {NOMBRE_EJE[eje]}
-            <span className="sr-only">{detalle[eje] ? ': encaja' : ': no encaja'}</span>
-          </li>
-        ))}
+        {(['momento', 'contexto', 'estacion'] as const).map((eje) =>
+          // En un contexto atemporal el momento y la estacion no cuentan: ni
+          // encajan ni fallan, y marcarlos con un ✓ diria lo que no es.
+          detalle.atemporal && eje !== 'contexto' ? (
+            <li key={eje} className="inline-flex items-center gap-1.5 text-texto-tenue">
+              <span aria-hidden="true">–</span>
+              {NOMBRE_EJE[eje]}
+              <span className="sr-only">: no cuenta en este contexto</span>
+            </li>
+          ) : (
+            <li
+              key={eje}
+              className={`inline-flex items-center gap-1.5 ${
+                detalle[eje] ? 'text-texto-tenue' : 'font-semibold text-id-nula'
+              }`}
+            >
+              <span aria-hidden="true" className={detalle[eje] ? 'text-id-total' : ''}>
+                {detalle[eje] ? '✓' : '✕'}
+              </span>
+              {NOMBRE_EJE[eje]}
+              <span className="sr-only">{detalle[eje] ? ': encaja' : ': no encaja'}</span>
+            </li>
+          ),
+        )}
       </ul>
       {explicacion ? <p className="text-sm text-texto-tenue">{explicacion}</p> : null}
     </div>

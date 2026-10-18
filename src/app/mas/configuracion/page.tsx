@@ -1,8 +1,9 @@
-/** Seccion 7.1 — Ubicacion y umbrales, editables sin desplegar. */
+/** Seccion 7.1 — Ubicacion y umbrales, editables sin desplegar. Y que contextos son atemporales. */
 import { redirect } from 'next/navigation';
 import { usuarioActual } from '@/servicios/auth';
 import { leerConfiguracion } from '@/servicios/ajustes';
-import { accionGuardarConfiguracion } from '@/app/acciones';
+import { accionGuardarConfiguracion, accionGuardarContextosAtemporales } from '@/app/acciones';
+import { listarContextos } from '@/servicios/consultas';
 import { CamposUbicacion } from './CamposUbicacion';
 import { MENSAJE_UMBRALES, type ErrorUmbrales } from '@/dominio/estacion';
 import { AvisosDiarios } from '@/componentes/AvisosDiarios';
@@ -34,7 +35,10 @@ export default async function PaginaConfiguracion({
 
   const { ubicacion, modoUbicacion, umbrales } = await leerConfiguracion(userId);
 
-  const recordatorio = await leerRecordatorio(userId);
+  const [recordatorio, contextos] = await Promise.all([
+    leerRecordatorio(userId),
+    listarContextos(userId),
+  ]);
 
   return (
     <div className="space-y-5">
@@ -87,6 +91,34 @@ export default async function PaginaConfiguracion({
           Guardar configuración
         </button>
       </form>
+
+      {contextos.length > 0 ? (
+        <form action={accionGuardarContextosAtemporales} className="tarjeta space-y-3">
+          <h2 className="font-semibold">Contextos atemporales</h2>
+          <p className="text-sm text-texto-tenue">
+            Donde da igual la hora y la estación: en el gimnasio hace el mismo calor en enero que en
+            agosto, de día y de noche. En estos contextos solo cuenta que el perfume esté marcado
+            para ellos.
+          </p>
+          <div className="space-y-2">
+            {contextos.map((c) => (
+              <label key={c.id} className="flex items-center gap-3 text-sm">
+                <input
+                  type="checkbox"
+                  name="atemporal"
+                  value={c.id}
+                  defaultChecked={c.atemporal}
+                  className="h-5 w-5"
+                />
+                {c.nombre}
+              </label>
+            ))}
+          </div>
+          <button type="submit" className="boton-secundario w-full">
+            Guardar contextos
+          </button>
+        </form>
+      ) : null}
 
       <section className="tarjeta space-y-3">
         <h2 className="font-semibold">Aviso de la noche</h2>

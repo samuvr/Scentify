@@ -3,7 +3,8 @@
 /**
  * Lo unico que se pregunta: para cuando (hoy o mañana), momento y contexto.
  * Mas el desplegable para sobrescribir la estacion, que la 7.1 exige que sea
- * siempre posible.
+ * siempre posible. Con un contexto atemporal (el gimnasio) el momento y la
+ * estacion no cuentan, y no se enseñan.
  */
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
@@ -25,7 +26,7 @@ export function SelectorPeticion({
   estacionesPropuestas,
   sobrescrita,
 }: {
-  contextos: { id: string; nombre: string }[];
+  contextos: { id: string; nombre: string; atemporal: boolean }[];
   paraManana: boolean;
   momento: Momento;
   contextoId: string;
@@ -36,6 +37,7 @@ export function SelectorPeticion({
   const router = useRouter();
   const parametros = useSearchParams();
   const [abierto, setAbierto] = useState(false);
+  const atemporal = contextos.find((c) => c.id === contextoId)?.atemporal ?? false;
 
   function navegar(cambios: Record<string, string | null>) {
     const nuevos = new URLSearchParams(parametros.toString());
@@ -74,22 +76,24 @@ export function SelectorPeticion({
         </div>
       </div>
 
-      <div>
-        <span className="block text-sm font-medium text-texto-tenue">Momento</span>
-        <div className="mt-1 grid grid-cols-2 gap-2">
-          {(['DIA', 'NOCHE'] as const).map((m) => (
-            <button
-              key={m}
-              type="button"
-              aria-pressed={momento === m}
-              onClick={() => navegar({ momento: m })}
-              className="opcion"
-            >
-              {m === 'DIA' ? 'Día' : 'Noche'}
-            </button>
-          ))}
+      {atemporal ? null : (
+        <div>
+          <span className="block text-sm font-medium text-texto-tenue">Momento</span>
+          <div className="mt-1 grid grid-cols-2 gap-2">
+            {(['DIA', 'NOCHE'] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                aria-pressed={momento === m}
+                onClick={() => navegar({ momento: m })}
+                className="opcion"
+              >
+                {m === 'DIA' ? 'Día' : 'Noche'}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       <div>
         <span className="block text-sm font-medium text-texto-tenue">Contexto</span>
@@ -108,45 +112,47 @@ export function SelectorPeticion({
         </div>
       </div>
 
-      <div>
-        <button
-          type="button"
-          onClick={() => setAbierto((v) => !v)}
-          aria-expanded={abierto}
-          className="boton-fantasma w-full justify-between px-1 text-sm"
-        >
-          Estación: {estacionesCompatibles.map((e) => NOMBRE_ESTACION[e]).join(' + ') || '—'}
-          {sobrescrita ? ' (a mano)' : ''}
-          <span aria-hidden="true">{abierto ? '−' : '+'}</span>
-        </button>
+      {atemporal ? null : (
+        <div>
+          <button
+            type="button"
+            onClick={() => setAbierto((v) => !v)}
+            aria-expanded={abierto}
+            className="boton-fantasma w-full justify-between px-1 text-sm"
+          >
+            Estación: {estacionesCompatibles.map((e) => NOMBRE_ESTACION[e]).join(' + ') || '—'}
+            {sobrescrita ? ' (a mano)' : ''}
+            <span aria-hidden="true">{abierto ? '−' : '+'}</span>
+          </button>
 
-        {abierto ? (
-          <div className="mt-2 space-y-2">
-            <div className="flex flex-wrap gap-2">
-              {(Object.keys(NOMBRE_ESTACION) as Estacion[]).map((e) => (
+          {abierto ? (
+            <div className="mt-2 space-y-2">
+              <div className="flex flex-wrap gap-2">
+                {(Object.keys(NOMBRE_ESTACION) as Estacion[]).map((e) => (
+                  <button
+                    key={e}
+                    type="button"
+                    aria-pressed={estacionesCompatibles.includes(e)}
+                    onClick={() => alternarEstacion(e)}
+                    className="chip"
+                  >
+                    {NOMBRE_ESTACION[e]}
+                  </button>
+                ))}
+              </div>
+              {sobrescrita ? (
                 <button
-                  key={e}
                   type="button"
-                  aria-pressed={estacionesCompatibles.includes(e)}
-                  onClick={() => alternarEstacion(e)}
-                  className="chip"
+                  onClick={() => navegar({ estaciones: null })}
+                  className="boton-fantasma px-1 text-sm"
                 >
-                  {NOMBRE_ESTACION[e]}
+                  Volver a la propuesta ({estacionesPropuestas.map((e) => NOMBRE_ESTACION[e]).join(' + ')})
                 </button>
-              ))}
+              ) : null}
             </div>
-            {sobrescrita ? (
-              <button
-                type="button"
-                onClick={() => navegar({ estaciones: null })}
-                className="boton-fantasma px-1 text-sm"
-              >
-                Volver a la propuesta ({estacionesPropuestas.map((e) => NOMBRE_ESTACION[e]).join(' + ')})
-              </button>
-            ) : null}
-          </div>
-        ) : null}
-      </div>
+          ) : null}
+        </div>
+      )}
     </section>
   );
 }
