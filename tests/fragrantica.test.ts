@@ -392,3 +392,62 @@ describe('urlDeFichaEn: el enlace dentro de lo pegado o compartido', () => {
     expect(urlDeFichaEn(['Sauvage de Dior'])).toBeNull();
   });
 });
+
+/* --------------------------------- votos sin pintar: nada de inventarlos */
+
+/**
+ * Lo que sirve el servidor de Fragrantica: la piramide y los acordes vienen,
+ * pero los votos son un componente de Vue vacio que solo se pinta en el
+ * navegador. Se construye de la ficha real cambiando su bloque de votos por
+ * ese componente, con una reseña al lado que nombra «otoño» y «night» junto a
+ * un numero, que es el ruido que tiene la pagina de verdad.
+ */
+function conVotosSinPintar(html: string): string {
+  const inicio = html.indexOf('<!-- bloque 3 -->');
+  const fin = html.indexOf('<!-- bloque 4 -->');
+  return (
+    html.slice(0, inicio) +
+    `<!-- bloque 3 -->
+<div class="tw-rating-card-header"><span class="tw-rating-card-label">Cuándo usarlo</span></div>
+<div class="p-2"><seasons-rating-new :perfume_id="77860" type-chart="small-chart" colors="retro"></seasons-rating-new></div>
+<div class="reseña"><p>Lo llevo en otoño por la noche</p><span>9</span><p>night</p><span>9</span></div>
+` +
+    html.slice(fin)
+  );
+}
+
+/** El mismo bloque de votos con sus rotulos pero sin recuentos ni barras. */
+function conVotosEnEsqueleto(html: string): string {
+  const inicio = html.indexOf('<!-- bloque 3 -->');
+  const fin = html.indexOf('<!-- bloque 4 -->');
+  const bloque = html
+    .slice(inicio, fin)
+    .replace(/\sstyle="[^"]*width:[^"]*"/g, '')
+    .replace(/(tabular-nums"[^>]*>)[^<]*</g, '$1<');
+  return html.slice(0, inicio) + bloque + html.slice(fin);
+}
+
+describe('los votos que no se han pintado no se inventan', () => {
+  const real = leerFichaFragrantica(fixture('popular'));
+
+  it('con el componente sin pintar no hay votos, pero si notas y acordes', () => {
+    const ficha = leerFichaFragrantica(conVotosSinPintar(fixture('popular')));
+
+    expect(ficha.estaciones).toBeNull();
+    expect(ficha.momentos).toBeNull();
+    expect(ficha.notas).toEqual(real.notas);
+    expect(ficha.acordes).toEqual(real.acordes);
+  });
+
+  it('con los rotulos sin recuentos ni barras no sale un 100 % de noche', () => {
+    const ficha = leerFichaFragrantica(conVotosEnEsqueleto(fixture('popular')));
+
+    expect(ficha.estaciones).toBeNull();
+    expect(ficha.momentos).toBeNull();
+  });
+
+  it('la ficha pintada sigue dando sus votos', () => {
+    expect(real.estaciones?.INVIERNO.votos).toBe(2300);
+    expect(real.momentos?.NOCHE.votos).toBe(2700);
+  });
+});

@@ -10,8 +10,9 @@ import { z } from 'zod';
 import { usuarioActual } from '@/servicios/auth';
 import { consultarFicha, leerTextoPegado, mensajeDeFallo } from '@/servicios/fragrantica';
 
-// Leer la ficha a traves de ZenRows abre un navegador y tarda; ver el servicio.
-export const maxDuration = 60;
+// Leer la ficha a traves de ZenRows abre un navegador y espera a que se
+// pinten los votos: tarda. El servicio corta a los 100 s; ver alli.
+export const maxDuration = 120;
 
 const esquema = z.union([
   z.object({ url: z.string().min(1) }),
@@ -27,7 +28,18 @@ export async function POST(peticion: Request) {
 
   const datos = analisis.data;
   const porUrl = 'url' in datos;
-  const resultado = 'url' in datos ? await consultarFicha(datos.url) : leerTextoPegado(datos.texto);
+  let resultado;
+  try {
+    resultado = 'url' in datos ? await consultarFicha(datos.url) : leerTextoPegado(datos.texto);
+  } catch (error) {
+    // Lo imprevisto tambien contesta en JSON, para que el formulario no lo
+    // confunda con la falta de red.
+    console.error('[fragrantica] fallo inesperado:', error);
+    return NextResponse.json(
+      { ok: false, motivo: 'sin-respuesta', mensaje: 'No se ha podido leer la ficha. Pega el texto de la página.' },
+      { status: 500 },
+    );
+  }
 
   if (!resultado.ok) {
     // 200 a proposito: no es un error del cliente ni del servidor, es un

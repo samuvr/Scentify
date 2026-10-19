@@ -427,6 +427,13 @@ Lo que la ficha real hace y no era evidente:
   0 % noche, un número rotundo y falso. Por eso los votos se buscan solo dentro del
   bloque «Cuándo usarlo», igual que la pirámide se ancla a su contenedor. El fixture
   `fragrantica-pegado-ruidoso.txt` es esa página entera y lo fija.
+- La misma trampa vuelve con el HTML sin pintar, que es el que sirve el servidor: el
+  bloque «Cuándo usarlo» está, pero vacío, y el respaldo que busca por toda la página
+  encontraba «night» o «fall» junto a un número de una reseña, o la valoración
+  «4.34» justo detrás de «Noche»: 100 % de noche otra vez. Así que si el componente
+  de los votos sigue sin pintar (`<seasons-rating-new>`) no hay votos, y en HTML el
+  respaldo tiene que encontrar dato en dos etiquetas por lo menos: una ficha con
+  votos los pinta todos.
 - La misma página repite cada nota dos veces y el bloque de votos entero otra vez más;
   el parser deduplica y se queda con el primer bloque.
 - Los acordes principales marcan solas las familias que coinciden
@@ -494,8 +501,9 @@ votos siguen moviéndose) y es común a todas las cuentas, como la pirámide.
 
 - Fragrantica lo pinta en el navegador después de cargar, así que la petición
   directa del servidor no suele traerlo; el botón «Enviar a Scentify», compartir la
-  selección y pegar el texto, sí. A través de ZenRows, que también pinta la página,
-  debería llegar, pero no está comprobado con una ficha real. Por eso se lee por líneas de texto, que es lo que tienen en común
+  selección y pegar el texto, sí. A través de ZenRows tampoco suele llegar: está en
+  una sección que la página carga al acercarse con el scroll, y la lectura no hace
+  scroll. Por eso se lee por líneas de texto, que es lo que tienen en común
   el HTML y lo pegado.
 - Cada tarjeta es marca, nombre y los dos recuentos. Los votos son los dos **últimos**
   números antes de la tarjeta siguiente: hay perfumes que se llaman con un número
@@ -532,8 +540,8 @@ el porcentaje por completo. Más trabajo que copiar el texto, y menos fiable.
 Fragrantica está detrás de Cloudflare Turnstile, que corta las IP de centro de datos:
 la petición directa desde Vercel casi nunca pasa. Con `ZENROWS_API_KEY` la ficha se
 pide a través de [ZenRows](https://www.zenrows.com), que la abre en un navegador con
-IP residencial y devuelve el HTML ya pintado. Es el mismo HTML que el de los
-fixtures, así que lo lee el parser de siempre, sin un camino aparte.
+IP residencial y devuelve el HTML una vez pintado. Lo lee el parser de siempre, sin
+un camino aparte.
 
 1. Cuenta gratis en [zenrows.com](https://www.zenrows.com), sin tarjeta.
 2. Copia la clave de la API del panel y ponla en Vercel como `ZENROWS_API_KEY`.
@@ -549,12 +557,26 @@ página desde el móvil (Android) entra por el mismo camino.
 - **Coste.** Cada ficha son 25 créditos (navegador 5 × proxy residencial), y el plan
   gratuito trae 5.000 al mes: unas 200 fichas. ZenRows no cobra las que fallan.
 - **Se piden los dos parámetros.** Sin el proxy residencial, Turnstile corta igual.
-  El navegador es por prudencia: los fixtures salen del DOM ya pintado (los estilos
-  vienen serializados por el navegador, con los marcadores `<!---->` de Vue), y no
-  está comprobado que el HTML que sirve el servidor traiga ya los votos y los acordes.
-- **Tarda.** Abrir la página en un navegador lleva sus buenos segundos, así que la
-  petición a ZenRows espera hasta 45, la ruta tiene `maxDuration = 60` y la pantalla
-  avisa de que puede tardar.
+  Sin el navegador no hay votos: el HTML que sirve Fragrantica trae la pirámide y los
+  acordes, pero los votos de estación y momento son un componente de Vue vacío
+  (`<seasons-rating-new :perfume_id=…>`) que solo se pinta en el navegador. Los
+  fixtures son del DOM ya pintado (estilos serializados por el navegador, marcadores
+  `<!---->` de Vue), por eso traen las barras.
+- **Se espera a los votos, no un tiempo fijo.** Con `wait=2000` llegaban las notas y
+  las familias pero no los votos: a los dos segundos el componente seguía sin pintar.
+  Ahora la petición lleva `js_instructions=[{"wait_for":"div[index] span.tabular-nums"},
+  {"wait":1000}]`: espera a que aparezcan los seis recuentos (cuatro estaciones, día y
+  noche), que en el HTML del servidor no están. Va dentro de `js_instructions` y no
+  como el `wait_for` de primer nivel a propósito: si el selector no aparece (una
+  ficha sin votos todavía), el de primer nivel acaba en un 422 y se pierde la página
+  entera, notas incluidas; dentro de las instrucciones, ZenRows da ese paso por
+  fallido a los 10 s y devuelve la página igual. Si ZenRows rechazara las
+  instrucciones (un 400), se repite una vez sin ellas: mejor la ficha sin votos que
+  sin nada. No suma créditos.
+- **Tarda.** Abrir la página en un navegador y esperar a los votos lleva sus buenos
+  segundos. La consulta entera tiene un plazo de 100 s, la ruta `maxDuration = 120`
+  (como el asistente) y la pantalla avisa de que puede tardar. Si se agota con
+  ZenRows, no se gasta lo que queda en la petición directa, que desde Vercel no pasa.
 - **Si ZenRows falla** (sin créditos, la clave mal o caído), se prueba la petición
   directa, que no cuesta nada. Si tampoco pasa, quedan los dos fallbacks de la 5.2:
   pegar el texto o el botón del navegador.
@@ -563,8 +585,24 @@ página desde el móvil (Android) entra por el mismo camino.
   `ZenRows 402 …`), que es lo que se busca en su documentación. El mismo detalle
   queda en los logs de la función en Vercel, nunca con la clave. Antes, «Fragrantica
   ha bloqueado la petición» salía igual con la clave que sin ella.
+- **Una línea en el log por lectura.** Cada ficha leída a través de ZenRows deja en
+  los logs de la función (Vercel → Logs, buscar `[fragrantica] ZenRows`) una línea
+  como esta, sin la clave:
+
+  ```
+  [fragrantica] ZenRows <url> votos <x-request-id> <coste> <url final> {"ms":14200,
+  "vue":true,"votosSinPintar":false,"items":6,"recuentos":6,"estaciones":"INVIERNO:2300|78.76 …",…}
+  ```
+
+  Se lee así: con `items` 6 y `estaciones` puestas, todo bien. Con `votosSinPintar`
+  a `true` y `vue` a `false`, Vue no llegó a montar la página en el navegador de
+  ZenRows: lo siguiente que probar es `block_resources=none`. Con `vue` a `true`
+  pero sin `items`, el componente se montó sin datos. Con `items` 6 y sin
+  `estaciones`, es un fallo del parser: esa página es un fixture nuevo. `ms` es lo
+  que tarda de verdad, para ajustar el plazo.
 - **A ZenRows solo le llegan fichas de Fragrantica**: la URL se valida antes con
-  `esUrlDeFichaValida()`, igual que la petición directa.
+  `esUrlDeFichaValida()`, que exige la ruta entera de una ficha
+  (`/perfume/<Marca>/<Nombre>-<id>.html`), igual que la petición directa.
 
 Sin la clave todo sigue como antes: se intenta la petición directa, que fallará a
 menudo, y quedan los dos fallbacks de la 5.2, implementados y probados.

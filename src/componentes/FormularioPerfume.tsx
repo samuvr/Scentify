@@ -708,7 +708,7 @@ export function FormularioPerfume({
         </button>
         {consultando ? (
           <p className="text-sm text-texto-tenue" role="status">
-            Leyendo la ficha en Fragrantica. Puede tardar hasta medio minuto.
+            Leyendo la ficha en Fragrantica. Puede tardar hasta un minuto.
           </p>
         ) : null}
 
