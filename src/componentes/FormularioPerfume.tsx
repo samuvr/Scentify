@@ -93,6 +93,19 @@ function AcordesDeFragrantica({
   );
 }
 
+/**
+ * La ficha se ha leido pero sin los votos de este eje: se dice, para que no
+ * parezca que faltan las barras por un fallo de la pantalla.
+ */
+function SinVotos({ ficha, eje }: { ficha: FichaFragrantica | null; eje: 'estaciones' | 'momentos' }) {
+  if (!ficha || ficha[eje]) return null;
+  return (
+    <p className="text-xs text-texto-tenue">
+      La lectura de Fragrantica no ha traído los votos de {eje === 'estaciones' ? 'estación' : 'día y noche'}.
+    </p>
+  );
+}
+
 /** Barra de apoyo con el voto de Fragrantica. Solo visual: no decide nada. */
 function BarraVoto({ voto }: { voto: VotoEje | undefined }) {
   if (!voto) return null;
@@ -145,6 +158,7 @@ export function FormularioPerfume({
   compartidaCon = 0,
   sugerirConIa = false,
   consultarAlAbrir = false,
+  yaLoTengo = false,
   deseoId,
 }: {
   perfumeId?: string;
@@ -155,6 +169,12 @@ export function FormularioPerfume({
    * consulta con la direccion guardada, en vez de dejar en el paso 1.
    */
   consultarAlAbrir?: boolean;
+  /**
+   * El enlace es de un perfume que ya esta en mi coleccion: la pagina lo
+   * avisa, y leer la ficha sola gastaria una lectura de ZenRows para nada.
+   * El boton de consultar sigue ahi.
+   */
+  yaLoTengo?: boolean;
   iniciales?: ValoresPerfume;
   /**
    * Ficha del catalogo que ya encaja con lo que llega, p. ej. la misma URL de
@@ -308,6 +328,7 @@ export function FormularioPerfume({
       aplicarFicha(fichaInicial);
       return;
     }
+    if (yaLoTengo) return;
     void consultarFragrantica({ url: iniciales?.fragranticaUrl ?? '' });
     // Solo al montar: `compartida` se calcula de los valores iniciales.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -403,16 +424,27 @@ export function FormularioPerfume({
     setConsultando(true);
     setAvisoFragrantica(null);
     try {
-      const r = await fetch('/api/fragrantica', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(cuerpo),
-      });
-      const datos = await r.json();
-      if (datos.ok) aplicarFicha(datos.ficha);
-      else setAvisoFragrantica(datos.mensaje ?? 'No se ha podido leer la ficha.');
-    } catch {
-      setAvisoFragrantica('No hay conexión. Sigue a mano: no pierdes nada de lo escrito.');
+      let r: Response;
+      try {
+        r = await fetch('/api/fragrantica', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(cuerpo),
+        });
+      } catch {
+        setAvisoFragrantica('No hay conexión. Sigue a mano: no pierdes nada de lo escrito.');
+        return;
+      }
+      // Una respuesta sin JSON es del servidor (un fallo, o la funcion que se
+      // ha pasado de tiempo), no de la red: decir «no hay conexión» engañaba.
+      const datos = await r.json().catch(() => null);
+      if (datos?.ok) aplicarFicha(datos.ficha);
+      else if (datos?.mensaje) setAvisoFragrantica(datos.mensaje);
+      else {
+        setAvisoFragrantica(
+          `El servidor no ha podido leer la ficha (error ${r.status}). Inténtalo otra vez o pega el texto de la página.`,
+        );
+      }
     } finally {
       setConsultando(false);
     }
@@ -676,7 +708,7 @@ export function FormularioPerfume({
         </button>
         {consultando ? (
           <p className="text-sm text-texto-tenue" role="status">
-            Leyendo la ficha en Fragrantica. Puede tardar hasta medio minuto.
+            Leyendo la ficha en Fragrantica. Puede tardar hasta un minuto.
           </p>
         ) : null}
 
@@ -834,6 +866,7 @@ export function FormularioPerfume({
         <p className="text-sm text-texto-tenue">
           Marca las estaciones. Los votos son solo una referencia: manda lo que marques tú.
         </p>
+        <SinVotos ficha={ficha} eje="estaciones" />
         <MarcarSegunVotos
           propuesta={masVotadas(ficha?.estaciones)}
           actual={v.estaciones}
@@ -860,6 +893,7 @@ export function FormularioPerfume({
   const seccionMomento = () => (
       <section className="space-y-3">
         <p className="text-sm text-texto-tenue">Día, noche o ambos. Mínimo uno.</p>
+        <SinVotos ficha={ficha} eje="momentos" />
         <MarcarSegunVotos
           propuesta={masVotadas(ficha?.momentos)}
           actual={v.momentos}

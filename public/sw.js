@@ -34,8 +34,11 @@
  *     guardan las redirecciones al login; las navegaciones esperan a la red
  *     como mucho unos segundos si hay copia; y el armazon se vuelve a guardar
  *     ya con sesion.
+ * v9: el alta con parametros (?url=, ?ficha=, ?deseo=) va siempre a la red y
+ *     no se guarda: una copia de un despliegue anterior volvia a leer la ficha
+ *     con el codigo viejo.
  */
-const VERSION = 'v8';
+const VERSION = 'v9';
 const CACHE_ARMAZON = `scentify-armazon-${VERSION}`;
 const CACHE_DATOS = `scentify-datos-${VERSION}`;
 const ETIQUETA_SYNC = 'sincronizar-usos';
@@ -179,6 +182,13 @@ self.addEventListener('fetch', (evento) => {
 
   if (url.pathname.startsWith('/api/')) {
     evento.respondWith(redPrimero(request, CACHE_DATOS));
+    return;
+  }
+
+  // El alta con lo que llega de Fragrantica es de un solo uso: lo que trae
+  // depende del catalogo de ese momento, y una copia vieja lo enseñaria mal.
+  if (request.mode === 'navigate' && url.pathname === '/coleccion/nuevo' && url.search !== '') {
+    evento.respondWith(fetch(request).catch(() => paginaSinConexion()));
     return;
   }
 

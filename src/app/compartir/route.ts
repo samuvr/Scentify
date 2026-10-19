@@ -20,6 +20,7 @@
  */
 import { NextResponse } from 'next/server';
 import { usuarioActual } from '@/servicios/auth';
+import { urlDeFichaEn } from '@/dominio/fragrantica';
 import { destinoDeCompartido } from '@/servicios/compartido';
 
 export const dynamic = 'force-dynamic';
@@ -53,9 +54,11 @@ async function manejar(peticion: Request): Promise<Response> {
   const userId = await usuarioActual();
   if (!userId) {
     // Sin sesion no se pierde lo compartido... salvo el texto largo, que no
-    // cabe en una URL de vuelta. Se avisa en vez de fingir que sigue ahi.
+    // cabe en una URL de vuelta. Chrome en Android deja `url` vacio y manda
+    // el enlace dentro de `text`, asi que se busca en los tres campos.
+    const enlace = urlDeFichaEn([url, text, title]) ?? url;
     const pendiente = new URLSearchParams();
-    if (url) pendiente.set('url', url);
+    if (enlace) pendiente.set('url', enlace);
     if (title) pendiente.set('title', title);
     const destino = `/compartir?${pendiente}`;
     return a(`/login?siguiente=${encodeURIComponent(destino)}`);

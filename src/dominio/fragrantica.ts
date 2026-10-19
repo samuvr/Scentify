@@ -326,6 +326,17 @@ function bloqueDeVotos(fuente: string, esHtml: boolean): string {
   return fin === undefined ? resto : resto.slice(0, fin);
 }
 
+/**
+ * El componente de Vue que pinta los votos de estacion y momento. En una
+ * pagina ya pintada no queda: Vue lo sustituye por las barras.
+ */
+const VOTOS_SIN_PINTAR = /<seasons-rating-new\b/i;
+
+/** Cuantas etiquetas de un eje han encontrado un recuento o una barra. */
+function etiquetasConDato(eje: Record<string, VotoEje>): number {
+  return Object.values(eje).filter((voto) => voto.votos !== null || voto.anchura !== null).length;
+}
+
 /** Normaliza un eje a porcentajes sobre su propio total (paso 4 de la 5.1). */
 function normalizarEje<C extends string>(
   fuente: string,
@@ -744,13 +755,30 @@ export function leerFichaFragrantica(fuente: string): FichaFragrantica {
    * Si el recorte no da nada —una maquetacion sin el rotulo esperado, o un
    * pegado que empieza ya dentro del bloque— se vuelve a intentar con la
    * fuente entera, que es como se comportaba antes.
+   *
+   * En HTML, el respaldo tiene que encontrar dato en dos etiquetas por lo
+   * menos. Una ficha con votos los pinta todos; uno solo es un numero suelto
+   * que ha caido cerca, como la nota «4.34» de la valoracion justo detras de
+   * «Noche», y daba un 100 % de noche rotundo y falso.
    */
-  const respaldo = <C extends string>(etiquetas: Record<C, string[]>) =>
-    votos === fuente ? null : normalizarEje(fuente, etiquetas, esHtml);
+  const respaldo = <C extends string>(etiquetas: Record<C, string[]>) => {
+    if (votos === fuente) return null;
+    const eje = normalizarEje(fuente, etiquetas, esHtml);
+    return eje && (!esHtml || etiquetasConDato(eje) >= 2) ? eje : null;
+  };
+  /**
+   * El componente de los votos sin pintar: el HTML tal como lo sirve el
+   * servidor, o una pagina capturada antes de que Vue lo montase. Ahi no hay
+   * votos que leer, y lo que hubiera cerca de «fall» o de «night» seria un
+   * numero de una reseña.
+   */
+  const sinPintar = esHtml && VOTOS_SIN_PINTAR.test(fuente);
+  const eje = <C extends string>(etiquetas: Record<C, string[]>) =>
+    sinPintar ? null : (normalizarEje(votos, etiquetas, esHtml) ?? respaldo(etiquetas));
 
   return {
-    estaciones: normalizarEje(votos, ETIQUETAS_ESTACION, esHtml) ?? respaldo(ETIQUETAS_ESTACION),
-    momentos: normalizarEje(votos, ETIQUETAS_MOMENTO, esHtml) ?? respaldo(ETIQUETAS_MOMENTO),
+    estaciones: eje(ETIQUETAS_ESTACION),
+    momentos: eje(ETIQUETAS_MOMENTO),
     notas: extraerPiramide(fuente),
     marca: extraerMarca(fuente),
     anio: extraerAnio(fuente),
@@ -854,11 +882,17 @@ export function esUrlDeFichaValida(url: string): boolean {
     const etiquetasDominio = analizada.hostname.toLowerCase().split('.');
     const registrable = etiquetasDominio.at(-2);
 
+    // La ruta, entera: /perfume/<Marca>/<Nombre>-<id>.html. Con solo exigir
+    // «/perfume/» pasaban el indice o una noticia, y cada una es una lectura
+    // de ZenRows cobrada para nada. Sin puerto ni credenciales en la URL.
     return (
       analizada.protocol === 'https:' &&
+      analizada.port === '' &&
+      !analizada.username &&
+      !analizada.password &&
       etiquetasDominio.length >= 2 &&
       registrable === 'fragrantica' &&
-      /\/perfume\//i.test(analizada.pathname)
+      /^\/perfume\/[^/]+\/[^/]+-\d+\.html$/i.test(analizada.pathname)
     );
   } catch {
     return false;
