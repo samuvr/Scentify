@@ -1,29 +1,66 @@
-import Link from 'next/link';
-import { redirect } from 'next/navigation';
-import { usuarioActual } from '@/servicios/auth';
-import { leerUltimaCopia } from '@/servicios/ajustes';
-import { diasDesdeCopia, textoUltimaCopia, tocaCopia } from '@/dominio/copias';
-import { accionCerrarSesion } from '../acciones';
-import type { Metadata } from 'next';
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { usuarioActual } from "@/servicios/auth";
+import { leerUltimaCopia } from "@/servicios/ajustes";
+import { diasDesdeCopia, textoUltimaCopia, tocaCopia } from "@/dominio/copias";
+import { accionCerrarSesion } from "../acciones";
+import type { Metadata } from "next";
 
-export const metadata: Metadata = { title: 'Más' };
+export const metadata: Metadata = { title: "Más" };
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 const SECCIONES = [
-  { href: '/estadisticas', titulo: 'Estadísticas', descripcion: 'Qué te pones, cuándo y cuánto aciertas' },
-  { href: '/mas/calendario', titulo: 'Calendario', descripcion: 'Qué te pusiste cada día y qué días no apuntaste' },
-  { href: '/mas/wishlist', titulo: 'Wishlist', descripcion: 'Lo que quiero y a qué precio' },
-  { href: '/mas/huecos', titulo: 'Huecos', descripcion: 'Qué combinaciones no cubre tu colección' },
-  { href: '/mas/viaje', titulo: 'Modo viaje', descripcion: 'El set mínimo de frascos para lo que viene' },
-  { href: '/mas/importador', titulo: 'Botón de Fragrantica', descripcion: 'Trae una ficha de un toque y completa las que ya tienes' },
-  { href: '/mas/configuracion', titulo: 'Configuración', descripcion: 'Ubicación y umbrales de temperatura' },
-  { href: '/mas/datos', titulo: 'Datos', descripcion: 'Importar, exportar y copia de seguridad' },
+  {
+    href: "/estadisticas",
+    titulo: "Estadísticas",
+    descripcion: "Qué te pones, cuándo y cuánto aciertas",
+  },
+  {
+    href: "/mas/calendario",
+    titulo: "Calendario",
+    descripcion: "Qué te pusiste cada día y qué días no apuntaste",
+  },
+  {
+    href: "/mas/wishlist",
+    titulo: "Wishlist",
+    descripcion: "Lo que quiero y a qué precio",
+  },
+  {
+    href: "/mas/huecos",
+    titulo: "Huecos",
+    descripcion: "Qué combinaciones no cubre tu colección",
+  },
+  {
+    href: "/mas/reparto",
+    titulo: "Reparto",
+    descripcion: "Cuántos perfumes tienes por contexto y momento del día",
+  },
+  {
+    href: "/mas/viaje",
+    titulo: "Modo viaje",
+    descripcion: "El set mínimo de frascos para lo que viene",
+  },
+  {
+    href: "/mas/importador",
+    titulo: "Botón de Fragrantica",
+    descripcion: "Trae una ficha de un toque y completa las que ya tienes",
+  },
+  {
+    href: "/mas/configuracion",
+    titulo: "Configuración",
+    descripcion: "Ubicación y umbrales de temperatura",
+  },
+  {
+    href: "/mas/datos",
+    titulo: "Datos",
+    descripcion: "Importar, exportar y copia de seguridad",
+  },
 ];
 
 export default async function PaginaMas() {
   const userId = await usuarioActual();
-  if (!userId) redirect('/login');
+  if (!userId) redirect("/login");
   const dias = diasDesdeCopia(await leerUltimaCopia(userId));
 
   return (
@@ -32,7 +69,8 @@ export default async function PaginaMas() {
       {/* Todo lo de la cuenta vive en una base: sin copia, un error la perderia. */}
       {tocaCopia(dias) ? (
         <Link href="/mas/datos" className="aviso-atencion block">
-          {textoUltimaCopia(dias)} <span className="underline">Hacer una copia</span>
+          {textoUltimaCopia(dias)}{" "}
+          <span className="underline">Hacer una copia</span>
         </Link>
       ) : null}
       <ul className="space-y-2">
