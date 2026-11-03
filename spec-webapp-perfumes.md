@@ -241,6 +241,8 @@ idoneidad = round(100 × aciertos / 3)
 
 **Contextos atemporales.** En algunos contextos las condiciones no cambian con la hora ni con la estación: en el gimnasio hace el mismo calor, con la misma humedad y el mismo sudor, en enero que en agosto y de día que de noche. En ellos el momento y la estación no cuentan: la idoneidad es 100 si el perfume está marcado para el contexto y 0 si no, y el desglose enseña esos dos ejes como «no cuenta». Por defecto solo el gimnasio es atemporal; se cambia desde configuración. La recomendación, los huecos (una sola casilla por contexto atemporal) y el modo viaje (un solo requisito) siguen el mismo criterio.
 
+**Momentos de un contexto.** Un contexto puede existir solo de día o solo de noche: a la oficina se va de día. La combinación que falta («Oficina · Noche») desaparece de toda la app: no se ofrece al registrar ni al pedir recomendación, no abre huecos ni casillas de reparto, no se pide en el modo viaje y no se combina en los filtros de colección y estadísticas. Los usos antiguos que la tengan se conservan tal cual. Se cambia desde configuración; por defecto solo la oficina es de día.
+
 ---
 
 ## 7. Funcionalidad — Recomendación
@@ -330,6 +332,8 @@ No es opcional: se introduce mucha información a mano y perderla sería inacept
 
 ### 10.1 Detección de huecos
 Cruce de contextos × momentos × estaciones contra la colección, listando las combinaciones sin cobertura: *"No tienes ningún perfume marcado para Oficina + Verano + Día."* Cada hueco enlaza a crear una entrada de wishlist. Un contexto atemporal (6.2) es una sola casilla: *"No tienes ningún perfume marcado para Gimnasio."*
+
+**Reparto.** Además de los huecos, cuántos perfumes hay en cada casilla comparado con cuánto se usa cada contexto, no con una media global: cinco para la oficina (cinco días a la semana) están bien; cinco para ocasiones elegantes (dos veces al mes) sobran. Cada contexto tiene en configuración sus veces por semana y su % de noche, con la frecuencia real de los últimos 90 días al lado (ocasiones distintas, día y momento). Los frascos esperados de un contexto son su parte de la raíz cuadrada de su frecuencia sobre el total de frascos (suavizado: más uso pide más frascos, pero no en proporción), repartidos por momento según el % de noche, iguales en cada estación y con un mínimo de uno donde haya uso. Contra eso, cada casilla es vacía, escasa (menos de la mitad, o uno solo donde tocan dos o más), bien o de sobra (al menos vez y media y dos por encima), y dice cada cuánto sale cada frasco. Un contexto sin frecuencia no se juzga.
 
 ### 10.2 Solapamiento en wishlist
 Al añadir un deseo, si comparte 3 o más notas de fondo con perfumes que ya tengo, aviso sin bloquear: *"Se parece a X e Y que ya tienes."*

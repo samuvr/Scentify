@@ -41,7 +41,8 @@ import {
   type ResultadoActualizacion,
 } from '@/servicios/hoja-actualizacion';
 import type { AnalisisHoja } from '@/dominio/hoja-actualizacion';
-import { guardarAjuste, guardarContextosAtemporales, guardarUmbrales } from '@/servicios/ajustes';
+import { guardarAjuste, guardarContextos, guardarUmbrales } from '@/servicios/ajustes';
+import { leerAjusteContexto, type AjusteContexto } from '@/dominio/contextos';
 import { ajustarMarca, rechazarPropuesta } from '@/servicios/recategorizacion';
 import { validarUmbrales } from '@/dominio/estacion';
 import { HORA_MAXIMA_RECORDATORIO } from '@/servicios/recordatorio';
@@ -337,20 +338,35 @@ export async function accionGuardarConfiguracion(datos: FormData) {
 }
 
 /**
- * Contextos atemporales: en ellos la hora y la estacion no cuentan. Va en un
- * formulario aparte para que guardarlos no dependa de que los umbrales validen.
+ * Contextos: si son atemporales, en que momentos existen y cuanto se usan. Va
+ * en un formulario aparte para que guardarlos no dependa de que los umbrales
+ * validen. Si un contexto no valida no se guarda ninguno, y se dice cual.
  */
-export async function accionGuardarContextosAtemporales(datos: FormData) {
+export async function accionGuardarContextos(datos: FormData) {
   const userId = await exigirUsuario();
-  const ids = datos.getAll('atemporal').map(String).filter(esUuid);
-  await guardarContextosAtemporales(userId, ids);
+  const ids = datos.getAll('contexto').map(String).filter(esUuid);
+  const atemporales = new Set(datos.getAll('atemporal').map(String));
+  const ajustes = new Map<string, AjusteContexto & { atemporal: boolean }>();
+  for (const id of ids) {
+    const leido = leerAjusteContexto({
+      momentos: datos.getAll(`momentos-${id}`).map(String),
+      usosSemana: String(datos.get(`usos-${id}`) ?? ''),
+      pctNoche: String(datos.get(`noche-${id}`) ?? ''),
+    });
+    if (!leido.ok) {
+      const nombre = String(datos.get(`nombre-${id}`) ?? 'Un contexto');
+      redirect(
+        `/mas/configuracion?errorContextos=${encodeURIComponent(`${nombre}: ${leido.error}.`)}#contextos`,
+      );
+    }
+    ajustes.set(id, { ...leido.ajuste, atemporal: atemporales.has(id) });
+  }
+  await guardarContextos(userId, ajustes);
 
-  revalidatePath('/');
-  revalidatePath('/mas/configuracion');
-  revalidatePath('/recomendacion');
-  revalidatePath('/mas/huecos');
-  revalidatePath('/mas/viaje');
-  redirect('/mas/configuracion?guardado=1');
+  // Momentos y frecuencias cambian el registro, la recomendacion, los
+  // huecos, el reparto, el viaje y los filtros de la coleccion.
+  revalidatePath('/', 'layout');
+  redirect('/mas/configuracion?guardado=1#contextos');
 }
 
 /* --------------------------------------------------------------- perfumes */

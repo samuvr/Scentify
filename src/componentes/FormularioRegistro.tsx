@@ -27,6 +27,7 @@ import {
 } from '@/app/acciones';
 import { coincideBusqueda, MINIMO_CARACTERES_BUSQUEDA } from '@/dominio/texto';
 import type { EjesIdoneidad, Momento, PromediosPerfume } from '@/dominio/tipos';
+import { admiteMomento, contextoParaMomento, contextosDelMomento } from '@/dominio/contextos';
 
 const MINIMO_BUSQUEDA = MINIMO_CARACTERES_BUSQUEDA;
 const MAXIMO_RESULTADOS = 8;
@@ -80,6 +81,9 @@ const SEGUNDOS_AVISO = 8;
 interface Contexto {
   id: string;
   nombre: string;
+  atemporal: boolean;
+  /** Momentos en que existe: la oficina solo de dia. */
+  momentos: Momento[];
 }
 
 interface Resumen extends PromediosPerfume {
@@ -150,7 +154,10 @@ export function FormularioRegistro({
   const [elegido, setElegido] = useState<PerfumeBreve | null>(null);
   const [resumen, setResumen] = useState<Resumen | null>(null);
 
-  const contextoPorDefecto = (m: Momento) => contextoPorMomento[m] ?? contextos[0]?.id ?? '';
+  // El habitual del momento si existe en ese momento; si no, el primero que
+  // exista. Nunca «Oficina» de noche.
+  const contextoPorDefecto = (m: Momento) =>
+    contextoParaMomento(contextos, m, contextoPorMomento[m])?.id ?? '';
 
   const fechaInicial = fechaFija ?? hoy;
   const [fecha, setFecha] = useState(fechaInicial);
@@ -319,7 +326,10 @@ export function FormularioRegistro({
 
   function cambiarMomento(m: Momento) {
     setMomento(m);
-    if (!contextoTocado) setContextoId(contextoPorDefecto(m));
+    // Tambien si se habia tocado a mano, cuando el elegido no existe en el
+    // nuevo momento: Oficina y pasar a Noche.
+    const elegidoValido = contextos.some((c) => c.id === contextoId && admiteMomento(c, m));
+    if (!contextoTocado || !elegidoValido) setContextoId(contextoPorDefecto(m));
   }
 
   function elegirContexto(id: string) {
@@ -811,7 +821,7 @@ export function FormularioRegistro({
           <div>
             <span className="block text-sm font-medium text-texto-tenue">Contexto</span>
             <div className="mt-1 flex flex-wrap gap-2">
-              {contextos.map((c) => (
+              {contextosDelMomento(contextos, momento).map((c) => (
                 <button
                   key={c.id}
                   type="button"

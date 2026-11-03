@@ -2,6 +2,8 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import type { Periodo, RangoFechas } from '@/dominio/estadisticas';
+import { admiteMomento, momentosDe } from '@/dominio/contextos';
+import type { Momento } from '@/dominio/tipos';
 
 const ETIQUETAS: Record<Periodo, string> = {
   '30d': '30 días',
@@ -18,7 +20,8 @@ export function SelectorPeriodo({
 }: {
   periodo: Periodo;
   rango: RangoFechas;
-  contextos: { id: string; nombre: string }[];
+  /** Con sus momentos: la oficina de noche no se ofrece. */
+  contextos: { id: string; nombre: string; atemporal: boolean; momentos: Momento[] }[];
 }) {
   const router = useRouter();
   const parametros = useSearchParams();
@@ -29,8 +32,18 @@ export function SelectorPeriodo({
       if (valor) nuevos.set(clave, valor);
       else nuevos.delete(clave);
     }
+    // Contexto y momento solo se combinan si el contexto existe en ese
+    // momento: elegir Oficina quita «Noche», y al reves.
+    const contexto = contextos.find((c) => c.id === nuevos.get('contexto'));
+    const momento = nuevos.get('momento');
+    if (contexto && (momento === 'DIA' || momento === 'NOCHE') && !admiteMomento(contexto, momento)) {
+      nuevos.delete('contexto' in cambios ? 'momento' : 'contexto');
+    }
     router.push(`/estadisticas?${nuevos}`);
   }
+
+  const contextoElegido = contextos.find((c) => c.id === parametros.get('contexto'));
+  const momentoElegido = (['DIA', 'NOCHE'] as const).find((m) => m === parametros.get('momento'));
 
   return (
     <section className="space-y-3">
@@ -86,8 +99,11 @@ export function SelectorPeriodo({
             className="mt-1"
           >
             <option value="">Ambos</option>
-            <option value="DIA">Día</option>
-            <option value="NOCHE">Noche</option>
+            {(contextoElegido ? momentosDe(contextoElegido) : (['DIA', 'NOCHE'] as const)).map((m) => (
+              <option key={m} value={m}>
+                {m === 'DIA' ? 'Día' : 'Noche'}
+              </option>
+            ))}
           </select>
         </div>
         <div>
@@ -99,7 +115,9 @@ export function SelectorPeriodo({
             className="mt-1"
           >
             <option value="">Todos</option>
-            {contextos.map((c) => (
+            {contextos
+              .filter((c) => !momentoElegido || admiteMomento(c, momentoElegido))
+              .map((c) => (
               <option key={c.id} value={c.id}>
                 {c.nombre}
               </option>

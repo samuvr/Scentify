@@ -10,6 +10,7 @@ import { and, eq } from 'drizzle-orm';
 import { crearDb, schema } from '@/db';
 import { headers } from 'next/headers';
 import { UMBRALES_POR_DEFECTO, type UmbralesEstacion } from '@/dominio/estacion';
+import type { AjusteContexto } from '@/dominio/contextos';
 import {
   UBICACION_POR_DEFECTO,
   interpretarAjusteUbicacion,
@@ -135,21 +136,30 @@ export async function guardarUmbrales(
 }
 
 /**
- * Marca como atemporales justo los contextos de `ids` y desmarca los demas del
- * usuario. Son media docena de filas: se toca solo la que cambia.
+ * Guarda lo que cada contexto dice de si mismo: si es atemporal, en que
+ * momentos existe, cuantas veces a la semana se usa y que parte de noche. Solo
+ * toca los contextos del usuario; un id ajeno se ignora.
  */
-export async function guardarContextosAtemporales(userId: string, ids: string[]): Promise<void> {
+export async function guardarContextos(
+  userId: string,
+  ajustes: ReadonlyMap<string, AjusteContexto & { atemporal: boolean }>,
+): Promise<void> {
   const db = crearDb();
-  const elegidos = new Set(ids);
-  const contextos = await db
-    .select({ id: schema.contexto.id, atemporal: schema.contexto.atemporal })
+  const propios = await db
+    .select({ id: schema.contexto.id })
     .from(schema.contexto)
     .where(eq(schema.contexto.userId, userId));
-  for (const { id, atemporal } of contextos) {
-    if (atemporal === elegidos.has(id)) continue;
+  for (const { id } of propios) {
+    const ajuste = ajustes.get(id);
+    if (!ajuste) continue;
     await db
       .update(schema.contexto)
-      .set({ atemporal: !atemporal })
+      .set({
+        atemporal: ajuste.atemporal,
+        momentos: ajuste.momentos,
+        usosSemana: ajuste.usosSemana,
+        pctNoche: ajuste.pctNoche,
+      })
       .where(and(eq(schema.contexto.userId, userId), eq(schema.contexto.id, id)));
   }
 }

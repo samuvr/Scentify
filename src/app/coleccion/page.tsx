@@ -93,7 +93,12 @@ export default async function PaginaColeccion({
       <Filtros
         marcas={marcas}
         familias={familias.map((f) => ({ id: f.id, nombre: f.nombre }))}
-        contextos={contextos.map((c) => ({ id: c.id, nombre: c.nombre }))}
+        contextos={contextos.map((c) => ({
+          id: c.id,
+          nombre: c.nombre,
+          atemporal: c.atemporal,
+          momentos: c.momentos,
+        }))}
         notas={notas}
       />
 

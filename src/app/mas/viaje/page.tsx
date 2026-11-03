@@ -18,6 +18,7 @@ import type { Estacion, Momento } from '@/dominio/tipos';
 import { FormularioViaje } from './FormularioViaje';
 import { BloquePromedios } from '@/componentes/BloquePromedios';
 import { fechaOVacia } from '@/dominio/navegacion';
+import { admiteMomento } from '@/dominio/contextos';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = { title: 'Modo viaje' };
@@ -67,8 +68,12 @@ export default async function PaginaViaje({
 
   const nombreContexto = (id: string) => contextos.find((c) => c.id === id)?.nombre ?? '—';
 
-  const contextosDia = listaDeIds(p.dia);
-  const contextosNoche = listaDeIds(p.noche);
+  // Solo los que existen en cada momento: un enlace viejo con la oficina de
+  // noche no pide perfumes para algo que no va a pasar.
+  const existeEn = (momento: Momento) => (id: string) =>
+    contextos.some((c) => c.id === id && admiteMomento(c, momento));
+  const contextosDia = listaDeIds(p.dia).filter(existeEn('DIA'));
+  const contextosNoche = listaDeIds(p.noche).filter(existeEn('NOCHE'));
   const hayContextos = contextosDia.length > 0 || contextosNoche.length > 0;
   const tope = entero(p.tope);
   const minimo = entero(p.minimo);
@@ -163,7 +168,12 @@ export default async function PaginaViaje({
       </header>
 
       <FormularioViaje
-        contextos={contextos.map((c) => ({ id: c.id, nombre: c.nombre }))}
+        contextos={contextos.map((c) => ({
+          id: c.id,
+          nombre: c.nombre,
+          atemporal: c.atemporal,
+          momentos: c.momentos,
+        }))}
         contextosDia={contextosDia}
         contextosNoche={contextosNoche}
         desde={desde}

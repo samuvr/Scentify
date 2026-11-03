@@ -10,6 +10,13 @@ import { and, asc, desc, eq, gte, ilike, inArray, isNull, like, lte, ne, or, sql
 import { crearDb, schema } from '@/db';
 import { datosDeUrlFragrantica, idDeFichaFragrantica } from '@/dominio/fragrantica';
 import { parecidosValidos } from '@/dominio/parecidos';
+import {
+  admiteMomento,
+  DIAS_FRECUENCIA_REAL,
+  frecuenciaReal,
+  momentosDe,
+  type FrecuenciaReal,
+} from '@/dominio/contextos';
 import type { PerfumeCandidato } from '@/dominio/recomendacion';
 import type {
   DuracionPercibida,
@@ -360,11 +367,19 @@ export async function perfumeHabitual(userId: string, desde: string) {
     .limit(1);
   if (!fila) return null;
   const [contexto] = await db
-    .select({ nombre: schema.contexto.nombre })
+    .select({
+      nombre: schema.contexto.nombre,
+      atemporal: schema.contexto.atemporal,
+      momentos: schema.contexto.momentos,
+    })
     .from(schema.contexto)
     .where(eq(schema.contexto.id, fila.contextoId))
     .limit(1);
-  return { ...fila, contexto: contexto?.nombre ?? '' };
+  // Momento y contexto salen de modas separadas: si el contexto no existe en
+  // ese momento (la oficina de noche), manda el contexto.
+  const momento =
+    contexto && !admiteMomento(contexto, fila.momento) ? momentosDe(contexto)[0]! : fila.momento;
+  return { ...fila, momento, contexto: contexto?.nombre ?? '' };
 }
 
 /**
@@ -561,6 +576,43 @@ export async function usosPorCombinacion(
     .from(u)
     .where(and(eq(u.userId, userId), gte(u.fecha, desde)))
     .groupBy(u.contextoId, u.momento, u.estacionEfectiva);
+}
+
+/**
+ * Cuantas veces has usado de verdad cada contexto en los ultimos 90 dias, para
+ * enseñarlo al lado de la frecuencia que dices. Una ocasion es un dia y un
+ * momento: dos perfumes la misma noche cuentan una vez.
+ */
+export async function frecuenciaRealDeContextos(
+  userId: string,
+  hoy: string,
+): Promise<Map<string, FrecuenciaReal>> {
+  const db = crearDb();
+  const u = schema.uso;
+  const dia = (iso: string) => Date.parse(`${iso}T00:00:00Z`) / 86_400_000;
+  const desde = new Date((dia(hoy) - (DIAS_FRECUENCIA_REAL - 1)) * 86_400_000)
+    .toISOString()
+    .slice(0, 10);
+  const ocasion = sql`(${u.fecha}::text || ${u.momento}::text)`;
+  const [filas, [primero]] = await Promise.all([
+    db
+      .select({
+        contextoId: u.contextoId,
+        ocasiones: sql<number>`count(distinct ${ocasion})::int`,
+        noches: sql<number>`count(distinct ${u.fecha}) filter (where ${u.momento} = 'NOCHE')::int`,
+      })
+      .from(u)
+      .where(and(eq(u.userId, userId), gte(u.fecha, desde), lte(u.fecha, hoy)))
+      .groupBy(u.contextoId),
+    db
+      .select({ fecha: sql<string | null>`min(${u.fecha})::text` })
+      .from(u)
+      .where(eq(u.userId, userId)),
+  ]);
+  if (!primero?.fecha) return new Map();
+  // Dias con historial, contando hoy: con dos semanas de registros no se
+  // divide entre trece.
+  return frecuenciaReal(filas, Math.round(dia(hoy) - dia(primero.fecha)) + 1);
 }
 
 /** Solo el nombre, para el titulo de la pestaña: no merece cargar la ficha entera. */

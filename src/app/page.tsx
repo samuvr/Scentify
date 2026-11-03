@@ -11,6 +11,7 @@ import { FormularioRegistro } from '@/componentes/FormularioRegistro';
 import { TarjetaUso } from '@/componentes/TarjetaUso';
 import { usuarioActual } from '@/servicios/auth';
 import { zonaDelUsuario } from '@/servicios/zona';
+import { contextoParaMomento } from '@/dominio/contextos';
 import {
   candidatosParaRecomendar,
   coleccionParaRegistro,
@@ -81,9 +82,12 @@ export default async function PaginaHoy({
   // La sugerencia del dia: el mismo motor que Sugerir, con el momento por la
   // hora y el contexto que el registro de un toque va a guardar. Sin lo que ya
   // se ha puesto hoy ni lo descartado con «Otro».
-  const contextoAhora =
-    contextos.find((c) => c.id === (momento === 'DIA' ? habitualDia : habitualNoche)) ??
-    contextos[0];
+  // Solo entre los que existen ahora: de noche, nunca la oficina.
+  const contextoAhora = contextoParaMomento(
+    contextos,
+    momento,
+    momento === 'DIA' ? habitualDia : habitualNoche,
+  );
   const yaHoy = new Set(registrados.map((u) => u.perfumeId));
   const sugerencias = contextoAhora
     ? recomendar({
@@ -163,7 +167,12 @@ export default async function PaginaHoy({
         <section className="space-y-3">
           {registrados.length > 0 ? <h2 className="subtitulo">¿Te pones otro?</h2> : null}
           <FormularioRegistro
-            contextos={contextos.map((c) => ({ id: c.id, nombre: c.nombre }))}
+            contextos={contextos.map((c) => ({
+              id: c.id,
+              nombre: c.nombre,
+              atemporal: c.atemporal,
+              momentos: c.momentos,
+            }))}
             coleccion={coleccion}
             recientes={recientes.map((p) => ({
               id: p.id,

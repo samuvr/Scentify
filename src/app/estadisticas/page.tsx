@@ -76,7 +76,12 @@ export default async function PaginaEstadisticas({
       <SelectorPeriodo
         periodo={periodo}
         rango={rango}
-        contextos={contextos.map((c) => ({ id: c.id, nombre: c.nombre }))}
+        contextos={contextos.map((c) => ({
+          id: c.id,
+          nombre: c.nombre,
+          atemporal: c.atemporal,
+          momentos: c.momentos,
+        }))}
       />
 
       <section className="grid grid-cols-3 gap-2">

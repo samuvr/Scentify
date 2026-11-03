@@ -19,6 +19,7 @@ import {
   type Combinacion,
 } from '@/dominio/huecos';
 import { huecosQueCierra } from '@/dominio/recategorizacion';
+import { momentosPorContexto } from '@/dominio/contextos';
 import { PropuestasMarcas } from '@/componentes/PropuestasMarcas';
 import { propuestasDeLaColeccion } from '@/servicios/recategorizacion';
 import { desplazarDias, hoyIso } from '@/servicios/usos';
@@ -54,17 +55,19 @@ export default async function PaginaHuecos() {
   ]);
   const contextoIds = contextos.map((c) => c.id);
   const atemporales = contextos.filter((c) => c.atemporal).map((c) => c.id);
+  // La oficina de noche no es un hueco: es una combinacion que no existe.
+  const soloEnUnMomento = momentosPorContexto(contextos);
 
   // «Ya lo cubres sin saberlo»: marcas que tus usos respaldan y que cerrarian
   // huecos. Antes la pantalla pedia comprar lo que ya tenias.
   const cubresSinSaberlo = propuestas
     .filter((p) => p.accion === 'añadir')
-    .map((p) => ({ ...p, cierra: huecosQueCierra(coleccion, contextoIds, p, atemporales) }))
+    .map((p) => ({ ...p, cierra: huecosQueCierra(coleccion, contextoIds, p, atemporales, soloEnUnMomento) }))
     .filter((p) => p.cierra > 0)
     .sort((a, b) => b.cierra - a.cierra)
     .slice(0, 5);
 
-  const resultado = detectarHuecos(coleccion, contextoIds, atemporales);
+  const resultado = detectarHuecos(coleccion, contextoIds, atemporales, soloEnUnMomento);
   const ponderados = ponderarHuecos(resultado, usosVividos, atemporales);
   const teoricosPorContexto = agruparPorContexto(ponderados.teoricos);
   const nombreContexto = (id: string) => contextos.find((c) => c.id === id)?.nombre ?? '—';
