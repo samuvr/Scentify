@@ -26,6 +26,17 @@ import {
   marcarConvertido,
   solapamientoConLaColeccion,
 } from '@/servicios/wishlist';
+import {
+  candidatosParaRecomendar,
+  listarContextos,
+  piramidesDeLaColeccion,
+} from '@/servicios/consultas';
+import { parecidosPorNotas } from '@/dominio/parecido-notas';
+import {
+  evaluarCompra,
+  parecidosEnLaColeccion,
+  type EvaluacionCompra,
+} from '@/dominio/evaluacion-compra';
 import { guardarSuscripcion, borrarSuscripcion, leerRecordatorio } from '@/servicios/recordatorio';
 import {
   importarColeccion,
@@ -570,6 +581,70 @@ export async function accionBorrarDeseo(datos: FormData) {
   const id = String(datos.get('id') ?? '');
   if (id) await borrarDeseo(userId, id);
   revalidatePath('/mas/wishlist');
+}
+
+/* --------------------------------------------------------- evaluar compra */
+
+const esquemaEvaluacion = z.object({
+  nombre: z.string().max(200),
+  marca: z.string().max(200),
+  contextoIds: z.array(z.string().uuid()).min(1, 'Marca al menos un contexto.'),
+  estaciones: z.array(z.enum(ESTACIONES)).min(1, 'Marca al menos una estación.'),
+  momentos: z.array(z.enum(MOMENTOS)).min(1, 'Marca al menos un momento del día.'),
+  /** La piramide entera: el parecido mira salida, corazon y fondo. */
+  notas: z
+    .array(z.object({ nombre: z.string().min(1).max(80), nivel: z.enum(['SALIDA', 'CORAZON', 'FONDO']) }))
+    .max(90),
+  /** «Esta fragancia me recuerda a», recien leido de Fragrantica. */
+  recuerdaA: z.array(esquemaParecido).max(MAXIMO_PARECIDOS),
+});
+
+export type RespuestaEvaluacion =
+  | {
+      ok: true;
+      evaluacion: EvaluacionCompra;
+      /** Nombre de cada contexto, para pintar las casillas. */
+      nombres: Record<string, string>;
+    }
+  | { ok: false; error: string };
+
+/**
+ * ¿Merece la pena comprarlo? No guarda nada: cruza lo marcado con el reparto
+ * de la coleccion y con lo que ya tengo que se le parece.
+ */
+export async function accionEvaluarCompra(entrada: unknown): Promise<RespuestaEvaluacion> {
+  const userId = await exigirUsuario();
+  const analisis = esquemaEvaluacion.safeParse(entrada);
+  if (!analisis.success) {
+    return { ok: false, error: analisis.error.issues[0]?.message ?? 'Datos no válidos.' };
+  }
+  const d = analisis.data;
+  const [contextos, coleccion, piramides] = await Promise.all([
+    listarContextos(userId),
+    candidatosParaRecomendar(userId),
+    piramidesDeLaColeccion(userId),
+  ]);
+  const evaluacion = evaluarCompra({
+    candidato: {
+      nombre: d.nombre,
+      marca: d.marca,
+      contextos: d.contextoIds,
+      momentos: d.momentos,
+      estaciones: d.estaciones,
+    },
+    coleccion,
+    contextos,
+    parecidos: parecidosEnLaColeccion(
+      parecidosPorNotas(d.notas, piramides),
+      d.recuerdaA,
+      coleccion,
+    ),
+  });
+  return {
+    ok: true,
+    evaluacion,
+    nombres: Object.fromEntries(contextos.map((c) => [c.id, c.nombre])),
+  };
 }
 
 /* ------------------------------------------------------------------ datos */

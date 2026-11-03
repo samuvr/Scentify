@@ -70,7 +70,9 @@ export default async function PaginaWishlist({
       <ul className="space-y-2">
         {deseos.map((d, i) => {
           const meses = mesesDesde(d.creadoEn.toISOString());
-          const hrefConvertir = `/coleccion/nuevo?nombre=${encodeURIComponent(d.nombre)}&marca=${encodeURIComponent(d.marca)}&deseo=${d.id}${d.fragranticaUrl ? `&url=${encodeURIComponent(d.fragranticaUrl)}` : ''}`;
+          const delDeseo = `nombre=${encodeURIComponent(d.nombre)}&marca=${encodeURIComponent(d.marca)}&deseo=${d.id}${d.fragranticaUrl ? `&url=${encodeURIComponent(d.fragranticaUrl)}` : ''}`;
+          const hrefConvertir = `/coleccion/nuevo?${delDeseo}`;
+          const hrefEvaluar = `/evaluar?${delDeseo}`;
           return (
             <TarjetaDeseo
               key={d.id}
@@ -86,6 +88,7 @@ export default async function PaginaWishlist({
               }}
               notasConocidas={notasConocidas}
               hrefConvertir={hrefConvertir}
+              hrefEvaluar={hrefEvaluar}
             >
               <div className="flex items-start justify-between gap-3">
                 <div>

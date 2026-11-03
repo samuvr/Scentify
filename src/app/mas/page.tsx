@@ -11,6 +11,7 @@ export const metadata: Metadata = { title: 'Más' };
 export const dynamic = 'force-dynamic';
 
 const SECCIONES = [
+  { href: '/asistente', titulo: 'Asistente', descripcion: 'Pregúntale a Claude por tu colección' },
   { href: '/estadisticas', titulo: 'Estadísticas', descripcion: 'Qué te pones, cuándo y cuánto aciertas' },
   { href: '/mas/calendario', titulo: 'Calendario', descripcion: 'Qué te pusiste cada día y qué días no apuntaste' },
   { href: '/mas/wishlist', titulo: 'Wishlist', descripcion: 'Lo que quiero y a qué precio' },
