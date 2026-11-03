@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { describirRotacion, nivelDe, repartoPorContexto, type ContextoReparto } from '@/dominio/reparto';
+import {
+  describirRotacion,
+  nivelDe,
+  repartoPorContexto,
+  type ContextoReparto,
+} from '@/dominio/reparto';
 import type { PerfumeCandidato } from '@/dominio/recomendacion';
 
 const OFICINA = 'ctx-oficina';
@@ -28,7 +33,14 @@ function perfume(nombre: string, parcial: Partial<PerfumeCandidato> = {}): Perfu
 const TODO_EL_AÑO = ['PRIMAVERA', 'VERANO', 'OTONO', 'INVIERNO'] as const;
 
 function contexto(id: string, parcial: Partial<ContextoReparto> = {}): ContextoReparto {
-  return { id, atemporal: false, momentos: ['DIA', 'NOCHE'], usosSemana: 1, pctNoche: 50, ...parcial };
+  return {
+    id,
+    atemporal: false,
+    momentos: ['DIA', 'NOCHE'],
+    usosSemana: 1,
+    pctNoche: 50,
+    ...parcial,
+  };
 }
 
 /** Las frecuencias del usuario: oficina y gimnasio 5, amigos 3, cita 1, elegante 0,5. */
@@ -90,60 +102,85 @@ describe('reparto por contexto, momento y estación', () => {
     expect(casillas.every((c) => c.cuantos === 0 && c.nivel === 'vacia')).toBe(true);
   });
 
-  it('cinco de oficina están bien; cinco de ocasión elegante sobran', () => {
-    const deOficina = Array.from({ length: 5 }, (_, i) =>
+  // Dos contextos sencillos: la oficina de dia 4 veces por semana (pesa 2) y
+  // la cita de noche 1 vez (pesa 1).
+  const SENCILLOS: ContextoReparto[] = [
+    contexto(OFICINA, { momentos: ['DIA'], usosSemana: 4 }),
+    contexto(CITA, { momentos: ['NOCHE'], usosSemana: 1 }),
+  ];
+  const coleccionDe = (oficina: number, cita: number, citaInvierno = cita) => [
+    ...Array.from({ length: oficina }, (_, i) =>
+      perfume(`o${i}`, { estaciones: [...TODO_EL_AÑO] }),
+    ),
+    ...Array.from({ length: cita }, (_, i) =>
+      perfume(`c${i}`, {
+        contextos: [CITA],
+        momentos: ['NOCHE'],
+        estaciones: i < citaInvierno ? [...TODO_EL_AÑO] : ['PRIMAVERA', 'VERANO', 'OTONO'],
+      }),
+    ),
+  ];
+
+  it('una colección grande y bien repartida no sale de sobra en ninguna parte', () => {
+    // 40 y 20 frascos para 4 y 1 usos por semana: cada uno sale cada ~2 meses
+    // o mas, pero en proporcion a lo que pide cada contexto.
+    const { casillas } = repartoPorContexto(coleccionDe(40, 20), SENCILLOS);
+    expect(casillas.every((c) => c.nivel === 'normal')).toBe(true);
+    expect(casillas.every((c) => c.cobertura === 1)).toBe(true);
+    expect(casillaDe(casillas, CITA, 'NOCHE', 'VERANO').diasEntreUsos).toBe(140);
+  });
+
+  it('señala la casilla que va coja respecto al resto', () => {
+    // Igual, pero para la cita de invierno solo quedan 4.
+    const { casillas } = repartoPorContexto(coleccionDe(40, 20, 4), SENCILLOS);
+    const coja = casillaDe(casillas, CITA, 'NOCHE', 'INVIERNO');
+    expect(coja.nivel).toBe('escasa');
+    expect(coja.cobertura!).toBeLessThan(0.5);
+    const cojas = casillas.filter((c) => c.nivel === 'escasa' || c.nivel === 'vacia');
+    expect(cojas).toEqual([coja]);
+  });
+
+  it('crecer por igual en todas partes no cambia el reparto', () => {
+    // La oficina va por detras de la cita; triplicarlo todo no lo cambia.
+    const coberturas = (oficina: number, cita: number) =>
+      repartoPorContexto(coleccionDe(oficina, cita), SENCILLOS).casillas.map((c) => c.cobertura);
+    expect(coberturas(6, 6)).toEqual(coberturas(2, 2));
+    expect(coberturas(2, 2)[0]!).toBeLessThan(1);
+  });
+
+  it('con el mismo número, el contexto más usado va más cojo', () => {
+    const deOficina = Array.from({ length: 6 }, (_, i) =>
       perfume(`o${i}`, { estaciones: [...TODO_EL_AÑO] }),
     );
-    const deGimnasio = Array.from({ length: 5 }, (_, i) =>
-      perfume(`g${i}`, { contextos: [GIMNASIO] }),
-    );
-    const deAmigos = Array.from({ length: 3 }, (_, i) =>
-      perfume(`a${i}`, {
-        contextos: [AMIGOS],
-        momentos: ['DIA', 'NOCHE'],
+    const elegantes = Array.from({ length: 6 }, (_, i) =>
+      perfume(`e${i}`, {
+        contextos: [ELEGANTE],
+        momentos: ['NOCHE'],
         estaciones: [...TODO_EL_AÑO],
       }),
     );
-    const elegantes = Array.from({ length: 5 }, (_, i) =>
-      perfume(`e${i}`, { contextos: [ELEGANTE], momentos: ['NOCHE'], estaciones: [...TODO_EL_AÑO] }),
+    const { casillas } = repartoPorContexto(
+      [...deOficina, ...elegantes],
+      [
+        contexto(OFICINA, { momentos: ['DIA'], usosSemana: 5 }),
+        contexto(ELEGANTE, { momentos: ['NOCHE'], usosSemana: 0.5 }),
+      ],
     );
-    const deCita = Array.from({ length: 2 }, (_, i) =>
-      perfume(`c${i}`, { contextos: [CITA], momentos: ['DIA', 'NOCHE'], estaciones: [...TODO_EL_AÑO] }),
-    );
-    const { casillas, frascos } = repartoPorContexto(
-      [...deOficina, ...deGimnasio, ...deAmigos, ...elegantes, ...deCita],
-      MIS_CONTEXTOS,
-    );
-    expect(frascos).toBe(20);
-
-    // Con 20 frascos y la raiz de las frecuencias: oficina ~5,7 por casilla.
     const oficina = casillaDe(casillas, OFICINA, 'DIA', 'INVIERNO');
-    expect(oficina.esperado).toBe(5.7);
-    expect(oficina.nivel).toBe('normal');
-    expect(oficina.diasEntreUsos).toBe(7);
-
-    // Elegante de noche: ~1,4 esperados (1,8 x 80 %) y cinco frascos.
     const elegante = casillaDe(casillas, ELEGANTE, 'NOCHE', 'INVIERNO');
-    expect(elegante.esperado).toBeCloseTo(1.4, 1);
-    expect(elegante.nivel).toBe('sobrecargada');
-    expect(elegante.diasEntreUsos).toBe(88);
-
-    // De dia apenas hay ocasiones elegantes, pero si alguna: espera al menos uno.
-    const eleganteDia = casillaDe(casillas, ELEGANTE, 'DIA', 'INVIERNO');
-    expect(eleganteDia.esperado).toBe(1);
-    expect(eleganteDia.nivel).toBe('vacia');
+    expect(oficina.cobertura!).toBeLessThan(1);
+    expect(elegante.cobertura!).toBeGreaterThan(1);
+    expect(oficina.esperado!).toBeGreaterThan(elegante.esperado!);
   });
 
-  it('suavizado: la cita espera más de lo que diría la proporción', () => {
-    const coleccion = Array.from({ length: 20 }, (_, i) =>
-      perfume(`p${i}`, { contextos: [OFICINA, GIMNASIO, CITA, AMIGOS, ELEGANTE] }),
+  it('si casi todo está vacío, lo poco que hay no sale holgado', () => {
+    const { casillas } = repartoPorContexto(
+      [perfume('a', { contextos: [AMIGOS], momentos: ['DIA'], estaciones: ['VERANO'] })],
+      MIS_CONTEXTOS,
     );
-    const { casillas } = repartoPorContexto(coleccion, MIS_CONTEXTOS);
-    // Proporcional seria 20 x 1 / 14,5 = 1,4 para toda la cita; con la raiz, ~2,5.
-    const noche = casillaDe(casillas, CITA, 'NOCHE', 'VERANO').esperado!;
-    const dia = casillaDe(casillas, CITA, 'DIA', 'VERANO').esperado!;
-    expect(noche).toBeCloseTo(2, 1);
-    expect(dia).toBe(1);
+    expect(casillas.some((c) => c.nivel === 'holgada')).toBe(false);
+    expect(casillaDe(casillas, AMIGOS, 'DIA', 'VERANO').nivel).toBe('normal');
+    expect(casillaDe(casillas, OFICINA, 'DIA', 'VERANO').nivel).toBe('vacia');
   });
 
   it('el gimnasio es una casilla con el peso de todo su uso', () => {
@@ -160,7 +197,10 @@ describe('reparto por contexto, momento y estación', () => {
   it('sin frecuencia no se juzga, y no entra en el cálculo de los demás', () => {
     const { casillas, frascos } = repartoPorContexto(
       [perfume('casa', { contextos: [CASA] }), perfume('ofi', { estaciones: [...TODO_EL_AÑO] })],
-      [contexto(OFICINA, { momentos: ['DIA'], usosSemana: 5 }), contexto(CASA, { usosSemana: null })],
+      [
+        contexto(OFICINA, { momentos: ['DIA'], usosSemana: 5 }),
+        contexto(CASA, { usosSemana: null }),
+      ],
     );
     expect(frascos).toBe(1);
     const deCasa = casillas.filter((c) => c.contextoId === CASA);
@@ -180,9 +220,9 @@ describe('reparto por contexto, momento y estación', () => {
 });
 
 describe('nivel de una casilla frente a lo esperado', () => {
-  it('con pocos esperados, uno o dos más no es sobrecargar', () => {
+  it('con pocos esperados, uno o dos más no es ir holgado', () => {
     expect(nivelDe(3, 2)).toBe('normal');
-    expect(nivelDe(4, 2)).toBe('sobrecargada');
+    expect(nivelDe(4, 2)).toBe('holgada');
     expect(nivelDe(2, 6)).toBe('escasa');
     expect(nivelDe(3, 6)).toBe('normal');
   });
