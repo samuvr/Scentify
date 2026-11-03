@@ -1,6 +1,7 @@
 /**
- * Reparto por contexto, momento y estacion: cuantos perfumes tienes para cada
- * casilla, comparado con cuanto usas ese contexto.
+ * Reparto por contexto, momento y estacion: en que casillas vas mas cojo que en
+ * el resto de tu coleccion, teniendo en cuenta cuanto usas cada contexto. No
+ * dice si tienes muchos perfumes, sino donde tienes menos que en lo demas.
  *
  * Cada contexto enseña la frecuencia que dices al lado de la real de los
  * ultimos 90 dias, para ver si te desvias y ajustarla. Cada casilla enlaza a
@@ -46,7 +47,7 @@ const BORDE_NIVEL: Record<NivelReparto, string> = {
   vacia: 'border-id-nula',
   escasa: 'border-id-parcial',
   normal: 'border-id-total',
-  sobrecargada: 'border-acento',
+  holgada: 'border-acento',
   'sin-uso': 'border-borde',
   'sin-frecuencia': 'border-borde',
 };
@@ -55,7 +56,7 @@ const TEXTO_NIVEL: Record<NivelReparto, string> = {
   vacia: 'Vacía',
   escasa: 'Escasa',
   normal: 'Bien',
-  sobrecargada: 'De sobra',
+  holgada: 'Holgada',
   'sin-uso': 'Sin uso',
   'sin-frecuencia': '—',
 };
@@ -90,23 +91,22 @@ export default async function PaginaReparto() {
     }).toString()}`;
   const enlaceWishlist = (c: CasillaReparto) =>
     `/mas/wishlist?hueco=${encodeURIComponent(partes(c).join(' + '))}`;
-  /** «esperados ~1,4 · cada ~12 semanas» */
+  /** «al 40 % del resto · cada ~12 semanas» */
   const detalle = (c: CasillaReparto) =>
     [
-      c.esperado !== null ? `esperados ~${decimal(c.esperado)}` : null,
+      c.cobertura !== null ? `al ${Math.round(100 * c.cobertura)} % del resto` : null,
       c.diasEntreUsos !== null ? describirRotacion(c.diasEntreUsos) : null,
     ]
       .filter(Boolean)
       .join(' · ');
 
-  const exceso = (c: CasillaReparto) => c.cuantos - (c.esperado ?? 0);
-  const proporcion = (c: CasillaReparto) => c.cuantos / (c.esperado || 1);
-  const sobrecargadas = casillas
-    .filter((c) => c.nivel === 'sobrecargada')
-    .sort((a, b) => exceso(b) - exceso(a));
+  const cobertura = (c: CasillaReparto) => c.cobertura ?? 1;
+  const holgadas = casillas
+    .filter((c) => c.nivel === 'holgada')
+    .sort((a, b) => cobertura(b) - cobertura(a));
   const porReforzar = casillas
     .filter((c) => c.nivel === 'vacia' || c.nivel === 'escasa')
-    .sort((a, b) => proporcion(a) - proporcion(b));
+    .sort((a, b) => cobertura(a) - cobertura(b) || (b.usosSemana ?? 0) - (a.usosSemana ?? 0));
   const sinFrecuencia = contextos.filter((c) => c.usosSemana === null);
   const juzgadas = casillas.filter((c) => c.nivel !== 'sin-uso' && c.nivel !== 'sin-frecuencia');
 
@@ -136,10 +136,11 @@ export default async function PaginaReparto() {
       <header className="space-y-1">
         <h1 className="titulo">Reparto</h1>
         <p className="text-sm text-texto-tenue">
-          Cuántos perfumes tienes para cada contexto, momento del día y estación, comparado con
-          cuánto usas cada contexto: donde más lo usas, más frascos tocan. «5, de ~2,3» son 5
-          perfumes donde tocarían unos 2,3. Uno marcado para varios cuenta en todos. Toca una
-          casilla para ver cuáles son.
+          Dónde vas más cojo respecto al resto de tu colección. No mide si tienes muchos o pocos
+          perfumes: compara cada contexto, momento y estación con los demás, teniendo en cuenta
+          cuánto los usas (donde más lo usas, más frascos pide). «3, de ~6» son 3 perfumes donde, al
+          ritmo del resto de tu colección, tendrías unos 6. Uno marcado para varios cuenta en todos.
+          Toca una casilla para ver cuáles son.
         </p>
         <p className="text-sm text-texto-tenue">
           Las frecuencias se cambian en{' '}
@@ -149,6 +150,62 @@ export default async function PaginaReparto() {
           . Al lado, la real de los últimos 90 días.
         </p>
       </header>
+
+      {porReforzar.length > 0 ? (
+        <section className="space-y-2">
+          <h2 className="subtitulo">Donde vas más cojo</h2>
+          <p className="text-sm text-texto-tenue">
+            Vacías, o bastante por detrás del resto de tu colección para lo que las usas. Primero
+            las que más se quedan atrás. Toca para apuntar en la wishlist.
+          </p>
+          <ul className="space-y-1">
+            {porReforzar.map((c) => (
+              <li key={claveDe(c)}>
+                <Link href={enlaceWishlist(c)} className="fila-toque justify-between">
+                  <span className="min-w-0 flex-1">
+                    <span
+                      className={`block truncate ${c.nivel === 'vacia' ? 'text-id-nula' : 'text-id-parcial'}`}
+                    >
+                      {partes(c).join(' · ')}
+                    </span>
+                    <span className="block truncate text-xs text-texto-tenue">{detalle(c)}</span>
+                  </span>
+                  <span className="etiqueta">{c.cuantos}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {juzgadas.length > 0 && holgadas.length === 0 && porReforzar.length === 0 ? (
+        <p className="tarjeta text-sm text-texto">
+          Reparto equilibrado: ninguna casilla va claramente por detrás ni por delante del resto.
+        </p>
+      ) : null}
+
+      {holgadas.length > 0 ? (
+        <section className="space-y-2">
+          <h2 className="subtitulo">Donde vas más servido</h2>
+          <p className="text-sm text-texto-tenue">
+            Bastante por delante del resto para lo que las usas: aquí otro frasco suma menos que en
+            las de arriba.
+          </p>
+          <ul className="space-y-1">
+            {holgadas.map((c) => (
+              <li key={claveDe(c)}>
+                <Link href={enlaceColeccion(c)} className="fila-toque justify-between">
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate">{partes(c).join(' · ')}</span>
+                    <span className="block truncate text-xs text-texto-tenue">{detalle(c)}</span>
+                  </span>
+                  <span className="etiqueta">{c.cuantos}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       {casillas.length === 0 ? (
         <p className="tarjeta text-sm text-texto-tenue">No tienes contextos creados.</p>
@@ -213,61 +270,6 @@ export default async function PaginaReparto() {
           );
         })
       )}
-
-      {sobrecargadas.length > 0 ? (
-        <section className="space-y-2">
-          <h2 className="subtitulo">Ya tienes de sobra</h2>
-          <p className="text-sm text-texto-tenue">
-            Muchos más de los que tocan por lo que lo usas: cada frasco sale poco y otro más apenas
-            suma.
-          </p>
-          <ul className="space-y-1">
-            {sobrecargadas.map((c) => (
-              <li key={claveDe(c)}>
-                <Link href={enlaceColeccion(c)} className="fila-toque justify-between">
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate">{partes(c).join(' · ')}</span>
-                    <span className="block truncate text-xs text-texto-tenue">{detalle(c)}</span>
-                  </span>
-                  <span className="etiqueta">{c.cuantos}</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-
-      {porReforzar.length > 0 ? (
-        <section className="space-y-2">
-          <h2 className="subtitulo">Les vendría bien un refuerzo</h2>
-          <p className="text-sm text-texto-tenue">
-            Vacías o con poco donde elegir para lo que las usas. Toca para apuntar en la wishlist.
-          </p>
-          <ul className="space-y-1">
-            {porReforzar.map((c) => (
-              <li key={claveDe(c)}>
-                <Link href={enlaceWishlist(c)} className="fila-toque justify-between">
-                  <span className="min-w-0 flex-1">
-                    <span
-                      className={`block truncate ${c.nivel === 'vacia' ? 'text-id-nula' : 'text-id-parcial'}`}
-                    >
-                      {partes(c).join(' · ')}
-                    </span>
-                    <span className="block truncate text-xs text-texto-tenue">{detalle(c)}</span>
-                  </span>
-                  <span className="etiqueta">{c.cuantos}</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-
-      {juzgadas.length > 0 && sobrecargadas.length === 0 && porReforzar.length === 0 ? (
-        <p className="tarjeta text-sm text-texto">
-          Reparto equilibrado: ninguna casilla se sale de lo que tocaría por cómo las usas.
-        </p>
-      ) : null}
 
       {sinFrecuencia.length > 0 ? (
         <p className="text-sm text-texto-tenue">
