@@ -4,6 +4,10 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import type { Ubicacion } from '@/dominio/ubicacion';
 import { accionBuscarDestino } from '@/app/acciones';
+import { contextosDelMomento } from '@/dominio/contextos';
+import type { Momento } from '@/dominio/tipos';
+
+type ContextoViaje = { id: string; nombre: string; atemporal: boolean; momentos: Momento[] };
 
 export function FormularioViaje({
   contextos,
@@ -16,7 +20,8 @@ export function FormularioViaje({
   tope,
   destino,
 }: {
-  contextos: { id: string; nombre: string }[];
+  /** Con sus momentos: la oficina no sale entre los de noche. */
+  contextos: ContextoViaje[];
   contextosDia: string[];
   contextosNoche: string[];
   desde: string;
@@ -122,14 +127,14 @@ export function FormularioViaje({
 
       <SelectorContextos
         titulo="Contextos de día"
-        contextos={contextos}
+        contextos={contextosDelMomento(contextos, 'DIA')}
         elegidos={contextosDia}
         onCambiar={(ids) => poner({ dia: ids.join(',') })}
       />
 
       <SelectorContextos
         titulo="Contextos de noche"
-        contextos={contextos}
+        contextos={contextosDelMomento(contextos, 'NOCHE')}
         elegidos={contextosNoche}
         onCambiar={(ids) => poner({ noche: ids.join(',') })}
       />

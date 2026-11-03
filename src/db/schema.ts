@@ -143,9 +143,33 @@ export const contexto = pgTable(
      * el perfume esta marcado para el contexto.
      */
     atemporal: boolean('atemporal').notNull().default(false),
+    /**
+     * Momentos en que se usa el contexto: a la oficina solo se va de dia. La
+     * combinacion que falta no existe en la app: ni se registra, ni se
+     * recomienda, ni abre huecos. En un contexto atemporal no cuenta.
+     */
+    momentos: momentoEnum('momentos')
+      .array()
+      .notNull()
+      .default(sql`'{DIA,NOCHE}'::momento[]`),
+    /**
+     * Cuantas veces a la semana lo usas, dicho por ti. Es lo que pesa cada
+     * contexto en el reparto. null: sin decir, y el reparto no lo juzga.
+     */
+    usosSemana: real('usos_semana'),
+    /** Que parte de esos usos es de noche, en %. Solo cuenta con los dos momentos. */
+    pctNoche: smallint('pct_noche').notNull().default(50),
     creadoEn: timestamp('creado_en', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [unique('uq_contexto_usuario_slug').on(t.userId, t.slug)],
+  (t) => [
+    unique('uq_contexto_usuario_slug').on(t.userId, t.slug),
+    check('ck_contexto_momentos', sql`cardinality(${t.momentos}) between 1 and 2`),
+    check('ck_contexto_pct_noche', sql`${t.pctNoche} between 0 and 100`),
+    check(
+      'ck_contexto_usos_semana',
+      sql`${t.usosSemana} is null or ${t.usosSemana} between 0 and 14`,
+    ),
+  ],
 );
 
 /* ---------------------------------------------------------------- fichas */

@@ -8,6 +8,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { MINIMO_CARACTERES_BUSQUEDA } from '@/dominio/texto';
 import { CLAVE_ULTIMA_COLECCION } from '@/componentes/VolverAColeccion';
+import { admiteMomento, momentosDe } from '@/dominio/contextos';
+import type { Momento } from '@/dominio/tipos';
 
 /** Lo justo para no lanzar una consulta por cada tecla al escribir seguido. */
 const ESPERA_MS = 250;
@@ -20,7 +22,8 @@ export function Filtros({
 }: {
   marcas: string[];
   familias: { id: string; nombre: string }[];
-  contextos: { id: string; nombre: string }[];
+  /** Con sus momentos: la oficina de noche no se ofrece. */
+  contextos: { id: string; nombre: string; atemporal: boolean; momentos: Momento[] }[];
   /** Solo las notas que hay en la coleccion: las demas darian siempre 0. */
   notas: { id: string; nombre: string }[];
 }) {
@@ -43,6 +46,13 @@ export function Filtros({
     const nuevos = new URLSearchParams(parametros.toString());
     if (valor) nuevos.set(clave, valor);
     else nuevos.delete(clave);
+    // Contexto y momento solo se combinan si el contexto existe en ese
+    // momento: elegir Oficina quita «Noche», y al reves.
+    const contexto = contextos.find((c) => c.id === nuevos.get('contexto'));
+    const momento = nuevos.get('momento');
+    if (contexto && (momento === 'DIA' || momento === 'NOCHE') && !admiteMomento(contexto, momento)) {
+      nuevos.delete(clave === 'contexto' ? 'momento' : 'contexto');
+    }
     const destino = `/coleccion?${nuevos}`;
     // Al escribir se reemplaza la entrada del historial: volver atras no debe
     // deshacer la busqueda letra a letra.
@@ -74,6 +84,9 @@ export function Filtros({
     return () => clearTimeout(espera);
     // `poner` cambia en cada render; lo que dispara la busqueda es el texto.
   }, [texto]);
+
+  const contextoElegido = contextos.find((c) => c.id === parametros.get('contexto'));
+  const momentoElegido = (['DIA', 'NOCHE'] as const).find((m) => m === parametros.get('momento'));
 
   const activos = [...parametros.keys()].filter((k) => k !== 'q' && k !== 'orden').length;
 
@@ -161,7 +174,9 @@ export function Filtros({
           {selector(
             'contexto',
             'Contexto',
-            contextos.map((c) => ({ valor: c.id, texto: c.nombre })),
+            contextos
+              .filter((c) => !momentoElegido || admiteMomento(c, momentoElegido))
+              .map((c) => ({ valor: c.id, texto: c.nombre })),
           )}
           {selector('estacion', 'Estación', [
             { valor: 'PRIMAVERA', texto: 'Primavera' },
@@ -169,10 +184,13 @@ export function Filtros({
             { valor: 'OTONO', texto: 'Otoño' },
             { valor: 'INVIERNO', texto: 'Invierno' },
           ])}
-          {selector('momento', 'Momento', [
-            { valor: 'DIA', texto: 'Día' },
-            { valor: 'NOCHE', texto: 'Noche' },
-          ])}
+          {selector(
+            'momento',
+            'Momento',
+            (contextoElegido ? momentosDe(contextoElegido) : (['DIA', 'NOCHE'] as const)).map(
+              (m) => ({ valor: m, texto: m === 'DIA' ? 'Día' : 'Noche' }),
+            ),
+          )}
           {selector(
             'valoracion',
             'Valoración mínima',

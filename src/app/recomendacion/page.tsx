@@ -31,6 +31,7 @@ import { porQueNoHayRecomendacion, recomendar, type SinRecomendacion } from '@/d
 import type { Estacion, Momento } from '@/dominio/tipos';
 import { FilaRecomendacion, TarjetaPrincipal } from './Tarjetas';
 import { SelectorPeticion } from './SelectorPeticion';
+import { admiteMomento, contextoParaMomento } from '@/dominio/contextos';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = { title: 'Sugerir' };
@@ -90,8 +91,21 @@ export default async function PaginaRecomendacion({
     parametros.contexto ? null : contextoHabitual(userId, momento, esFinDeSemana(fecha)),
   ]);
 
-  const contextoElegido =
-    contextos.find((c) => c.id === (parametros.contexto ?? habitual)) ?? contextos[0] ?? null;
+  // Solo entre los que existen en ese momento: de noche, nunca la oficina. Un
+  // contexto de la URL que no existe ahora cae al habitual del momento.
+  const contextoDeLaUrl = contextos.find(
+    (c) => c.id === parametros.contexto && admiteMomento(c, momento),
+  );
+  const habitualDelMomento = contextoDeLaUrl
+    ? null
+    : parametros.contexto
+      ? await contextoHabitual(userId, momento, esFinDeSemana(fecha))
+      : habitual;
+  const contextoElegido = contextoParaMomento(
+    contextos,
+    momento,
+    contextoDeLaUrl?.id ?? habitualDelMomento,
+  );
 
   // La estacion propuesta siempre es sobrescribible (7.1).
   const forzadas = leerEstaciones(parametros.estaciones);
@@ -156,7 +170,12 @@ export default async function PaginaRecomendacion({
       </header>
 
       <SelectorPeticion
-        contextos={contextos.map((c) => ({ id: c.id, nombre: c.nombre, atemporal: c.atemporal }))}
+        contextos={contextos.map((c) => ({
+          id: c.id,
+          nombre: c.nombre,
+          atemporal: c.atemporal,
+          momentos: c.momentos,
+        }))}
         paraManana={paraManana}
         momento={momento}
         contextoId={contextoElegido?.id ?? ''}

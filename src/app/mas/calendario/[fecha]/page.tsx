@@ -111,7 +111,12 @@ export default async function PaginaDiaCalendario({
           <FormularioRegistro
             // Una instancia por fecha: al cambiar de dia no se arrastra lo a medias.
             key={fecha}
-            contextos={contextos.map((c) => ({ id: c.id, nombre: c.nombre }))}
+            contextos={contextos.map((c) => ({
+              id: c.id,
+              nombre: c.nombre,
+              atemporal: c.atemporal,
+              momentos: c.momentos,
+            }))}
             recientes={recientes.map((p) => ({
               id: p.id,
               nombre: p.nombre,

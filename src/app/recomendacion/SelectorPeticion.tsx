@@ -8,6 +8,7 @@
  */
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
+import { admiteMomento, contextosDelMomento } from '@/dominio/contextos';
 import type { Estacion, Momento } from '@/dominio/tipos';
 
 const NOMBRE_ESTACION: Record<Estacion, string> = {
@@ -26,7 +27,8 @@ export function SelectorPeticion({
   estacionesPropuestas,
   sobrescrita,
 }: {
-  contextos: { id: string; nombre: string; atemporal: boolean }[];
+  /** Con sus momentos: de noche no se ofrece la oficina. */
+  contextos: { id: string; nombre: string; atemporal: boolean; momentos: Momento[] }[];
   paraManana: boolean;
   momento: Momento;
   contextoId: string;
@@ -85,7 +87,15 @@ export function SelectorPeticion({
                 key={m}
                 type="button"
                 aria-pressed={momento === m}
-                onClick={() => navegar({ momento: m })}
+                // Si el contexto elegido no existe en ese momento (Oficina y
+                // pasar a Noche), se suelta y manda el habitual de la noche.
+                onClick={() => {
+                  const elegido = contextos.find((c) => c.id === contextoId);
+                  navegar({
+                    momento: m,
+                    ...(elegido && !admiteMomento(elegido, m) ? { contexto: null } : {}),
+                  });
+                }}
                 className="opcion"
               >
                 {m === 'DIA' ? 'Día' : 'Noche'}
@@ -98,7 +108,7 @@ export function SelectorPeticion({
       <div>
         <span className="block text-sm font-medium text-texto-tenue">Contexto</span>
         <div className="mt-1 flex flex-wrap gap-2">
-          {contextos.map((c) => (
+          {contextosDelMomento(contextos, momento).map((c) => (
             <button
               key={c.id}
               type="button"

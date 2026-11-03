@@ -4,8 +4,9 @@
  * Cruza contextos x momentos x estaciones contra la coleccion y lista las
  * combinaciones que no cubre ningun perfume. Un contexto atemporal (el
  * gimnasio) es una sola casilla, sin momento ni estacion: alli da igual la hora
- * y la epoca del año. Con los seis contextos de las semillas son 5 x 2 x 4 + 1
- * = 41 combinaciones.
+ * y la epoca del año. Un contexto que solo existe en un momento (la oficina,
+ * de dia) no tiene casillas en el otro. Con los seis contextos de las semillas
+ * son 4 x 2 x 4 + 1 x 4 + 1 = 37 combinaciones.
  *
  * "Cubrir" aqui significa exactamente lo mismo que idoneidad 100 en la 6.2: el
  * perfume esta marcado para ese contexto, ese momento y esa estacion. Si fuera
@@ -43,10 +44,17 @@ export interface ResultadoHuecos {
 const disponibles = (coleccion: PerfumeCandidato[]) =>
   coleccion.filter((p) => p.estado === 'LO_TENGO' && !p.archivado);
 
-/** Las casillas de un contexto: una sola si es atemporal, momento x estacion si no. */
-function combinacionesDe(contextoId: string, atemporal: boolean): Combinacion[] {
+/**
+ * Las casillas de un contexto: una sola si es atemporal, momento x estacion si
+ * no, solo con los momentos en que existe.
+ */
+function combinacionesDe(
+  contextoId: string,
+  atemporal: boolean,
+  momentos: readonly Momento[] = MOMENTOS,
+): Combinacion[] {
   if (atemporal) return [{ contextoId, momento: null, estacion: null }];
-  return MOMENTOS.flatMap((momento) =>
+  return MOMENTOS.filter((m) => momentos.includes(m)).flatMap((momento) =>
     ESTACIONES.map((estacion) => ({ contextoId, momento, estacion })),
   );
 }
@@ -61,6 +69,8 @@ export function detectarHuecos(
   contextoIds: string[],
   /** Ids de los contextos atemporales (el gimnasio). */
   atemporales: readonly string[] = [],
+  /** Momentos de los contextos que no existen en los dos (la oficina, de dia). */
+  momentosPorContexto: Readonly<Record<string, readonly Momento[]>> = {},
 ): ResultadoHuecos {
   const utiles = disponibles(coleccion);
 
@@ -70,7 +80,12 @@ export function detectarHuecos(
   let totalCombinaciones = 0;
 
   for (const contextoId of contextoIds) {
-    for (const combinacion of combinacionesDe(contextoId, atemporales.includes(contextoId))) {
+    const combinaciones = combinacionesDe(
+      contextoId,
+      atemporales.includes(contextoId),
+      momentosPorContexto[contextoId],
+    );
+    for (const combinacion of combinaciones) {
       totalCombinaciones += 1;
       const cuantos = utiles.filter((p) => cubre(p, combinacion)).length;
 
@@ -86,7 +101,7 @@ export function detectarHuecos(
 }
 
 /**
- * Agrupa los huecos por contexto. Cuarenta y una combinaciones en una lista
+ * Agrupa los huecos por contexto. Casi cuarenta combinaciones en una lista
  * plana no se leen en un movil; por contexto, si.
  */
 export function agruparPorContexto(huecos: Combinacion[]): Map<string, Combinacion[]> {

@@ -6,23 +6,47 @@
  * te vendria bien un refuerzo. Las mismas casillas que los huecos: sin la
  * estacion, «Oficina · Día» parece bien servida aunque todo sea de verano.
  *
+ * Cada casilla se mide contra lo que se usa, no contra una media global: cinco
+ * perfumes para la oficina (cinco dias a la semana) estan bien; cinco para
+ * ocasiones elegantes (dos veces al mes) son demasiados. El calculo:
+ *
+ * 1. Cada contexto pesa la raiz cuadrada de sus usos por semana. Raiz y no
+ *    proporcion: un contexto diez veces mas usado merece mas frascos, pero no
+ *    diez veces mas; en los que se usan poco tambien apetece variedad.
+ * 2. Los frascos esperados de un contexto son su parte de ese peso por los
+ *    frascos que tienes para contextos con frecuencia.
+ * 3. Dentro del contexto se reparten por momento segun la parte de noche, y
+ *    cada estacion espera lo mismo (cada una necesita su propio juego).
+ * 4. Una casilla que se usa espera al menos un frasco.
+ *
  * Un perfume marcado para varios contextos, momentos o estaciones cuenta en
  * cada casilla que cubre. Un contexto atemporal (el gimnasio) es una casilla
- * sola, igual que en los huecos.
+ * sola, igual que en los huecos. Un momento en que el contexto no existe (la
+ * oficina de noche) no es casilla.
  */
 import type { PerfumeCandidato } from './recomendacion';
 import type { Estacion, Momento } from './tipos';
-import { ESTACIONES, MOMENTOS } from './huecos';
+import { fraccionDelMomento, momentosDe, type FrecuenciaContexto } from './contextos';
+import { ESTACIONES } from './huecos';
 
 /**
- * Comparado con la media de casillas:
+ * Comparado con lo esperado para la casilla:
  * - vacia: ninguno.
- * - escasa: uno solo, o menos de la mitad de la media.
+ * - escasa: menos de la mitad de lo esperado, o uno solo donde se esperan dos
+ *   o mas.
  * - normal: lo esperable.
- * - sobrecargada: al menos la media y media, y dos por encima de ella (con una
- *   media de 2, tener 3 no es sobrecargar nada).
+ * - sobrecargada: al menos una vez y media lo esperado, y dos por encima (con
+ *   dos esperados, tener tres no es sobrecargar nada).
+ * - sin-uso: el contexto no se usa en ese momento (0 veces, o 0 % de noche).
+ * - sin-frecuencia: el contexto no tiene dicho cuanto se usa; no se juzga.
  */
-export type NivelReparto = 'vacia' | 'escasa' | 'normal' | 'sobrecargada';
+export type NivelReparto =
+  | 'vacia'
+  | 'escasa'
+  | 'normal'
+  | 'sobrecargada'
+  | 'sin-uso'
+  | 'sin-frecuencia';
 
 export interface CasillaReparto {
   contextoId: string;
@@ -31,27 +55,38 @@ export interface CasillaReparto {
   /** null en un contexto atemporal: vale para cualquier estacion. */
   estacion: Estacion | null;
   cuantos: number;
+  /** Frascos que tocarian por lo que se usa, con un decimal. null sin frecuencia. */
+  esperado: number | null;
+  /** Usos por semana que caen en la casilla mientras esta activa. null sin frecuencia. */
+  usosSemana: number | null;
+  /**
+   * Cada cuantos dias sale cada frasco de la casilla, si los rotas por igual.
+   * null si no hay frascos o no se usa.
+   */
+  diasEntreUsos: number | null;
   nivel: NivelReparto;
 }
 
 export interface ResultadoReparto {
   /** Por contexto, en el orden de entrada; dentro, por momento y estacion. */
   casillas: CasillaReparto[];
-  /** Perfumes por casilla de media, con un decimal. */
-  media: number;
+  /** Frascos que entran en el calculo: los que tienes para algun contexto con frecuencia. */
+  frascos: number;
 }
 
-export interface ContextoReparto {
-  id: string;
-  atemporal: boolean;
-}
+export type ContextoReparto = FrecuenciaContexto;
 
-export function nivelDe(cuantos: number, media: number): NivelReparto {
+/** Una casilla que se usa espera al menos esto. */
+const MINIMO_ESPERADO = 1;
+
+export function nivelDe(cuantos: number, esperado: number): NivelReparto {
   if (cuantos === 0) return 'vacia';
-  if (cuantos === 1 || cuantos < media / 2) return 'escasa';
-  if (cuantos >= media * 1.5 && cuantos - media >= 2) return 'sobrecargada';
+  if (cuantos < esperado / 2 || (cuantos === 1 && esperado >= 2)) return 'escasa';
+  if (cuantos >= esperado * 1.5 && cuantos - esperado >= 2) return 'sobrecargada';
   return 'normal';
 }
+
+const usa = (c: ContextoReparto) => c.usosSemana !== null && c.usosSemana > 0;
 
 export function repartoPorContexto(
   coleccion: PerfumeCandidato[],
@@ -60,28 +95,83 @@ export function repartoPorContexto(
   // Lo mismo que cuenta en los huecos: lo que tengo y no he archivado.
   const utiles = coleccion.filter((p) => p.estado === 'LO_TENGO' && !p.archivado);
 
-  const conteos = contextos.flatMap(({ id, atemporal }): Omit<CasillaReparto, 'nivel'>[] => {
-    const delContexto = utiles.filter((p) => p.contextos.includes(id));
-    if (atemporal) {
-      return [{ contextoId: id, momento: null, estacion: null, cuantos: delContexto.length }];
-    }
-    return MOMENTOS.flatMap((momento) =>
-      ESTACIONES.map((estacion) => ({
-        contextoId: id,
+  const conFrecuencia = contextos.filter(usa);
+  const idsConFrecuencia = new Set(conFrecuencia.map((c) => c.id));
+  const frascos = utiles.filter((p) => p.contextos.some((id) => idsConFrecuencia.has(id))).length;
+  const pesoTotal = conFrecuencia.reduce((suma, c) => suma + Math.sqrt(c.usosSemana!), 0);
+
+  /** Frascos esperados para todo el contexto, antes de repartir por momento. */
+  const esperadoDelContexto = (c: ContextoReparto) =>
+    pesoTotal === 0 ? 0 : (frascos * Math.sqrt(c.usosSemana!)) / pesoTotal;
+
+  const casilla = (
+    c: ContextoReparto,
+    momento: Momento | null,
+    estacion: Estacion | null,
+    cuantos: number,
+  ): CasillaReparto => {
+    if (c.usosSemana === null) {
+      return {
+        contextoId: c.id,
         momento,
         estacion,
-        cuantos: delContexto.filter(
-          (p) => p.momentos.includes(momento) && p.estaciones.includes(estacion),
-        ).length,
-      })),
+        cuantos,
+        esperado: null,
+        usosSemana: null,
+        diasEntreUsos: null,
+        nivel: 'sin-frecuencia',
+      };
+    }
+    const fraccion = momento === null ? 1 : fraccionDelMomento(c, momento);
+    const usosSemana = c.usosSemana * fraccion;
+    if (usosSemana <= 0) {
+      return {
+        contextoId: c.id,
+        momento,
+        estacion,
+        cuantos,
+        esperado: 0,
+        usosSemana: 0,
+        diasEntreUsos: null,
+        nivel: 'sin-uso',
+      };
+    }
+    const esperado = Math.max(MINIMO_ESPERADO, esperadoDelContexto(c) * fraccion);
+    return {
+      contextoId: c.id,
+      momento,
+      estacion,
+      cuantos,
+      esperado: Math.round(10 * esperado) / 10,
+      usosSemana: Math.round(100 * usosSemana) / 100,
+      diasEntreUsos: cuantos === 0 ? null : Math.round((7 * cuantos) / usosSemana),
+      nivel: nivelDe(cuantos, esperado),
+    };
+  };
+
+  const casillas = contextos.flatMap((c): CasillaReparto[] => {
+    const delContexto = utiles.filter((p) => p.contextos.includes(c.id));
+    if (c.atemporal) return [casilla(c, null, null, delContexto.length)];
+    return momentosDe(c).flatMap((momento) =>
+      ESTACIONES.map((estacion) =>
+        casilla(
+          c,
+          momento,
+          estacion,
+          delContexto.filter((p) => p.momentos.includes(momento) && p.estaciones.includes(estacion))
+            .length,
+        ),
+      ),
     );
   });
 
-  const total = conteos.reduce((suma, c) => suma + c.cuantos, 0);
-  const media = conteos.length === 0 ? 0 : total / conteos.length;
+  return { casillas, frascos };
+}
 
-  return {
-    casillas: conteos.map((c) => ({ ...c, nivel: nivelDe(c.cuantos, media) })),
-    media: Math.round(10 * media) / 10,
-  };
+/** «cada 4 días», «cada ~3 semanas», «cada ~4 meses»: legible en el movil. */
+export function describirRotacion(dias: number): string {
+  if (dias <= 1) return 'cada día';
+  if (dias < 14) return `cada ${dias} días`;
+  if (dias < 60) return `cada ~${Math.round(dias / 7)} semanas`;
+  return `cada ~${Math.round(dias / 30)} meses`;
 }
