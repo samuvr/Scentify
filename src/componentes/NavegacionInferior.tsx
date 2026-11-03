@@ -11,13 +11,19 @@ const DESTINOS = [
   { href: '/', etiqueta: 'Hoy', icono: 'M12 3v18M3 12h18' },
   { href: '/recomendacion', etiqueta: 'Sugerir', icono: 'M12 2l2.4 7.4H22l-6 4.4 2.3 7.2-6.3-4.6L5.7 21 8 13.8 2 9.4h7.6z' },
   { href: '/coleccion', etiqueta: 'Colección', icono: 'M4 6h16M4 12h16M4 18h16' },
+  // ¿Merece la pena comprarlo? Ocupa el sitio del asistente, que pasa a Mas.
   {
-    href: '/asistente',
-    etiqueta: 'Asistente',
-    icono: 'M21 12a8 8 0 0 1-11.6 7.1L4 21l1.9-5.4A8 8 0 1 1 21 12z',
+    href: '/evaluar',
+    etiqueta: 'Evaluar',
+    icono: 'M6 8h12l-1 12H7L6 8zM9 8V7a3 3 0 0 1 6 0v1',
   },
-  // Estadisticas cuelga de Mas: al estar dentro, se marca Mas.
-  { href: '/mas', etiqueta: 'Más', icono: 'M5 12h.01M12 12h.01M19 12h.01', tambien: ['/estadisticas'] },
+  // Estadisticas y el asistente cuelgan de Mas: al estar dentro, se marca Mas.
+  {
+    href: '/mas',
+    etiqueta: 'Más',
+    icono: 'M5 12h.01M12 12h.01M19 12h.01',
+    tambien: ['/estadisticas', '/asistente'],
+  },
 ] as const;
 
 function estaActivo(ruta: string, destino: (typeof DESTINOS)[number]): boolean {

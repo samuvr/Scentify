@@ -14,11 +14,14 @@ export function TarjetaDeseo({
   deseo,
   notasConocidas,
   hrefConvertir,
+  hrefEvaluar,
   children,
 }: {
   deseo: DeseoEditable;
   notasConocidas: string[];
   hrefConvertir: string;
+  /** «¿Merece la pena?» con lo que ya se sabe del deseo. */
+  hrefEvaluar: string;
   /** La parte de solo lectura, pintada en el servidor. */
   children: React.ReactNode;
 }) {
@@ -39,6 +42,9 @@ export function TarjetaDeseo({
   return (
     <li className="tarjeta space-y-2">
       {children}
+      <Link href={hrefEvaluar} className="boton-secundario block w-full text-center text-sm">
+        ¿Merece la pena?
+      </Link>
       <div className="flex gap-2">
         <Link href={hrefConvertir} className="boton-primario flex-1 text-sm">
           Convertir en colección

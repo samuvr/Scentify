@@ -63,6 +63,28 @@ export default async function PaginaNuevoPerfume({
           </Link>
         </p>
       ) : null}
+      {/*
+        Llegando con una ficha (compartida desde Fragrantica, o pegada al
+        empezar) puede que aun no se haya comprado: se ofrece valorarla antes.
+      */}
+      {!miFrasco && !previos.deseo && (previos.url || previos.ficha) ? (
+        <Link
+          href={`/evaluar?${new URLSearchParams(
+            Object.entries({
+              url: previos.url,
+              ficha: previos.ficha,
+              nombre: previos.nombre,
+              marca: previos.marca,
+            }).filter((e): e is [string, string] => Boolean(e[1])),
+          )}`}
+          className="tarjeta block"
+        >
+          <p className="font-semibold">¿Aún no lo has comprado?</p>
+          <p className="text-sm text-texto-tenue">
+            Mira antes si merece la pena: qué huecos de tu colección llenaría.
+          </p>
+        </Link>
+      ) : null}
       {previos.compartido === 'no-reconocido' ? (
         <p className="aviso-atencion">
           Lo compartido no era una ficha de Fragrantica. Sigue a mano: no falta nada por hacer,

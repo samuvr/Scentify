@@ -19,7 +19,14 @@
  */
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { accionGuardarPerfume, type RespuestaPerfume } from '@/app/acciones';
+import {
+  accionEvaluarCompra,
+  accionGuardarDeseo,
+  accionGuardarPerfume,
+  type RespuestaEvaluacion,
+  type RespuestaPerfume,
+} from '@/app/acciones';
+import { ResultadoEvaluacion } from '@/componentes/ResultadoEvaluacion';
 import type { Estacion, Momento } from '@/dominio/tipos';
 import { familiasDeAcordes } from '@/dominio/familias';
 import { urlDeFichaEn, type FichaFragrantica, type VotoEje } from '@/dominio/fragrantica';
@@ -160,8 +167,15 @@ export function FormularioPerfume({
   consultarAlAbrir = false,
   yaLoTengo = false,
   deseoId,
+  evaluar = false,
 }: {
   perfumeId?: string;
+  /**
+   * «¿Merece la pena?»: los mismos pasos que el alta, pero sin inventario y
+   * acabando en la evaluacion en vez de guardar. No se guarda nada hasta
+   * pulsar «Lo he comprado», que convierte la pantalla en el alta.
+   */
+  evaluar?: boolean;
   /** Alta desde «Convertir en colección»: al guardar, el deseo sale de la wishlist. */
   deseoId?: string;
   /**
@@ -243,6 +257,20 @@ export function FormularioPerfume({
   const [sugiriendo, setSugiriendo] = useState(false);
   const [avisoSugerencia, setAvisoSugerencia] = useState<string | null>(null);
   const sugerenciaPedida = useRef(false);
+  /** El resultado de «¿Merece la pena?», mientras se enseña. */
+  const [evaluacion, setEvaluacion] = useState<Extract<RespuestaEvaluacion, { ok: true }> | null>(
+    null,
+  );
+  const [evaluando, setEvaluando] = useState(false);
+  /** Tras evaluar, «Lo he comprado»: a partir de ahi es un alta normal. */
+  const [comprado, setComprado] = useState(false);
+  const [enWishlist, setEnWishlist] = useState<'no' | 'guardando' | 'si'>('no');
+  /** Evaluando no hay nada que perder al salir; tras «Lo he comprado», si. */
+  const soloEvaluar = evaluar && !comprado;
+  const avisarAlSalir = useRef(!evaluar);
+  useEffect(() => {
+    avisarAlSalir.current = !soloEvaluar;
+  }, [soloEvaluar]);
 
   const cambiar = (parcial: Partial<ValoresPerfume>) => setV((previo) => ({ ...previo, ...parcial }));
 
@@ -293,7 +321,7 @@ export function FormularioPerfume({
   }, [v]);
   useEffect(() => {
     const alSalir = (e: BeforeUnloadEvent) => {
-      if (sinCambios.current) return;
+      if (sinCambios.current || !avisarAlSalir.current) return;
       e.preventDefault();
     };
     window.addEventListener('beforeunload', alSalir);
@@ -351,7 +379,8 @@ export function FormularioPerfume({
     setErrorEnlace(null);
     const parametros = new URLSearchParams({ url });
     if (deseoId) parametros.set('deseo', deseoId);
-    abrirConTransicion(() => router.push(`/coleccion/nuevo?${parametros}`));
+    const ruta = evaluar ? '/evaluar' : '/coleccion/nuevo';
+    abrirConTransicion(() => router.push(`${ruta}?${parametros}`));
   }
 
   /**
@@ -562,6 +591,72 @@ export function FormularioPerfume({
     } else setError(respuesta.error);
   }
 
+  async function evaluarCompra() {
+    setEvaluando(true);
+    setError(null);
+    const notas = conNotasPendientes();
+    try {
+      const respuesta = await accionEvaluarCompra({
+        nombre: v.nombre,
+        marca: v.marca,
+        contextoIds: v.contextoIds,
+        estaciones: v.estaciones,
+        momentos: v.momentos,
+        notasFondo: notas.filter((n) => n.nivel === 'FONDO').map((n) => n.nombre).slice(0, 30),
+        recuerdaA: ficha?.parecidos ?? [],
+      });
+      if (respuesta.ok) {
+        setEvaluacion(respuesta);
+        window.scrollTo({ top: 0 });
+      } else setError(respuesta.error);
+    } catch {
+      setError(
+        navigator.onLine
+          ? 'No se ha podido valorar. Inténtalo otra vez.'
+          : 'Sin conexión: no se puede valorar ahora.',
+      );
+    } finally {
+      setEvaluando(false);
+    }
+  }
+
+  /** Tras evaluar: lo he comprado. Se sigue como un alta, con lo marcado. */
+  function loHeComprado() {
+    setComprado(true);
+    setEvaluacion(null);
+    setModo('revision');
+    setV((previo) => ({
+      ...previo,
+      estado: 'LO_TENGO',
+      fechaCompra: previo.fechaCompra || new Date().toLocaleDateString('sv-SE'),
+    }));
+    window.scrollTo({ top: 0 });
+  }
+
+  async function guardarEnWishlist() {
+    if (!evaluacion) return;
+    setEnWishlist('guardando');
+    setError(null);
+    try {
+      const respuesta = await accionGuardarDeseo(null, {
+        nombre: v.nombre,
+        marca: v.marca,
+        // Lo que merece la pena entra mas arriba en la lista.
+        prioridad: evaluacion.evaluacion.veredicto === 'merece' ? 'LO_QUIERO' : 'EN_EL_RADAR',
+        fragranticaUrl: v.fragranticaUrl || null,
+        notasFondo: v.notas.filter((n) => n.nivel === 'FONDO').map((n) => n.nombre).slice(0, 30),
+      });
+      if (respuesta.ok) setEnWishlist('si');
+      else {
+        setEnWishlist('no');
+        setError(respuesta.error ?? 'No se ha podido guardar en la wishlist.');
+      }
+    } catch {
+      setEnWishlist('no');
+      setError('No se ha podido guardar en la wishlist. Inténtalo otra vez.');
+    }
+  }
+
   /**
    * En un alta con una ficha del catalogo, lo comun es de todos: «Cambiar» el
    * nombre o la marca reescribia la ficha y renombraba el perfume de las demas
@@ -571,6 +666,9 @@ export function FormularioPerfume({
     setFichaId(null);
     irAPaso(0);
   }
+
+  /** Evaluando, el inventario sobra: se acaba en los contextos. */
+  const ultimoPaso = soloEvaluar ? PASOS.length - 2 : PASOS.length - 1;
 
   const puedeAvanzar = [
     v.nombre.trim() !== '' && v.marca.trim() !== '',
@@ -1144,27 +1242,90 @@ export function FormularioPerfume({
           <h2 className="subtitulo">Contextos</h2>
           {seccionContextos()}
         </div>
-        <details className="tarjeta">
-          <summary className="cursor-pointer font-medium">
-            Inventario y valoración <span className="text-texto-tenue">(opcional)</span>
-          </summary>
-          <div className="pt-4">{seccionInventario()}</div>
-        </details>
+        {soloEvaluar ? null : (
+          // Recien comprado, abierto: es lo unico que falta por decir.
+          <details className="tarjeta" open={comprado}>
+            <summary className="cursor-pointer font-medium">
+              Inventario y valoración <span className="text-texto-tenue">(opcional)</span>
+            </summary>
+            <div className="pt-4">{seccionInventario()}</div>
+          </details>
+        )}
       </div>
     );
   };
 
+  if (evaluacion) {
+    return (
+      <ResultadoEvaluacion evaluacion={evaluacion.evaluacion} nombres={evaluacion.nombres}>
+        <div className="space-y-2">
+          {error ? (
+            <p className="aviso-error" role="alert">
+              {error}
+            </p>
+          ) : null}
+          <button type="button" onClick={loHeComprado} className="boton-primario w-full">
+            Lo he comprado
+          </button>
+          {deseoId ? null : enWishlist === 'si' ? (
+            <p className="aviso-hecho">
+              Guardado en la{' '}
+              <a href="/mas/wishlist" className="underline">
+                wishlist
+              </a>
+              .
+            </p>
+          ) : (
+            <button
+              type="button"
+              disabled={enWishlist === 'guardando'}
+              onClick={() => void guardarEnWishlist()}
+              className="boton-secundario w-full"
+            >
+              {enWishlist === 'guardando' ? 'Guardando…' : 'Guardar en la wishlist'}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setEvaluacion(null)}
+            className="w-full text-center text-sm underline"
+          >
+            Cambiar lo marcado
+          </button>
+        </div>
+      </ResultadoEvaluacion>
+    );
+  }
+
+  /** Lo que hace el boton final: valorar o guardar. */
+  const textoFinal = soloEvaluar
+    ? evaluando
+      ? 'Valorando…'
+      : '¿Merece la pena?'
+    : guardando
+      ? 'Guardando…'
+      : perfumeId
+        ? 'Guardar cambios'
+        : 'Añadir a la colección';
+  const accionFinal = () => void (soloEvaluar ? evaluarCompra() : guardar());
+  const ocupado = soloEvaluar ? evaluando : guardando;
+
   return (
     <div className="space-y-5">
+      {comprado ? (
+        <p className="aviso-hecho">
+          Enhorabuena. Revisa lo marcado, añade el volumen o la valoración si quieres, y guárdalo.
+        </p>
+      ) : null}
       {modo === 'pasos' ? (
         <div className="space-y-2">
           <p className="text-sm text-texto-tenue">
-            Paso {paso + 1} de {PASOS.length} · {PASOS[paso]}
+            Paso {paso + 1} de {ultimoPaso + 1} · {PASOS[paso]}
           </p>
           <div className="h-1.5 overflow-hidden bg-borde">
             <div
               className="h-full bg-acento transition-all"
-              style={{ width: `${((paso + 1) / PASOS.length) * 100}%` }}
+              style={{ width: `${((paso + 1) / (ultimoPaso + 1)) * 100}%` }}
             />
           </div>
         </div>
@@ -1241,11 +1402,11 @@ export function FormularioPerfume({
         <div className="space-y-2">
           <button
             type="button"
-            disabled={guardando || faltan.length > 0}
-            onClick={() => void guardar()}
+            disabled={ocupado || faltan.length > 0}
+            onClick={accionFinal}
             className="boton-primario w-full"
           >
-            {guardando ? 'Guardando…' : perfumeId ? 'Guardar cambios' : 'Añadir a la colección'}
+            {textoFinal}
           </button>
           {faltan.length > 0 ? (
             <p className="text-center text-sm text-texto-tenue">Falta marcar {faltan.join(', ')}.</p>
@@ -1269,7 +1430,7 @@ export function FormularioPerfume({
             Atrás
           </button>
         ) : null}
-        {paso < PASOS.length - 1 ? (
+        {paso < ultimoPaso ? (
           <button
             type="button"
             disabled={!puedeAvanzar}
@@ -1281,11 +1442,11 @@ export function FormularioPerfume({
         ) : (
           <button
             type="button"
-            disabled={guardando}
-            onClick={() => void guardar()}
+            disabled={ocupado || (soloEvaluar && !puedeAvanzar)}
+            onClick={accionFinal}
             className="boton-primario flex-1"
           >
-            {guardando ? 'Guardando…' : perfumeId ? 'Guardar cambios' : 'Añadir a la colección'}
+            {textoFinal}
           </button>
         )}
       </div>

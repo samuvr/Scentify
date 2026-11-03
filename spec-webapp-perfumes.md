@@ -344,6 +344,13 @@ Le indico los días y los contextos previstos y propone el **set mínimo de fras
 ### 10.4 Recordatorio diario
 Aviso para registrar el uso del día si a cierta hora no hay ningún registro.
 
+### 10.5 ¿Merece la pena comprarlo?
+En la barra inferior («Evaluar», en el sitio del asistente, que pasa a Más). Los mismos pasos que el alta (enlace de Fragrantica, notas, familias, estaciones, momentos y contextos con la sugerencia de la IA), sin inventario, y en vez de guardar se valora qué aportaría a la colección. No se guarda nada.
+
+Se cruzan las casillas que cubriría (contexto × momento × estación, las mismas del reparto, 10.1) con cómo están hoy: vacía vale 1, escasa 0,75, bien 0,35 y holgada 0, pesadas como en el reparto (raíz de los usos por semana del contexto por la parte del momento). Con una media de 0,6 o más, *merece la pena*; con 0,3 o más, *aporta algo*; por debajo, *compra prescindible*. Si se parece a algo que ya tengo (3 o más notas de fondo comunes, como en 10.2, o Fragrantica lo pone en «me recuerda a»), baja un escalón, y se dice con cuál. Las casillas se enseñan antes y después, primero donde suma y luego donde ya voy servido, con los perfumes con los que competiría. Los contextos sin frecuencia no se valoran.
+
+Al final: *Lo he comprado* (la pantalla pasa a ser el alta, con lo marcado, el inventario abierto y la fecha de compra de hoy), *Guardar en la wishlist* (con prioridad «Lo quiero» si merece la pena) y *Cambiar lo marcado*. Se llega también desde cada deseo de la wishlist (y al comprarlo se marca conseguido) y desde el alta cuando llega una ficha compartida, por si aún no se ha comprado.
+
 ---
 
 ## 11. Requisitos no funcionales
