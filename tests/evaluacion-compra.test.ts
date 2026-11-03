@@ -182,7 +182,7 @@ describe('evaluarCompra', () => {
       coleccion: COLECCION,
       contextos: CONTEXTOS,
       parecidos: [
-        { perfumeId: 'id-Gym', nombre: 'Gym', marca: 'Lattafa', comunes: ['Ámbar'], segunFragrantica: true },
+        { perfumeId: 'id-Gym', nombre: 'Gym', marca: 'Lattafa', comunes: { SALIDA: [], CORAZON: [], FONDO: ['Ámbar'] }, proporcion: 0.5, segunFragrantica: true },
       ],
     });
     expect(ev.veredictoPorCasillas).toBe('merece');
@@ -199,7 +199,16 @@ describe('parecidosEnLaColeccion', () => {
 
   it('junta notas comunes y «me recuerda a» en el mismo perfume', () => {
     const lista = parecidosEnLaColeccion(
-      [{ perfumeId: 'id-Asad', nombre: 'Asad', marca: 'Lattafa', comunes: ['Ámbar', 'Vainilla', 'Tabaco'] }],
+      [
+        {
+          perfumeId: 'id-Asad',
+          nombre: 'Asad',
+          marca: 'Lattafa',
+          comunes: { SALIDA: [], CORAZON: [], FONDO: ['Ámbar', 'Vainilla', 'Tabaco'] },
+          puntos: 3,
+          proporcion: 0.5,
+        },
+      ],
       [
         { nombre: 'khamrah', marca: 'LATTAFA' },
         { nombre: 'Asad', marca: null },
@@ -209,8 +218,22 @@ describe('parecidosEnLaColeccion', () => {
       coleccion,
     );
     expect(lista).toEqual([
-      { perfumeId: 'id-Asad', nombre: 'Asad', marca: 'Lattafa', comunes: ['Ámbar', 'Vainilla', 'Tabaco'], segunFragrantica: true },
-      { perfumeId: 'id-Khamrah', nombre: 'Khamrah', marca: 'Lattafa', comunes: [], segunFragrantica: true },
+      {
+        perfumeId: 'id-Asad',
+        nombre: 'Asad',
+        marca: 'Lattafa',
+        comunes: { SALIDA: [], CORAZON: [], FONDO: ['Ámbar', 'Vainilla', 'Tabaco'] },
+        proporcion: 0.5,
+        segunFragrantica: true,
+      },
+      {
+        perfumeId: 'id-Khamrah',
+        nombre: 'Khamrah',
+        marca: 'Lattafa',
+        comunes: { SALIDA: [], CORAZON: [], FONDO: [] },
+        proporcion: null,
+        segunFragrantica: true,
+      },
     ]);
   });
 });
@@ -234,7 +257,7 @@ describe('resumenEvaluacion', () => {
       candidato: candidato({}),
       coleccion: COLECCION,
       contextos: CONTEXTOS,
-      parecidos: [{ perfumeId: 'id-Gym', nombre: 'Gym', marca: 'Lattafa', comunes: [], segunFragrantica: true }],
+      parecidos: [{ perfumeId: 'id-Gym', nombre: 'Gym', marca: 'Lattafa', comunes: { SALIDA: [], CORAZON: [], FONDO: [] }, proporcion: null, segunFragrantica: true }],
     });
     expect(resumenEvaluacion(ev)).toContain('sería «Merece la pena», pero se parece');
   });

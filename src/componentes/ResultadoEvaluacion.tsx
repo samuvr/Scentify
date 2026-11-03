@@ -87,6 +87,16 @@ export function resumenEvaluacion(ev: EvaluacionCompra): string {
   return partes.join(' ');
 }
 
+const NIVEL_NOTA = { SALIDA: 'salida', CORAZON: 'corazón', FONDO: 'fondo' } as const;
+
+/** «salida: bergamota, pimienta · fondo: ámbar» */
+function textoComunes(comunes: EvaluacionCompra['parecidos'][number]['comunes']): string | null {
+  const partes = (['SALIDA', 'CORAZON', 'FONDO'] as const)
+    .filter((n) => comunes[n].length > 0)
+    .map((n) => `${NIVEL_NOTA[n]}: ${comunes[n].join(', ')}`);
+  return partes.length > 0 ? `comparten ${partes.join(' · ')}` : null;
+}
+
 interface Grupo {
   clave: string;
   contextoId: string;
@@ -197,7 +207,7 @@ export function ResultadoEvaluacion({
                   {' '}
                   ·{' '}
                   {[
-                    p.comunes.length > 0 ? `comparten fondo: ${p.comunes.join(', ')}` : null,
+                    textoComunes(p.comunes),
                     p.segunFragrantica ? 'Fragrantica dice que lo recuerda' : null,
                   ]
                     .filter(Boolean)

@@ -17,6 +17,7 @@ import {
   momentosDe,
   type FrecuenciaReal,
 } from '@/dominio/contextos';
+import type { PerfumeConNotas } from '@/dominio/parecido-notas';
 import type { PerfumeCandidato } from '@/dominio/recomendacion';
 import type {
   DuracionPercibida,
@@ -552,6 +553,40 @@ export async function notasDeLaColeccion(userId: string) {
     .where(eq(schema.perfume.userId, userId));
   const orden = new Intl.Collator('es', { sensitivity: 'base' });
   return filas.sort((a, b) => orden.compare(a.nombre, b.nombre));
+}
+
+/**
+ * La piramide de cada perfume que tengo (ni archivados ni «lo tuve»), para
+ * buscar los que se parecen a uno que aun no tengo.
+ */
+export async function piramidesDeLaColeccion(userId: string): Promise<PerfumeConNotas[]> {
+  const db = crearDb();
+  const filas = await db
+    .select({
+      id: schema.perfume.id,
+      nombre: schema.ficha.nombre,
+      marca: schema.ficha.marca,
+      nota: schema.nota.nombre,
+      nivel: schema.fichaNota.nivel,
+    })
+    .from(schema.perfume)
+    .innerJoin(schema.ficha, eq(schema.ficha.id, schema.perfume.fichaId))
+    .innerJoin(schema.fichaNota, eq(schema.fichaNota.fichaId, schema.perfume.fichaId))
+    .innerJoin(schema.nota, eq(schema.nota.id, schema.fichaNota.notaId))
+    .where(
+      and(
+        eq(schema.perfume.userId, userId),
+        eq(schema.perfume.estado, 'LO_TENGO'),
+        eq(schema.perfume.archivado, false),
+      ),
+    );
+  const porPerfume = new Map<string, PerfumeConNotas>();
+  for (const f of filas) {
+    const actual = porPerfume.get(f.id) ?? { id: f.id, nombre: f.nombre, marca: f.marca, notas: [] };
+    actual.notas.push({ nombre: f.nota, nivel: f.nivel });
+    porPerfume.set(f.id, actual);
+  }
+  return [...porPerfume.values()];
 }
 
 /* ------------------------------------------------------------------ ficha */

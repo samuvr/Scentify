@@ -20,9 +20,10 @@
  *    elegante.
  * 4. Con 0,6 o mas, merece la pena; con 0,3 o mas, aporta algo; por debajo,
  *    es prescindible.
- * 5. Si se parece a uno que ya tengo (tres notas de fondo comunes, o
- *    Fragrantica dice que recuerda a el), baja un escalon: puede caer en una
- *    casilla floja y aun asi ser casi el mismo frasco.
+ * 5. Si se parece a uno que ya tengo (por la piramide entera, salida,
+ *    corazon y fondo, ver parecido-notas; o porque Fragrantica dice que
+ *    recuerda a el), baja un escalon: puede caer en una casilla floja y aun
+ *    asi ser casi el mismo frasco.
  *
  * Funcion pura: recibe la coleccion y los contextos ya cargados.
  */
@@ -35,7 +36,7 @@ import {
   type ContextoReparto,
   type NivelReparto,
 } from './reparto';
-import type { Solapamiento } from './solapamiento';
+import type { NivelNota, ParecidoPorNotas } from './parecido-notas';
 import { normalizar } from './texto';
 
 export type Veredicto = 'merece' | 'aporta' | 'prescindible' | 'sin-datos';
@@ -52,8 +53,10 @@ export interface PerfumeParecido {
   perfumeId: string;
   nombre: string;
   marca: string;
-  /** Notas de fondo comunes; vacio si solo lo dice Fragrantica. */
-  comunes: string[];
+  /** Notas comunes por nivel; vacias si solo lo dice Fragrantica. */
+  comunes: Record<NivelNota, string[]>;
+  /** Puntos sobre las notas del mas corto, de 0 a 1; null si solo lo dice Fragrantica. */
+  proporcion: number | null;
   /** Fragrantica lo pone en «Esta fragancia me recuerda a». */
   segunFragrantica: boolean;
 }
@@ -141,22 +144,23 @@ function cubre(
 }
 
 /**
- * Los perfumes de la coleccion que se parecen al candidato: los de notas de
- * fondo comunes (ya calculados en el servidor) y los que Fragrantica pone en
+ * Los perfumes de la coleccion que se parecen al candidato: los de notas
+ * comunes (ya calculados con parecidosPorNotas) y los que Fragrantica pone en
  * «me recuerda a», buscados por nombre (y marca, si la trae).
  */
 export function parecidosEnLaColeccion(
-  solapamientos: Solapamiento[],
+  porNotas: ParecidoPorNotas[],
   recuerdaA: { nombre: string; marca: string | null }[],
   coleccion: Pick<PerfumeCandidato, 'id' | 'nombre' | 'marca' | 'estado' | 'archivado'>[],
 ): PerfumeParecido[] {
   const porId = new Map<string, PerfumeParecido>();
-  for (const s of solapamientos) {
+  for (const s of porNotas) {
     porId.set(s.perfumeId, {
       perfumeId: s.perfumeId,
       nombre: s.nombre,
       marca: s.marca,
       comunes: s.comunes,
+      proporcion: s.proporcion,
       segunFragrantica: false,
     });
   }
@@ -175,7 +179,8 @@ export function parecidosEnLaColeccion(
           perfumeId: p.id,
           nombre: p.nombre,
           marca: p.marca,
-          comunes: [],
+          comunes: { SALIDA: [], CORAZON: [], FONDO: [] },
+          proporcion: null,
           segunFragrantica: true,
         });
       }
@@ -184,7 +189,7 @@ export function parecidosEnLaColeccion(
   return [...porId.values()].sort(
     (a, b) =>
       Number(b.segunFragrantica) - Number(a.segunFragrantica) ||
-      b.comunes.length - a.comunes.length ||
+      (b.proporcion ?? 0) - (a.proporcion ?? 0) ||
       a.nombre.localeCompare(b.nombre, 'es'),
   );
 }

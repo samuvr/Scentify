@@ -602,7 +602,7 @@ export function FormularioPerfume({
         contextoIds: v.contextoIds,
         estaciones: v.estaciones,
         momentos: v.momentos,
-        notasFondo: notas.filter((n) => n.nivel === 'FONDO').map((n) => n.nombre).slice(0, 30),
+        notas: notas.slice(0, 90),
         recuerdaA: ficha?.parecidos ?? [],
       });
       if (respuesta.ok) {

@@ -26,7 +26,12 @@ import {
   marcarConvertido,
   solapamientoConLaColeccion,
 } from '@/servicios/wishlist';
-import { candidatosParaRecomendar, listarContextos } from '@/servicios/consultas';
+import {
+  candidatosParaRecomendar,
+  listarContextos,
+  piramidesDeLaColeccion,
+} from '@/servicios/consultas';
+import { parecidosPorNotas } from '@/dominio/parecido-notas';
 import {
   evaluarCompra,
   parecidosEnLaColeccion,
@@ -586,7 +591,10 @@ const esquemaEvaluacion = z.object({
   contextoIds: z.array(z.string().uuid()).min(1, 'Marca al menos un contexto.'),
   estaciones: z.array(z.enum(ESTACIONES)).min(1, 'Marca al menos una estación.'),
   momentos: z.array(z.enum(MOMENTOS)).min(1, 'Marca al menos un momento del día.'),
-  notasFondo: z.array(z.string().min(1).max(80)).max(30),
+  /** La piramide entera: el parecido mira salida, corazon y fondo. */
+  notas: z
+    .array(z.object({ nombre: z.string().min(1).max(80), nivel: z.enum(['SALIDA', 'CORAZON', 'FONDO']) }))
+    .max(90),
   /** «Esta fragancia me recuerda a», recien leido de Fragrantica. */
   recuerdaA: z.array(esquemaParecido).max(MAXIMO_PARECIDOS),
 });
@@ -611,10 +619,10 @@ export async function accionEvaluarCompra(entrada: unknown): Promise<RespuestaEv
     return { ok: false, error: analisis.error.issues[0]?.message ?? 'Datos no válidos.' };
   }
   const d = analisis.data;
-  const [contextos, coleccion, solapamientos] = await Promise.all([
+  const [contextos, coleccion, piramides] = await Promise.all([
     listarContextos(userId),
     candidatosParaRecomendar(userId),
-    solapamientoConLaColeccion(userId, d.notasFondo),
+    piramidesDeLaColeccion(userId),
   ]);
   const evaluacion = evaluarCompra({
     candidato: {
@@ -626,7 +634,11 @@ export async function accionEvaluarCompra(entrada: unknown): Promise<RespuestaEv
     },
     coleccion,
     contextos,
-    parecidos: parecidosEnLaColeccion(solapamientos, d.recuerdaA, coleccion),
+    parecidos: parecidosEnLaColeccion(
+      parecidosPorNotas(d.notas, piramides),
+      d.recuerdaA,
+      coleccion,
+    ),
   });
   return {
     ok: true,
