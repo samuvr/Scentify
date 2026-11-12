@@ -11,7 +11,11 @@ export type Estacion = 'PRIMAVERA' | 'VERANO' | 'OTONO' | 'INVIERNO';
 
 export type Momento = 'DIA' | 'NOCHE';
 
-export type EstadoPerfume = 'LO_TENGO' | 'LO_TUVE';
+/**
+ * MUESTRA: probado sin tenerlo (muestra, decant, probador). Se registran sus
+ * usos, pero no es de la coleccion.
+ */
+export type EstadoPerfume = 'LO_TENGO' | 'LO_TUVE' | 'MUESTRA';
 
 export type DuracionPercibida = 'MENOS_2H' | 'DE_2_4H' | 'DE_4_6H' | 'DE_6_8H' | 'MAS_8H';
 

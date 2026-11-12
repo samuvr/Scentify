@@ -18,7 +18,7 @@ import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { crearDb, schema } from '@/db';
 import type { ParecidosLeidos } from '@/dominio/parecidos';
 import { claveBusqueda, normalizar } from '@/dominio/texto';
-import type { Estacion, Momento } from '@/dominio/tipos';
+import type { Estacion, EstadoPerfume, Momento } from '@/dominio/tipos';
 
 export interface NotaDeEntrada {
   nombre: string;
@@ -41,7 +41,7 @@ export interface DatosPerfume {
   anioLanzamiento?: number | null;
   volumenMl?: number | null;
   fechaCompra?: string | null;
-  estado: 'LO_TENGO' | 'LO_TUVE';
+  estado: EstadoPerfume;
   valoracion?: number | null;
   notasPersonales?: string | null;
   fragranticaUrl?: string | null;
@@ -402,16 +402,21 @@ function camposFrasco(datos: DatosPerfume) {
  * del catalogo o la que tenga el mismo nombre, marca y concentracion. Se mira
  * ANTES de tocar ninguna ficha.
  */
-async function frascoPropioIgual(userId: string, datos: DatosPerfume): Promise<string | null> {
+async function frascoPropioIgual(
+  userId: string,
+  datos: DatosPerfume,
+): Promise<{ id: string; estado: EstadoPerfume } | null> {
   const fichaId = datos.fichaId ?? (await fichaConLaMismaClave(datos));
   if (!fichaId) return null;
   const db = crearDb();
+  // Un frasco de verdad antes que una muestra: es el que importa para avisar.
   const [fila] = await db
-    .select({ id: schema.perfume.id })
+    .select({ id: schema.perfume.id, estado: schema.perfume.estado })
     .from(schema.perfume)
     .where(and(eq(schema.perfume.userId, userId), eq(schema.perfume.fichaId, fichaId)))
+    .orderBy(sql`${schema.perfume.estado} = 'MUESTRA'`, schema.perfume.creadoEn)
     .limit(1);
-  return fila?.id ?? null;
+  return fila ?? null;
 }
 
 export async function crearPerfume(userId: string, datos: DatosPerfume): Promise<string> {
@@ -419,9 +424,18 @@ export async function crearPerfume(userId: string, datos: DatosPerfume): Promise
   await comprobarContextos(userId, datos.contextoIds);
   // Compartir desde Fragrantica algo que ya tienes creaba un segundo frasco
   // sin avisar: el aviso de «Ya lo tienes» solo existia en el paso 1.
-  if (!datos.confirmarDuplicado) {
-    const existente = await frascoPropioIgual(userId, datos);
-    if (existente) throw new ErrorDuplicado(existente);
+  const existente = await frascoPropioIgual(userId, datos);
+  if (existente) {
+    // Una muestra de algo que ya esta guardado (en la coleccion o como otra
+    // muestra) no es un perfume nuevo: se registra el uso con el que hay.
+    if (datos.estado === 'MUESTRA') return existente.id;
+    // Comprar lo que se probo como muestra la convierte en el frasco, con su
+    // historial de usos: no quedan dos perfumes iguales, uno de ellos huerfano.
+    if (existente.estado === 'MUESTRA') {
+      await actualizarPerfume(userId, existente.id, datos);
+      return existente.id;
+    }
+    if (!datos.confirmarDuplicado) throw new ErrorDuplicado(existente.id);
   }
 
   let fichaId: string;
@@ -510,11 +524,14 @@ export async function archivarPerfume(
     .where(and(eq(schema.perfume.userId, userId), eq(schema.perfume.id, perfumeId)));
 }
 
-/** Marcar LO_TUVE saca de recomendaciones pero no toca el historico (4.2). */
+/**
+ * Marcar LO_TUVE saca de recomendaciones pero no toca el historico (4.2).
+ * Una muestra que se compra pasa a LO_TENGO por aqui, con sus usos.
+ */
 export async function cambiarEstado(
   userId: string,
   perfumeId: string,
-  estado: 'LO_TENGO' | 'LO_TUVE',
+  estado: EstadoPerfume,
 ): Promise<void> {
   const db = crearDb();
   await db

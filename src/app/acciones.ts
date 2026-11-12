@@ -394,7 +394,7 @@ const esquemaPerfume = z.object({
   anioLanzamiento: z.coerce.number().int().min(1700).max(2200).nullable().optional(),
   volumenMl: z.coerce.number().int().positive().nullable().optional(),
   fechaCompra: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
-  estado: z.enum(['LO_TENGO', 'LO_TUVE']),
+  estado: z.enum(['LO_TENGO', 'LO_TUVE', 'MUESTRA']),
   valoracion: z.coerce.number().int().min(1).max(5).nullable().optional(),
   notasPersonales: z.string().max(4000).nullable().optional(),
   fragranticaUrl: z.string().url().max(500).nullable().optional(),

@@ -141,7 +141,7 @@ export function PanelDatos() {
                       <tr key={`${f.nombre}-${f.marca}`} className="border-t border-borde">
                         <td className="py-1 pr-3">{f.nombre}</td>
                         <td className="py-1 pr-3">{f.marca}</td>
-                        <td className="py-1 pr-3">{f.estado === 'LO_TENGO' ? 'Lo tengo' : 'Lo tuve'}</td>
+                        <td className="py-1 pr-3">{f.estado === 'LO_TENGO' ? 'Lo tengo' : f.estado === 'LO_TUVE' ? 'Lo tuve' : 'Muestra'}</td>
                         <td className="py-1">{f.contextos.join(', ') || '—'}</td>
                       </tr>
                     ))}

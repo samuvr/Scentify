@@ -33,7 +33,7 @@ export default async function PaginaColeccion({
   const p = await searchParams;
   const filtros: FiltrosColeccion = {
     texto: p.q,
-    estado: p.estado === 'LO_TUVE' || p.estado === 'LO_TENGO' ? p.estado : undefined,
+    estado: (['LO_TENGO', 'LO_TUVE', 'MUESTRA'] as const).find((e) => e === p.estado),
     marca: p.marca,
     familiaId: uuidOVacio(p.familia),
     notaId: uuidOVacio(p.nota),
@@ -106,7 +106,14 @@ export default async function PaginaColeccion({
         {perfumes.length} {perfumes.length === 1 ? 'perfume' : 'perfumes'}
         {notaActiva ? ` con ${notaActiva.nombre}` : ''}
         {familiaActiva ? ` de la familia ${familiaActiva.nombre}` : ''}
+        {filtros.estado === 'MUESTRA' ? ' probados con muestra' : ''}
       </p>
+      {filtros.estado === 'MUESTRA' ? (
+        <p className="text-xs text-texto-tenue">
+          Las muestras, decants y probadores que has registrado. No cuentan como colección: si
+          compras uno, ábrelo y pulsa «Lo he comprado».
+        </p>
+      ) : null}
 
       {/*
         Filas y no tarjetas: con cincuenta perfumes, cincuenta cajas iguales son
@@ -147,6 +154,7 @@ export default async function PaginaColeccion({
                     </span>
                   ) : null}
                   {perfume.estado === 'LO_TUVE' ? <span className="etiqueta">lo tuve</span> : null}
+                  {perfume.estado === 'MUESTRA' ? <span className="etiqueta">muestra</span> : null}
                   {perfume.archivado ? <span className="etiqueta">archivado</span> : null}
                 </div>
               </Link>

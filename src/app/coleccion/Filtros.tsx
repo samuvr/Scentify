@@ -155,6 +155,7 @@ export function Filtros({
           {selector('estado', 'Estado', [
             { valor: 'LO_TENGO', texto: 'Lo tengo' },
             { valor: 'LO_TUVE', texto: 'Lo tuve' },
+            { valor: 'MUESTRA', texto: 'Muestras probadas' },
           ])}
           {selector(
             'marca',

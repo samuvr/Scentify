@@ -16,7 +16,7 @@ import {
   usadosRecientemente,
 } from '@/servicios/consultas';
 import { desplazarDias, esFinDeSemana, hoyIso, momentoDeAhora, usosDelDia } from '@/servicios/usos';
-import { esFechaIso } from '@/dominio/navegacion';
+import { esFechaIso, esUuid } from '@/dominio/navegacion';
 import { fechaLarga, mesDe } from '@/dominio/calendario';
 import type { Metadata } from 'next';
 
@@ -33,14 +33,17 @@ export const dynamic = 'force-dynamic';
 
 export default async function PaginaDiaCalendario({
   params,
+  searchParams,
 }: {
   params: Promise<{ fecha: string }>;
+  searchParams: Promise<{ elegir?: string }>;
 }) {
   const userId = await usuarioActual();
   if (!userId) redirect('/login');
 
   const { fecha } = await params;
   if (!esFechaIso(fecha)) notFound();
+  const { elegir } = await searchParams;
 
   const zona = await zonaDelUsuario();
   const hoy = hoyIso(zona);
@@ -130,6 +133,7 @@ export default async function PaginaDiaCalendario({
             momentoInicial={momento}
             contextoPorMomento={{ DIA: habitualDia, NOCHE: habitualNoche }}
             fechaFija={fecha}
+            elegir={esUuid(elegir) ? elegir : undefined}
           />
         </section>
       ) : null}
