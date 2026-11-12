@@ -85,7 +85,7 @@ const PRIORIDAD: Record<DeseoExportable['prioridad'], string> = {
  */
 const ACERCA_DE = [
   'Exportación de una colección personal de perfumes hecha con la app Scentify.',
-  '«coleccion» son los frascos que tengo ahora; «ya_no_tengo», los que tuve; «lista_de_deseos», los que me planteo comprar.',
+  '«coleccion» son los frascos que tengo ahora; «ya_no_tengo», los que tuve; «lista_de_deseos», los que me planteo comprar; «probados_con_muestra», los que he llevado con una muestra, un decant o un probador sin tenerlos.',
   'Las notas (salida, corazón, fondo) y las familias olfativas vienen de la ficha del perfume, normalmente copiada de Fragrantica.',
   '«estaciones», «momentos» y «contextos» son MIS marcas: cuándo y dónde me parece apropiado ponérmelo, no la opinión general.',
   '«valoracion» es mi nota de 1 a 5 al perfume; «uso» resume el diario de lo que me he puesto (veces, último día, nota media del día, sprays y duración que noto).',
@@ -147,6 +147,7 @@ export function documentoParaIa(entrada: EntradaExportacionIa) {
   const visibles = entrada.perfumes.filter((p) => !p.archivado);
   const tengo = visibles.filter((p) => p.estado === 'LO_TENGO');
   const tuve = visibles.filter((p) => p.estado === 'LO_TUVE');
+  const muestras = visibles.filter((p) => p.estado === 'MUESTRA');
 
   const ya_no_tengo = tuve.map((p) =>
     compactar({
@@ -178,6 +179,7 @@ export function documentoParaIa(entrada: EntradaExportacionIa) {
     },
     coleccion: tengo.map(perfumeParaIa),
     ...(ya_no_tengo.length ? { ya_no_tengo } : {}),
+    ...(muestras.length ? { probados_con_muestra: muestras.map(perfumeParaIa) } : {}),
     ...(lista_de_deseos.length ? { lista_de_deseos } : {}),
   };
 }

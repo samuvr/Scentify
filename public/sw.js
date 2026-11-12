@@ -38,7 +38,7 @@
  *     no se guarda: una copia de un despliegue anterior volvia a leer la ficha
  *     con el codigo viejo.
  */
-const VERSION = 'v9';
+const VERSION = 'v10';
 const CACHE_ARMAZON = `scentify-armazon-${VERSION}`;
 const CACHE_DATOS = `scentify-datos-${VERSION}`;
 const ETIQUETA_SYNC = 'sincronizar-usos';
@@ -187,7 +187,12 @@ self.addEventListener('fetch', (evento) => {
 
   // El alta con lo que llega de Fragrantica es de un solo uso: lo que trae
   // depende del catalogo de ese momento, y una copia vieja lo enseñaria mal.
-  if (request.mode === 'navigate' && url.pathname === '/coleccion/nuevo' && url.search !== '') {
+  // Igual con la muestra.
+  if (
+    request.mode === 'navigate' &&
+    (url.pathname === '/coleccion/nuevo' || url.pathname === '/muestra') &&
+    url.search !== ''
+  ) {
     evento.respondWith(fetch(request).catch(() => paginaSinConexion()));
     return;
   }

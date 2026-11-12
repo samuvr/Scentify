@@ -66,7 +66,9 @@ export default async function PaginaFicha({
   const { perfume, notas, familias, parecidos, promedios, historial } = ficha;
   const todoElHistorial = verHistorial === 'todo';
   const usosVisibles = todoElHistorial ? historial : historial.slice(0, USOS_A_LA_VISTA);
-  const disponible = perfume.estado === 'LO_TENGO' && !perfume.archivado;
+  // Una muestra tambien se registra desde aqui: un decant dura varios dias.
+  const disponible = perfume.estado !== 'LO_TUVE' && !perfume.archivado;
+  const muestra = perfume.estado === 'MUESTRA';
   const nombreContexto = (contextoId: string) =>
     contextos.find((c) => c.id === contextoId)?.nombre ?? '—';
 
@@ -103,14 +105,25 @@ export default async function PaginaFicha({
           </Link>
         </div>
         <div className="flex flex-wrap gap-2 text-sm">
-          <span className="etiqueta">{perfume.estado === 'LO_TENGO' ? 'Lo tengo' : 'Lo tuve'}</span>
+          <span className="etiqueta">
+            {muestra ? 'Muestra' : perfume.estado === 'LO_TENGO' ? 'Lo tengo' : 'Lo tuve'}
+          </span>
           {perfume.volumenMl ? <span className="etiqueta">{perfume.volumenMl} ml</span> : null}
           {perfume.valoracion ? <span className="etiqueta">{perfume.valoracion}/5</span> : null}
           {perfume.archivado ? <span className="etiqueta text-texto-tenue">Archivado</span> : null}
         </div>
         {/* Registrar desde la ficha: el mismo toque de Hoy, con su Deshacer. */}
+        {muestra ? (
+          <p className="text-sm text-texto-tenue">
+            Lo has probado con una muestra, un decant o un probador: no está en tu colección ni
+            entra en las sugerencias.
+          </p>
+        ) : null}
         {disponible ? (
-          <Link href={`/?toque=${perfume.id}`} className="boton-primario w-full">
+          <Link
+            href={muestra ? `/?elegir=${perfume.id}` : `/?toque=${perfume.id}`}
+            className="boton-primario w-full"
+          >
             Me lo pongo hoy
           </Link>
         ) : null}
@@ -284,17 +297,24 @@ export default async function PaginaFicha({
       <section className="space-y-2 border-t border-borde pt-4">
         <h2 className="subtitulo">Acciones</h2>
         <div className="flex flex-wrap gap-2">
-          <form action={accionCambiarEstado}>
-            <input type="hidden" name="perfumeId" value={perfume.id} />
-            <input
-              type="hidden"
-              name="estado"
-              value={perfume.estado === 'LO_TENGO' ? 'LO_TUVE' : 'LO_TENGO'}
-            />
-            <button type="submit" className="boton-secundario text-sm">
-              Marcar como {perfume.estado === 'LO_TENGO' ? '«lo tuve»' : '«lo tengo»'}
-            </button>
-          </form>
+          {muestra ? (
+            // Pasa a la coleccion con sus usos; el volumen y la compra, al editar.
+            <Link href={`/coleccion/${perfume.id}/editar?comprado=1`} className="boton-primario text-sm">
+              Lo he comprado
+            </Link>
+          ) : (
+            <form action={accionCambiarEstado}>
+              <input type="hidden" name="perfumeId" value={perfume.id} />
+              <input
+                type="hidden"
+                name="estado"
+                value={perfume.estado === 'LO_TENGO' ? 'LO_TUVE' : 'LO_TENGO'}
+              />
+              <button type="submit" className="boton-secundario text-sm">
+                Marcar como {perfume.estado === 'LO_TENGO' ? '«lo tuve»' : '«lo tengo»'}
+              </button>
+            </form>
+          )}
           <form action={accionArchivar}>
             <input type="hidden" name="perfumeId" value={perfume.id} />
             <input type="hidden" name="archivar" value={perfume.archivado ? '0' : '1'} />

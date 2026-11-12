@@ -12,6 +12,7 @@ import { TarjetaUso } from '@/componentes/TarjetaUso';
 import { usuarioActual } from '@/servicios/auth';
 import { zonaDelUsuario } from '@/servicios/zona';
 import { contextoParaMomento } from '@/dominio/contextos';
+import { esUuid } from '@/dominio/navegacion';
 import {
   candidatosParaRecomendar,
   coleccionParaRegistro,
@@ -43,12 +44,12 @@ const SUGERENCIAS = 5;
 export default async function PaginaHoy({
   searchParams,
 }: {
-  searchParams: Promise<{ registrado?: string; toque?: string; cierre?: string }>;
+  searchParams: Promise<{ registrado?: string; toque?: string; cierre?: string; elegir?: string }>;
 }) {
   const userId = await usuarioActual();
   if (!userId) redirect('/login');
 
-  const { registrado, toque, cierre } = await searchParams;
+  const { registrado, toque, cierre, elegir } = await searchParams;
   const zona = await zonaDelUsuario();
   const hoy = hoyIso(zona);
   const momento = momentoDeAhora(zona);
@@ -187,6 +188,7 @@ export default async function PaginaHoy({
             registrados={[...yaHoy]}
             sugerencias={sugerencias}
             toque={toque}
+            elegir={esUuid(elegir) ? elegir : undefined}
           />
         </section>
       )}

@@ -12,6 +12,8 @@
  * dentro del campo y CRLF. Nada mas.
  */
 
+import type { EstadoPerfume } from './tipos';
+
 export type FilaCsv = string[];
 
 /* ------------------------------------------------------------- escritura */
@@ -123,7 +125,7 @@ export interface FilaColeccion {
   anioLanzamiento: number | null;
   volumenMl: number | null;
   fechaCompra: string | null;
-  estado: 'LO_TENGO' | 'LO_TUVE';
+  estado: EstadoPerfume;
   valoracion: number | null;
   notasSalida: string[];
   notasCorazon: string[];
@@ -230,7 +232,8 @@ export function analizarCsvColeccion(texto: string): ResultadoImportacion {
     }
 
     const estadoBruto = campo('estado').toUpperCase() || 'LO_TENGO';
-    if (estadoBruto !== 'LO_TENGO' && estadoBruto !== 'LO_TUVE') {
+    // MUESTRA tambien: la exportacion la escribe, y su propio CSV tiene que volver a entrar.
+    if (estadoBruto !== 'LO_TENGO' && estadoBruto !== 'LO_TUVE' && estadoBruto !== 'MUESTRA') {
       errores.push({ linea, motivo: `Estado desconocido: «${estadoBruto}».` });
       return;
     }

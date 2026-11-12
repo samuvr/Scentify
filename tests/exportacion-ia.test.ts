@@ -119,4 +119,14 @@ describe('documento para IA', () => {
     expect(doc.coleccion).toEqual([]);
     expect(doc).not.toHaveProperty('ya_no_tengo');
   });
+
+  it('separa lo probado con muestra de la colección', () => {
+    const doc = documentoParaIa({
+      ...BASE,
+      perfumes: [perfume(), perfume({ nombre: 'Aventus', marca: 'Creed', estado: 'MUESTRA' })],
+    });
+    expect(doc.coleccion.map((p) => p.nombre)).toEqual(['Khamrah']);
+    expect(doc.resumen.perfumes).toBe(1);
+    expect(doc.probados_con_muestra?.map((p) => p.nombre)).toEqual(['Aventus']);
+  });
 });

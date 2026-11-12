@@ -168,8 +168,21 @@ export function FormularioPerfume({
   yaLoTengo = false,
   deseoId,
   evaluar = false,
+  muestra = false,
+  fechaMuestra,
+  recienComprado = false,
 }: {
   perfumeId?: string;
+  /**
+   * Una muestra, un decant o un probador: los mismos pasos que el alta, sin
+   * inventario, y al guardar se va a registrar el uso. Se guarda con estado
+   * MUESTRA, fuera de la coleccion.
+   */
+  muestra?: boolean;
+  /** La muestra es de un dia concreto del calendario, no de hoy. */
+  fechaMuestra?: string;
+  /** Al editar desde «Lo he comprado» de una muestra: abre el inventario. */
+  recienComprado?: boolean;
   /**
    * «¿Merece la pena?»: los mismos pasos que el alta, pero sin inventario y
    * acabando en la evaluacion en vez de guardar. No se guarda nada hasta
@@ -263,7 +276,7 @@ export function FormularioPerfume({
   );
   const [evaluando, setEvaluando] = useState(false);
   /** Tras evaluar, «Lo he comprado»: a partir de ahi es un alta normal. */
-  const [comprado, setComprado] = useState(false);
+  const [comprado, setComprado] = useState(recienComprado);
   const [enWishlist, setEnWishlist] = useState<'no' | 'guardando' | 'si'>('no');
   /** Evaluando no hay nada que perder al salir; tras «Lo he comprado», si. */
   const soloEvaluar = evaluar && !comprado;
@@ -379,7 +392,8 @@ export function FormularioPerfume({
     setErrorEnlace(null);
     const parametros = new URLSearchParams({ url });
     if (deseoId) parametros.set('deseo', deseoId);
-    const ruta = evaluar ? '/evaluar' : '/coleccion/nuevo';
+    if (muestra && fechaMuestra) parametros.set('fecha', fechaMuestra);
+    const ruta = evaluar ? '/evaluar' : muestra ? '/muestra' : '/coleccion/nuevo';
     abrirConTransicion(() => router.push(`${ruta}?${parametros}`));
   }
 
@@ -579,6 +593,13 @@ export function FormularioPerfume({
 
     if (respuesta.ok) {
       sinCambios.current = true;
+      // Guardada la muestra, lo que queda es registrar el uso: a Hoy (o al dia
+      // del calendario) con ella ya elegida.
+      if (muestra && !perfumeId) {
+        const elegir = `elegir=${respuesta.id}`;
+        router.push(fechaMuestra ? `/mas/calendario/${fechaMuestra}?${elegir}` : `/?${elegir}`);
+        return;
+      }
       // Al editar se sustituye el editor en el historial: «atrás» desde la
       // ficha volvia al formulario ya guardado.
       const destino = `/coleccion/${respuesta.id}${
@@ -667,8 +688,9 @@ export function FormularioPerfume({
     irAPaso(0);
   }
 
-  /** Evaluando, el inventario sobra: se acaba en los contextos. */
-  const ultimoPaso = soloEvaluar ? PASOS.length - 2 : PASOS.length - 1;
+  /** Evaluando o con una muestra, el inventario sobra: se acaba en los contextos. */
+  const sinInventario = soloEvaluar || (muestra && !perfumeId);
+  const ultimoPaso = sinInventario ? PASOS.length - 2 : PASOS.length - 1;
 
   const puedeAvanzar = [
     v.nombre.trim() !== '' && v.marca.trim() !== '',
@@ -1044,12 +1066,19 @@ export function FormularioPerfume({
       </section>
   );
 
+  // «Muestra» solo se ofrece a lo que ya lo era: lo comprado no vuelve atras
+  // sin querer, pero se puede deshacer un «Lo he comprado» pulsado por error.
+  const estadosPosibles =
+    iniciales?.estado === 'MUESTRA'
+      ? (['LO_TENGO', 'LO_TUVE', 'MUESTRA'] as const)
+      : (['LO_TENGO', 'LO_TUVE'] as const);
+
   const seccionInventario = () => (
       <section className="space-y-4">
         <div>
           <span className="block text-sm font-medium text-texto-tenue">Estado</span>
-          <div className="mt-1 grid grid-cols-2 gap-2">
-            {(['LO_TENGO', 'LO_TUVE'] as const).map((e) => (
+          <div className={`mt-1 grid gap-2 ${estadosPosibles.length > 2 ? 'grid-cols-3' : 'grid-cols-2'}`}>
+            {estadosPosibles.map((e) => (
               <button
                 key={e}
                 type="button"
@@ -1057,7 +1086,7 @@ export function FormularioPerfume({
                 onClick={() => cambiar({ estado: e })}
                 className="opcion"
               >
-                {e === 'LO_TENGO' ? 'Lo tengo' : 'Lo tuve'}
+                {e === 'LO_TENGO' ? 'Lo tengo' : e === 'LO_TUVE' ? 'Lo tuve' : 'Muestra'}
               </button>
             ))}
           </div>
@@ -1242,7 +1271,7 @@ export function FormularioPerfume({
           <h2 className="subtitulo">Contextos</h2>
           {seccionContextos()}
         </div>
-        {soloEvaluar ? null : (
+        {sinInventario ? null : (
           // Recien comprado, abierto: es lo unico que falta por decir.
           <details className="tarjeta" open={comprado}>
             <summary className="cursor-pointer font-medium">
@@ -1306,7 +1335,9 @@ export function FormularioPerfume({
       ? 'Guardando…'
       : perfumeId
         ? 'Guardar cambios'
-        : 'Añadir a la colección';
+        : muestra
+          ? 'Guardar y registrar el uso'
+          : 'Añadir a la colección';
   const accionFinal = () => void (soloEvaluar ? evaluarCompra() : guardar());
   const ocupado = soloEvaluar ? evaluando : guardando;
 
@@ -1442,7 +1473,7 @@ export function FormularioPerfume({
         ) : (
           <button
             type="button"
-            disabled={ocupado || (soloEvaluar && !puedeAvanzar)}
+            disabled={ocupado || (sinInventario && !puedeAvanzar)}
             onClick={accionFinal}
             className="boton-primario flex-1"
           >

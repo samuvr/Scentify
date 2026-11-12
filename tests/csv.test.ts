@@ -107,6 +107,12 @@ describe('importación de colección', () => {
     expect(resultado.filas[0]).toMatchObject({ nombre: 'Asad', estado: 'LO_TENGO' });
   });
 
+  it('acepta las muestras que escribe la propia exportación', () => {
+    const resultado = analizarCsvColeccion(`${minima},estado\nAventus,Creed,Oficina,VERANO,DIA,MUESTRA`);
+    expect(resultado.errores).toEqual([]);
+    expect(resultado.filas[0]).toMatchObject({ nombre: 'Aventus', estado: 'MUESTRA' });
+  });
+
   it('avisa fila a fila sin descartar el resto del fichero', () => {
     const csv = [
       `${minima},valoracion`,

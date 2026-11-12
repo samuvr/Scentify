@@ -11,7 +11,7 @@
  * Al no declarar 'use client' aqui, este modulo es codigo compartido normal y
  * las dos partes ven el mismo objeto.
  */
-import type { Estacion, Momento } from '@/dominio/tipos';
+import type { Estacion, EstadoPerfume, Momento } from '@/dominio/tipos';
 
 export type Nivel = 'SALIDA' | 'CORAZON' | 'FONDO';
 
@@ -22,7 +22,7 @@ export interface ValoresPerfume {
   anioLanzamiento: string;
   volumenMl: string;
   fechaCompra: string;
-  estado: 'LO_TENGO' | 'LO_TUVE';
+  estado: EstadoPerfume;
   valoracion: string;
   notasPersonales: string;
   fragranticaUrl: string;

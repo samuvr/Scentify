@@ -37,6 +37,8 @@ export interface PerfumeBreve {
   nombre: string;
   marca: string;
   spraysHabituales?: number | null;
+  /** Probado con una muestra, un decant o un probador: no es de la coleccion. */
+  muestra?: boolean;
 }
 
 /** Un frasco de la coleccion con su clave de busqueda ya normalizada. */
@@ -111,6 +113,7 @@ export function FormularioRegistro({
   registrados = [],
   sugerencias = [],
   toque,
+  elegir: elegirInicial,
   fechaFija,
 }: {
   contextos: Contexto[];
@@ -142,6 +145,11 @@ export function FormularioRegistro({
    * pegatina NFC, ficha): 'ayer', 'sugerido' o el id de un perfume.
    */
   toque?: string;
+  /**
+   * Perfume a dejar elegido al abrir, con el formulario completo: al volver de
+   * guardar una muestra, para decir el momento y el contexto antes de registrar.
+   */
+  elegir?: string;
   /**
    * Registro para un dia concreto (desde el calendario): todo lo que se guarde,
    * tambien con un toque, va a esa fecha y no a la de hoy.
@@ -272,6 +280,16 @@ export function FormularioRegistro({
     const t = setTimeout(() => setReciente(null), SEGUNDOS_AVISO * 1000);
     return () => clearTimeout(t);
   }, [reciente]);
+
+  // Perfume pedido desde fuera (?elegir=): se abre elegido, sin registrar aun.
+  useEffect(() => {
+    if (!elegirInicial) return;
+    router.replace(fechaFija ? `/mas/calendario/${fechaFija}` : '/', { scroll: false });
+    const perfume = coleccion.find((p) => p.id === elegirInicial);
+    if (perfume) elegir(perfume);
+    else setAviso('Ese perfume no está disponible para registrar.');
+    // Solo al montar: el parametro se limpia de la URL al usarlo.
+  }, []);
 
   // Registro pedido desde fuera (?toque=): una sola vez, aunque se recargue.
   const toqueHecho = useRef(false);
@@ -631,6 +649,16 @@ export function FormularioRegistro({
               onChange={(e) => setConsulta(e.target.value)}
               className="mt-1"
             />
+            {/* Lo que no es de la coleccion: un decant, una muestra, el probador del aeropuerto. */}
+            <Link
+              href={fechaFija ? `/muestra?fecha=${fechaFija}` : '/muestra'}
+              className="boton-fantasma mt-2 w-full justify-between px-1 text-sm"
+            >
+              <span>
+                <span aria-hidden="true">🧪 </span>Muestra, decant o probador
+              </span>
+              <span aria-hidden="true">›</span>
+            </Link>
           </div>
 
           {resultados.length > 0 ? (
@@ -641,6 +669,7 @@ export function FormularioRegistro({
                     <button type="button" onClick={() => elegir(p)} className="fila-toque">
                       <span className="nombre-perfume">{p.nombre}</span>
                       <span className="text-sm text-texto-tenue">{p.marca}</span>
+                      {p.muestra ? <span className="etiqueta text-xs">muestra</span> : null}
                       {marca(p.id)}
                     </button>
                   </li>
@@ -664,6 +693,12 @@ export function FormularioRegistro({
                 </Link>
                 <Link href="/importar" className="boton-fantasma px-3 text-sm">
                   Desde Fragrantica
+                </Link>
+                <Link
+                  href={fechaFija ? `/muestra?fecha=${fechaFija}` : '/muestra'}
+                  className="boton-fantasma px-3 text-sm"
+                >
+                  Es una muestra
                 </Link>
               </div>
             </div>
@@ -779,7 +814,10 @@ export function FormularioRegistro({
               <div>
                 {editando ? <p className="subtitulo">Ajustando el registro</p> : null}
                 <p className="nombre-perfume text-xl">{elegido.nombre}</p>
-                <p className="text-sm text-texto-tenue">{elegido.marca}</p>
+                <p className="text-sm text-texto-tenue">
+                  {elegido.marca}
+                  {elegido.muestra ? ' · muestra' : ''}
+                </p>
               </div>
               {editando ? null : (
                 <button type="button" onClick={reiniciar} className="boton-fantasma px-2 text-sm">

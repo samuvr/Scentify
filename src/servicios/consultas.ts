@@ -22,6 +22,7 @@ import type { PerfumeCandidato } from '@/dominio/recomendacion';
 import type {
   DuracionPercibida,
   Estacion,
+  EstadoPerfume,
   Momento,
   PerfumeIdoneidad,
   PromediosPerfume,
@@ -302,6 +303,8 @@ export async function coleccionParaRegistro(userId: string) {
       nombre: schema.ficha.nombre,
       marca: schema.ficha.marca,
       clave: schema.ficha.busquedaNormalizada,
+      // Las muestras tambien se buscan: un decant se usa mas de un dia.
+      muestra: sql<boolean>`${schema.perfume.estado} = 'MUESTRA'`,
       spraysHabituales: sql<number | null>`(
         select round(avg(${u.sprays}))::int from ${u}
         where ${u.perfumeId} = ${schema.perfume.id} and ${u.userId} = ${userId}
@@ -439,7 +442,8 @@ export async function yaRegistradoEse(
 
 export interface FiltrosColeccion {
   texto?: string;
-  estado?: 'LO_TENGO' | 'LO_TUVE';
+  /** Sin estado, la coleccion: lo que tengo y lo que tuve, nunca las muestras. */
+  estado?: EstadoPerfume;
   marca?: string;
   familiaId?: string;
   notaId?: string;
@@ -459,7 +463,7 @@ export async function listarColeccion(userId: string, filtros: FiltrosColeccion 
 
   const condiciones = [eq(p.userId, userId)];
   if (!filtros.incluirArchivados) condiciones.push(eq(p.archivado, false));
-  if (filtros.estado) condiciones.push(eq(p.estado, filtros.estado));
+  condiciones.push(filtros.estado ? eq(p.estado, filtros.estado) : ne(p.estado, 'MUESTRA'));
   if (filtros.marca) condiciones.push(eq(f.marca, filtros.marca));
   if (filtros.valoracionMinima) condiciones.push(gte(p.valoracion, filtros.valoracionMinima));
   if (filtros.texto && normalizar(filtros.texto).length > 0) {
@@ -814,10 +818,13 @@ export async function buscarEnCatalogo(userId: string, texto: string, limite = 6
       anioLanzamiento: f.anioLanzamiento,
       // Calificado a mano: sin joins, Drizzle escribe las columnas sin tabla y
       // dentro de la subconsulta "id" seria el del perfume, no el de la ficha.
-      /** El frasco propio con esta ficha, si ya lo tengo. */
+      /**
+       * El frasco propio con esta ficha, si ya lo tengo. Una muestra no
+       * cuenta: darlo de alta la convierte en el frasco.
+       */
       miPerfumeId: sql<string | null>`(
         select fr.id from ${p} fr
-        where fr.ficha_id = ${f}.id and fr.user_id = ${userId}
+        where fr.ficha_id = ${f}.id and fr.user_id = ${userId} and fr.estado <> 'MUESTRA'
         order by fr.creado_en limit 1
       )`,
       personas: sql<number>`(
@@ -907,21 +914,33 @@ export async function parecidosPendientes(userId: string) {
     })
     .from(p)
     .innerJoin(f, eq(f.id, p.fichaId))
-    .where(and(eq(p.userId, userId), eq(p.archivado, false)))
+    .where(and(eq(p.userId, userId), eq(p.archivado, false), ne(p.estado, 'MUESTRA')))
     .orderBy(asc(f.nombre), asc(f.marca));
   return { total: filas.length, pendientes: filas.filter((fila) => !fila.tiene) };
 }
 
-/** Mi frasco de esa ficha, si ya lo tengo. */
+/** Mi frasco de esa ficha, si ya lo tengo. Las muestras no cuentan. */
 export async function miFrascoDeFicha(userId: string, fichaId: string) {
+  const fila = await loQueTengoDeFicha(userId, fichaId);
+  return fila && fila.estado !== 'MUESTRA' ? fila.id : null;
+}
+
+/**
+ * Lo que tengo guardado de esa ficha: el frasco si lo hay y, si no, la
+ * muestra. Para no crear dos veces lo mismo al registrar otra muestra.
+ */
+export async function loQueTengoDeFicha(
+  userId: string,
+  fichaId: string,
+): Promise<{ id: string; estado: EstadoPerfume } | null> {
   const db = crearDb();
   const [fila] = await db
-    .select({ id: schema.perfume.id })
+    .select({ id: schema.perfume.id, estado: schema.perfume.estado })
     .from(schema.perfume)
     .where(and(eq(schema.perfume.userId, userId), eq(schema.perfume.fichaId, fichaId)))
-    .orderBy(asc(schema.perfume.creadoEn))
+    .orderBy(sql`${schema.perfume.estado} = 'MUESTRA'`, asc(schema.perfume.creadoEn))
     .limit(1);
-  return fila?.id ?? null;
+  return fila ?? null;
 }
 
 /**

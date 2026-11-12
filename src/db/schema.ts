@@ -49,7 +49,13 @@ export const concentracionEnum = pgEnum('concentracion', [
   'OTRO',
 ]);
 
-export const estadoPerfumeEnum = pgEnum('estado_perfume', ['LO_TENGO', 'LO_TUVE']);
+/**
+ * MUESTRA: un perfume probado sin tenerlo (una muestra, un decant, el
+ * probador del aeropuerto). Tiene ficha y marcas propias para poder registrar
+ * sus usos y calcular su idoneidad, pero no es de la coleccion: no sale en
+ * ella, ni en la recomendacion, ni en los huecos.
+ */
+export const estadoPerfumeEnum = pgEnum('estado_perfume', ['LO_TENGO', 'LO_TUVE', 'MUESTRA']);
 
 export const nivelPiramideEnum = pgEnum('nivel_piramide', ['SALIDA', 'CORAZON', 'FONDO']);
 
