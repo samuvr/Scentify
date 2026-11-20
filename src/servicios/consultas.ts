@@ -10,6 +10,7 @@ import { and, asc, desc, eq, gte, ilike, inArray, isNull, like, lte, ne, or, sql
 import { crearDb, schema } from '@/db';
 import { datosDeUrlFragrantica, idDeFichaFragrantica } from '@/dominio/fragrantica';
 import { parecidosValidos } from '@/dominio/parecidos';
+import { sentidoPorDefecto, type OrdenColeccion, type SentidoOrden } from '@/dominio/orden-coleccion';
 import {
   admiteMomento,
   DIAS_FRECUENCIA_REAL,
@@ -452,7 +453,9 @@ export interface FiltrosColeccion {
   momento?: Momento;
   valoracionMinima?: number;
   incluirArchivados?: boolean;
-  orden?: 'nombre' | 'marca' | 'ultimo-uso' | 'mas-usado';
+  orden?: OrdenColeccion;
+  /** Sin sentido, el natural de cada orden: ver `sentidoPorDefecto`. */
+  sentido?: SentidoOrden;
 }
 
 export async function listarColeccion(userId: string, filtros: FiltrosColeccion = {}) {
@@ -500,12 +503,18 @@ export async function listarColeccion(userId: string, filtros: FiltrosColeccion 
     );
   }
 
-  const orden = {
-    nombre: asc(f.nombre),
-    marca: asc(f.marca),
-    'ultimo-uso': sql`${agregados.ultimoUso} desc nulls last`,
-    'mas-usado': sql`${agregados.vecesUsado} desc nulls last`,
-  }[filtros.orden ?? 'nombre'];
+  const criterio = filtros.orden ?? 'nombre';
+  const columna = {
+    nombre: f.nombre,
+    marca: f.marca,
+    'ultimo-uso': agregados.ultimoUso,
+    'mas-usado': agregados.vecesUsado,
+  }[criterio];
+  // Los sin estrenar van siempre al final, se ordene en un sentido o en otro.
+  const sentido = sql.raw(
+    (filtros.sentido ?? sentidoPorDefecto(criterio)) === 'desc' ? 'desc' : 'asc',
+  );
+  const orden = sql`${columna} ${sentido} nulls last`;
 
   return db
     .select({

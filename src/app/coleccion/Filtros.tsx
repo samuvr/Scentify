@@ -10,6 +10,7 @@ import { MINIMO_CARACTERES_BUSQUEDA } from '@/dominio/texto';
 import { CLAVE_ULTIMA_COLECCION } from '@/componentes/VolverAColeccion';
 import { admiteMomento, momentosDe } from '@/dominio/contextos';
 import type { Momento } from '@/dominio/tipos';
+import { sentidoPorDefecto, type OrdenColeccion } from '@/dominio/orden-coleccion';
 
 /** Lo justo para no lanzar una consulta por cada tecla al escribir seguido. */
 const ESPERA_MS = 250;
@@ -85,10 +86,24 @@ export function Filtros({
     // `poner` cambia en cada render; lo que dispara la busqueda es el texto.
   }, [texto]);
 
+  const ordenElegido: OrdenColeccion =
+    (['nombre', 'marca', 'ultimo-uso', 'mas-usado'] as const).find(
+      (o) => o === parametros.get('orden'),
+    ) ?? 'nombre';
+  const sentidoNatural = sentidoPorDefecto(ordenElegido);
+  const sentido =
+    (['asc', 'desc'] as const).find((d) => d === parametros.get('dir')) ?? sentidoNatural;
+  const textoSentido = {
+    nombre: { asc: 'De la A a la Z', desc: 'De la Z a la A' },
+    marca: { asc: 'De la A a la Z', desc: 'De la Z a la A' },
+    'ultimo-uso': { asc: 'Lo más antiguo primero', desc: 'Lo más reciente primero' },
+    'mas-usado': { asc: 'Menos usados primero', desc: 'Más usados primero' },
+  }[ordenElegido][sentido];
+
   const contextoElegido = contextos.find((c) => c.id === parametros.get('contexto'));
   const momentoElegido = (['DIA', 'NOCHE'] as const).find((m) => m === parametros.get('momento'));
 
-  const activos = [...parametros.keys()].filter((k) => k !== 'q' && k !== 'orden').length;
+  const activos = [...parametros.keys()].filter((k) => !['q', 'orden', 'dir'].includes(k)).length;
 
   const selector = (clave: string, etiqueta: string, opciones: { valor: string; texto: string }[]) => (
     <div>
@@ -138,16 +153,36 @@ export function Filtros({
           Filtros{activos > 0 ? ` (${activos})` : ''}
         </button>
         <select
-          value={parametros.get('orden') ?? 'nombre'}
-          onChange={(e) => poner('orden', e.target.value)}
+          value={ordenElegido}
+          onChange={(e) => {
+            // Cada orden arranca en su sentido natural: al pasar a «Más usado»
+            // se quieren ver primero los mas usados.
+            const nuevos = new URLSearchParams(parametros.toString());
+            nuevos.set('orden', e.target.value);
+            nuevos.delete('dir');
+            router.push(`/coleccion?${nuevos}`);
+          }}
           aria-label="Ordenar por"
-          className="flex-1"
+          className="min-w-0 flex-1"
         >
           <option value="nombre">Nombre</option>
           <option value="marca">Marca</option>
           <option value="ultimo-uso">Último uso</option>
           <option value="mas-usado">Más usado</option>
         </select>
+        <button
+          type="button"
+          onClick={() => {
+            const contrario = sentido === 'asc' ? 'desc' : 'asc';
+            // El sentido natural no se escribe en la URL: asi queda limpia.
+            poner('dir', contrario === sentidoNatural ? '' : contrario);
+          }}
+          aria-label={`${textoSentido}. Invertir el orden`}
+          title={textoSentido}
+          className="boton-secundario shrink-0 px-3 text-lg"
+        >
+          <span aria-hidden="true">{sentido === 'asc' ? '↑' : '↓'}</span>
+        </button>
       </div>
 
       {abierto ? (
