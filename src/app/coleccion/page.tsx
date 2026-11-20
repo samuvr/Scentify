@@ -46,6 +46,7 @@ export default async function PaginaColeccion({
     orden: (ORDENES as readonly string[]).includes(p.orden ?? '')
       ? (p.orden as FiltrosColeccion['orden'])
       : 'nombre',
+    sentido: (['asc', 'desc'] as const).find((d) => d === p.dir),
   };
 
   const [perfumes, marcas, familias, contextos, notas] = await Promise.all([
