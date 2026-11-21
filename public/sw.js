@@ -37,8 +37,10 @@
  * v9: el alta con parametros (?url=, ?ficha=, ?deseo=) va siempre a la red y
  *     no se guarda: una copia de un despliegue anterior volvia a leer la ficha
  *     con el codigo viejo.
+ * v11: tampoco se guarda el editor con ?fragrantica=1, que vuelve a leer la
+ *     ficha al abrirse: una copia vieja lo hacia con el codigo anterior.
  */
-const VERSION = 'v10';
+const VERSION = 'v11';
 const CACHE_ARMAZON = `scentify-armazon-${VERSION}`;
 const CACHE_DATOS = `scentify-datos-${VERSION}`;
 const ETIQUETA_SYNC = 'sincronizar-usos';
@@ -190,7 +192,9 @@ self.addEventListener('fetch', (evento) => {
   // Igual con la muestra.
   if (
     request.mode === 'navigate' &&
-    (url.pathname === '/coleccion/nuevo' || url.pathname === '/muestra') &&
+    (url.pathname === '/coleccion/nuevo' ||
+      url.pathname === '/muestra' ||
+      /^\/coleccion\/[^/]+\/editar$/.test(url.pathname)) &&
     url.search !== ''
   ) {
     evento.respondWith(fetch(request).catch(() => paginaSinConexion()));

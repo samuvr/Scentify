@@ -32,7 +32,7 @@ import { familiasDeAcordes } from '@/dominio/familias';
 import { urlDeFichaEn, type FichaFragrantica, type VotoEje } from '@/dominio/fragrantica';
 import { masVotadas } from '@/dominio/votos';
 import type { FichaParaAlta } from '@/servicios/consultas';
-import { contextosQueEncajan, type SugerenciaContextos } from '@/dominio/sugerencia-contextos';
+import { promptSugerencia } from '@/dominio/sugerencia-contextos';
 import { VALORES_VACIOS, type Nivel, type ValoresPerfume } from '@/componentes/valores-perfume';
 import { ParecidosFragrantica } from '@/componentes/ParecidosFragrantica';
 
@@ -163,7 +163,6 @@ export function FormularioPerfume({
   fichaInicial,
   fichaCatalogo,
   compartidaCon = 0,
-  sugerirConIa = false,
   consultarAlAbrir = false,
   yaLoTengo = false,
   deseoId,
@@ -210,8 +209,6 @@ export function FormularioPerfume({
   fichaCatalogo?: FichaParaAlta | null;
   /** Al editar: cuantas personas mas tienen este perfume y veran la ficha. */
   compartidaCon?: number;
-  /** Hay clave de Claude: se pueden pedir contextos sugeridos. */
-  sugerirConIa?: boolean;
   /**
    * Ficha ya leida en el servidor, cuando se comparte el texto de la pagina
    * desde el movil. Llega parseada para no tener que mandar los 17 kB de
@@ -266,10 +263,8 @@ export function FormularioPerfume({
   const [guardando, setGuardando] = useState(false);
   /** El frasco que ya tengo de este perfume, si el servidor lo ha encontrado. */
   const [duplicadoDe, setDuplicadoDe] = useState<string | null>(null);
-  const [sugerencia, setSugerencia] = useState<SugerenciaContextos | null>(null);
-  const [sugiriendo, setSugiriendo] = useState(false);
-  const [avisoSugerencia, setAvisoSugerencia] = useState<string | null>(null);
-  const sugerenciaPedida = useRef(false);
+  /** El prompt para la app de Claude, mientras se enseña. */
+  const [prompt, setPrompt] = useState<string | null>(null);
   /** El resultado de «¿Merece la pena?», mientras se enseña. */
   const [evaluacion, setEvaluacion] = useState<Extract<RespuestaEvaluacion, { ok: true }> | null>(
     null,
@@ -494,59 +489,25 @@ export function FormularioPerfume({
   }
 
   /**
-   * Pide a Claude su opinion sobre cada contexto, por las notas y las
-   * opiniones que encuentre en internet. Si no hay nada marcado, marca los que
-   * encajan; si ya hay algo, solo lo enseña, como los votos de Fragrantica.
+   * Arma el prompt con lo que haya escrito hasta ahora para pegarlo en la app
+   * de Claude. No llama a ninguna API: la opinion sale de la conversacion.
    */
-  async function pedirSugerencia() {
-    sugerenciaPedida.current = true;
-    setSugiriendo(true);
-    setAvisoSugerencia(null);
-    try {
-      const familiasElegidas = familias.filter((f) => v.familiaIds.includes(f.id)).map((f) => f.nombre);
-      const r = await fetch('/api/contextos-sugeridos', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
+  function prepararPrompt() {
+    setPrompt(
+      promptSugerencia(
+        {
           nombre: v.nombre,
           marca: v.marca,
           concentracion: v.concentracion || undefined,
-          notas: v.notas,
-          familias: familiasElegidas,
-        }),
-      });
-      const datos = await r.json();
-      if (!datos.ok) {
-        setAvisoSugerencia(datos.mensaje ?? 'No se han podido sugerir contextos. Márcalos a mano.');
-        return;
-      }
-      const nueva: SugerenciaContextos = datos.sugerencia;
-      setSugerencia(nueva);
-      setV((previo) =>
-        previo.contextoIds.length > 0 ? previo : { ...previo, contextoIds: contextosQueEncajan(nueva) },
-      );
-    } catch {
-      setAvisoSugerencia('No hay conexión. Marca los contextos a mano.');
-    } finally {
-      setSugiriendo(false);
-    }
+          anio: v.anioLanzamiento || undefined,
+          notas: conNotasPendientes(),
+          familias: familias.filter((f) => v.familiaIds.includes(f.id)).map((f) => f.nombre),
+          fragranticaUrl: v.fragranticaUrl || undefined,
+        },
+        contextos.map((c) => c.nombre),
+      ),
+    );
   }
-
-  /**
-   * Se pide sola al llegar a los contextos, en un alta y al editar, con
-   * nombre y marca ya puestos y, si los hay, las notas y familias. Al editar
-   * ya hay contextos marcados, asi que solo se enseña la opinion.
-   */
-  // Al editar, la revision es la pantalla de entrada: pedirla ahi la lanzaria
-  // cada vez que se abre el editor. Ahi queda el boton; sola, solo en el paso.
-  const enContextos = (modo === 'revision' && !perfumeId) || (modo === 'pasos' && paso === 6);
-  useEffect(() => {
-    if (!sugerirConIa || sugerenciaPedida.current || !enContextos) return;
-    if (!v.nombre.trim() || !v.marca.trim()) return;
-    void pedirSugerencia();
-    // Solo depende de haber llegado al paso: el resto se lee al pedirla.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enContextos]);
 
   async function guardar(confirmarDuplicado = false) {
     setGuardando(true);
@@ -1040,16 +1001,7 @@ export function FormularioPerfume({
   const seccionContextos = () => (
       <section className="space-y-3">
         <p className="text-sm text-texto-tenue">Mínimo uno, los que quieras.</p>
-        {sugerirConIa ? (
-          <SugerenciaDeContextos
-            sugerencia={sugerencia}
-            sugiriendo={sugiriendo}
-            aviso={avisoSugerencia}
-            actual={v.contextoIds}
-            pedir={pedirSugerencia}
-            aplicar={(contextoIds) => cambiar({ contextoIds })}
-          />
-        ) : null}
+        <PromptDeContextos prompt={prompt} preparar={prepararPrompt} cerrar={() => setPrompt(null)} />
         <div className="flex flex-wrap gap-2">
           {contextos.map((c) => (
             <button
@@ -1512,74 +1464,69 @@ function conFicha(previo: ValoresPerfume, ficha: FichaParaAlta): ValoresPerfume 
 }
 
 /**
- * La opinion de Claude encima de las casillas de contextos: los que encajan y
- * los que no, cada uno con su motivo, y el boton para marcar justo los que
- * encajan si se ha cambiado algo.
+ * «Sugerir contextos con IA»: en vez de llamar a la API, enseña un prompt con
+ * todo lo necesario para pegarlo en una conversacion de la app de Claude.
  */
-function SugerenciaDeContextos({
-  sugerencia,
-  sugiriendo,
-  aviso,
-  actual,
-  pedir,
-  aplicar,
+function PromptDeContextos({
+  prompt,
+  preparar,
+  cerrar,
 }: {
-  sugerencia: SugerenciaContextos | null;
-  sugiriendo: boolean;
-  aviso: string | null;
-  actual: string[];
-  pedir: () => void;
-  aplicar: (contextoIds: string[]) => void;
+  prompt: string | null;
+  preparar: () => void;
+  cerrar: () => void;
 }) {
-  if (sugiriendo) {
+  const [copiado, setCopiado] = useState<'no' | 'si' | 'error'>('no');
+  if (!prompt) {
     return (
-      <p className="text-sm text-texto-tenue" aria-live="polite">
-        Buscando opiniones y mirando las notas para valorar cada contexto…
-      </p>
+      <button
+        type="button"
+        onClick={() => {
+          setCopiado('no');
+          preparar();
+        }}
+        className="boton-secundario w-full text-sm"
+      >
+        Sugerir contextos con IA
+      </button>
     );
   }
-  if (!sugerencia) {
-    return (
-      <div className="space-y-2">
-        {aviso ? <p className="aviso-atencion">{aviso}</p> : null}
-        <button type="button" onClick={pedir} className="boton-secundario w-full text-sm">
-          Sugerir contextos con IA
-        </button>
-      </div>
-    );
+  async function copiar() {
+    try {
+      await navigator.clipboard.writeText(prompt ?? '');
+      setCopiado('si');
+    } catch {
+      setCopiado('error');
+    }
   }
-  const encajan = sugerencia.valoraciones.filter((c) => c.encaja);
-  const noEncajan = sugerencia.valoraciones.filter((c) => !c.encaja);
-  const grupo = (titulo: string, simbolo: string, lista: typeof encajan) =>
-    lista.length > 0 ? (
-      <div className="space-y-1">
-        <p className="font-semibold">{titulo}</p>
-        <ul className="space-y-1">
-          {lista.map((c) => (
-            <li key={c.id}>
-              <span aria-hidden="true">{simbolo} </span>
-              <span className="font-medium">{c.nombre}</span>
-              <span className="text-texto-tenue"> — {c.motivo}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
-    ) : null;
   return (
     <div className="tarjeta space-y-3 text-sm">
-      {sugerencia.resumen ? <p>{sugerencia.resumen}</p> : null}
-      {encajan.length === 0 ? (
-        <p className="text-texto-tenue">No encaja claro en ninguno de tus contextos.</p>
-      ) : null}
-      {grupo('Lo recomienda para', '✓', encajan)}
-      {grupo('No lo recomienda para', '✗', noEncajan)}
-      <MarcarSegunVotos
-        propuesta={encajan.map((c) => c.id)}
-        actual={actual}
-        aplicar={aplicar}
-        etiqueta="Marcar los recomendados"
+      <p>
+        Copia este texto y pégalo en una conversación nueva en la app de Claude. Te dirá qué
+        contextos encajan y por qué; luego márcalos aquí abajo.
+      </p>
+      <textarea
+        readOnly
+        rows={8}
+        value={prompt}
+        onFocus={(e) => e.currentTarget.select()}
+        aria-label="Prompt para la app de Claude"
+        className="font-mono text-xs"
       />
-      <p className="text-xs text-texto-tenue">Opinión de la IA: manda lo que marques tú.</p>
+      <div className="grid grid-cols-2 gap-2">
+        <button type="button" onClick={copiar} className="boton-primario text-sm">
+          {copiado === 'si' ? 'Copiado' : 'Copiar'}
+        </button>
+        <button type="button" onClick={cerrar} className="boton-secundario text-sm">
+          Cerrar
+        </button>
+      </div>
+      {copiado === 'error' ? (
+        <p className="aviso-atencion">No se ha podido copiar: selecciona el texto y cópialo a mano.</p>
+      ) : null}
+      <p className="text-xs text-texto-tenue">
+        Si cambias las notas o las familias, ciérralo y vuelve a pulsar para regenerarlo.
+      </p>
     </div>
   );
 }

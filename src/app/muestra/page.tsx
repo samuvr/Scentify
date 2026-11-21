@@ -11,7 +11,6 @@ import { VALORES_VACIOS } from '@/componentes/valores-perfume';
 import { esFechaIso } from '@/dominio/navegacion';
 import { datosDeUrlFragrantica } from '@/dominio/fragrantica';
 import { usuarioActual } from '@/servicios/auth';
-import { claudeDisponible } from '@/servicios/claude';
 import {
   fichaParaAlta,
   fichaPorUrl,
@@ -88,7 +87,6 @@ export default async function PaginaMuestra({
           familias={familias.map((f) => ({ id: f.id, slug: f.slug, nombre: f.nombre }))}
           notasConocidas={notas.map((n) => n.nombre)}
           fichaCatalogo={fichaCatalogo}
-          sugerirConIa={claudeDisponible()}
         />
       )}
     </div>

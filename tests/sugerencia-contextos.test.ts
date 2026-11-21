@@ -1,79 +1,43 @@
-/** Sugerencia de contextos: mensaje, esquema de la herramienta y traduccion a ids. */
+/** Sugerencia de contextos: el prompt que se copia a la app de Claude. */
 import { describe, expect, it } from 'vitest';
-import {
-  contextosQueEncajan,
-  esquemaPeticionSugerencia,
-  esquemaPropuesta,
-  interpretarPropuesta,
-  mensajeSugerencia,
-} from '@/dominio/sugerencia-contextos';
+import { INSTRUCCIONES_SUGERENCIA, promptSugerencia } from '@/dominio/sugerencia-contextos';
 
-const CONTEXTOS = [
-  { id: 'id-oficina', slug: 'oficina', nombre: 'Oficina' },
-  { id: 'id-gym', slug: 'gym', nombre: 'Gym' },
-  { id: 'id-cita', slug: 'cita', nombre: 'Cita' },
-];
+const CONTEXTOS = ['Oficina', 'Gym', 'Cita'];
 
-describe('sugerencia de contextos', () => {
-  it('el mensaje lleva el perfume, las notas por nivel y las claves de los contextos', () => {
-    const perfume = esquemaPeticionSugerencia.parse({
-      nombre: 'Khamrah',
-      marca: 'Lattafa',
-      concentracion: 'EDP',
-      notas: [
-        { nombre: 'Canela', nivel: 'SALIDA' },
-        { nombre: 'Dátil', nivel: 'CORAZON' },
-        { nombre: 'Vainilla', nivel: 'FONDO' },
-      ],
-      familias: ['Gourmand'],
-    });
-    const texto = mensajeSugerencia(perfume, CONTEXTOS);
-    expect(texto).toContain('Khamrah de Lattafa (EDP)');
-    expect(texto).toContain('- salida: Canela');
-    expect(texto).toContain('- fondo: Vainilla');
-    expect(texto).toContain('Familias: Gourmand');
-    expect(texto).toContain('- gym: Gym');
-  });
-
-  it('sin notas pide que las busque', () => {
-    const perfume = esquemaPeticionSugerencia.parse({ nombre: 'Aventus', marca: 'Creed' });
-    expect(mensajeSugerencia(perfume, CONTEXTOS)).toContain('sin indicar; búscalas');
-  });
-
-  it('el esquema pide una valoración por contexto, con su clave, si encaja y el motivo', () => {
-    const esquema = esquemaPropuesta(CONTEXTOS);
-    const item = esquema.properties.valoraciones.items;
-    expect(item.properties.clave.enum).toEqual(['oficina', 'gym', 'cita']);
-    expect(item.required).toEqual(['clave', 'encaja', 'motivo']);
-    expect(esquema.additionalProperties).toBe(false);
-  });
-
-  it('traduce a ids en el orden de los contextos y descarta desconocidas y repetidas', () => {
-    const sugerencia = interpretarPropuesta(
+describe('prompt de sugerencia de contextos', () => {
+  it('lleva las instrucciones, el perfume, las notas por nivel, las familias y los contextos', () => {
+    const texto = promptSugerencia(
       {
-        valoraciones: [
-          { clave: 'cita', encaja: true, motivo: ' Dulce y envolvente. ' },
-          { clave: 'playa', encaja: true, motivo: 'No existe.' },
-          { clave: 'cita', encaja: false, motivo: 'Repetido.' },
-          { clave: 'gym', encaja: false, motivo: 'Demasiado denso para sudar.' },
-          { clave: 'oficina', encaja: true, motivo: 'Proyección moderada.' },
+        nombre: 'Khamrah',
+        marca: 'Lattafa',
+        concentracion: 'EDP',
+        anio: '2022',
+        notas: [
+          { nombre: 'Canela', nivel: 'SALIDA' },
+          { nombre: 'Dátil', nivel: 'CORAZON' },
+          { nombre: 'Vainilla', nivel: 'FONDO' },
         ],
-        resumen: 'Gourmand especiado.',
+        familias: ['Gourmand'],
+        fragranticaUrl: 'https://www.fragrantica.es/perfume/Lattafa-Perfumes/Khamrah-75805.html',
       },
       CONTEXTOS,
     );
-    expect(sugerencia).toEqual({
-      valoraciones: [
-        { id: 'id-oficina', nombre: 'Oficina', encaja: true, motivo: 'Proyección moderada.' },
-        { id: 'id-gym', nombre: 'Gym', encaja: false, motivo: 'Demasiado denso para sudar.' },
-        { id: 'id-cita', nombre: 'Cita', encaja: true, motivo: 'Dulce y envolvente.' },
-      ],
-      resumen: 'Gourmand especiado.',
-    });
-    expect(contextosQueEncajan(sugerencia!)).toEqual(['id-oficina', 'id-cita']);
+    expect(texto.startsWith(INSTRUCCIONES_SUGERENCIA)).toBe(true);
+    expect(texto).toContain('Khamrah de Lattafa (EDP, 2022)');
+    expect(texto).toContain('Ficha de Fragrantica: https://www.fragrantica.es/perfume/');
+    expect(texto).toContain('- salida: Canela');
+    expect(texto).toContain('- corazón: Dátil');
+    expect(texto).toContain('- fondo: Vainilla');
+    expect(texto).toContain('Familias: Gourmand');
+    expect(texto).toContain('- Oficina\n- Gym\n- Cita');
+    expect(texto).toContain('Contextos a marcar:');
   });
 
-  it('una entrada sin forma no es una propuesta', () => {
-    expect(interpretarPropuesta({ valoraciones: 'oficina' }, CONTEXTOS)).toBeNull();
+  it('sin notas pide que las busque y omite lo que no hay', () => {
+    const texto = promptSugerencia({ nombre: 'Aventus', marca: 'Creed', notas: [], familias: [] }, CONTEXTOS);
+    expect(texto).toContain('Aventus de Creed\n');
+    expect(texto).toContain('no las tengo; búscalas');
+    expect(texto).not.toContain('Familias:');
+    expect(texto).not.toContain('Ficha de Fragrantica');
   });
 });
