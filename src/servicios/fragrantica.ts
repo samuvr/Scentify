@@ -17,7 +17,12 @@
  * espere a que aparezcan antes de devolver la pagina.
  */
 import 'server-only';
-import { esUrlDeFichaValida, leerFichaFragrantica, type FichaFragrantica } from '@/dominio/fragrantica';
+import {
+  esUrlDeFichaValida,
+  leerFichaFragrantica,
+  urlCanonicaDeFicha,
+  type FichaFragrantica,
+} from '@/dominio/fragrantica';
 
 const TIMEOUT_MS = 8000;
 const MAX_BYTES = 3_000_000;
@@ -42,6 +47,22 @@ const ZENROWS = 'https://api.zenrows.com/v1/';
 const SELECTOR_VOTOS = 'div[index] span.tabular-nums';
 
 /**
+ * Cada `wait_for` dentro de las instrucciones se da por fallido a los 10 s, y
+ * hay dias en que Fragrantica tarda mas en cargar los votos: en los logs, la
+ * misma ficha llego sin votos tras 41 s y con ellos en 15 s un rato despues.
+ * Por eso se encadenan tres: si el primero ya los ve, los otros dos pasan al
+ * instante; si no, se sigue esperando hasta 30 s en total.
+ */
+const ESPERAS_DE_VOTOS = 3;
+
+/**
+ * Si aun asi la pagina llega sin votos y queda plazo de sobra, se pide una
+ * vez mas. Es raro y ZenRows cobra las dos, pero sin votos la lectura vale
+ * la mitad.
+ */
+const MINIMO_PARA_REINTENTAR_MS = 50_000;
+
+/**
  * Esperar a los votos dentro de `js_instructions`, no con el `wait_for` de
  * primer nivel. Si los votos no aparecen (una ficha sin votos todavia), el de
  * primer nivel acaba en un 422 y se pierde la pagina entera, notas incluidas;
@@ -49,7 +70,10 @@ const SELECTOR_VOTOS = 'div[index] span.tabular-nums';
  * devuelve la pagina igual. El segundo de despues es por si los recuentos se
  * animan al aparecer.
  */
-const ESPERAR_VOTOS = JSON.stringify([{ wait_for: SELECTOR_VOTOS }, { wait: 1000 }]);
+const ESPERAR_VOTOS = JSON.stringify([
+  ...Array.from({ length: ESPERAS_DE_VOTOS }, () => ({ wait_for: SELECTOR_VOTOS })),
+  { wait: 1000 },
+]);
 
 /** User-Agent de navegador normal, como pide la especificacion. */
 const CABECERAS = {
@@ -93,6 +117,9 @@ export async function consultarFicha(url: string): Promise<ResultadoConsulta> {
   const clave = claveLector();
   const conLector = clave !== null;
   if (!esUrlDeFichaValida(url)) return { ok: false, motivo: 'url-no-valida', conLector };
+  // Lo de detras de la ruta (`#:~:text=…` al compartir una seleccion, `?…`)
+  // no cambia la ficha y solo ensucia la peticion.
+  url = urlCanonicaDeFicha(url);
 
   const fin = Date.now() + PLAZO_MS;
   const quedan: Plazo = () => fin - Date.now();
@@ -103,13 +130,25 @@ export async function consultarFicha(url: string): Promise<ResultadoConsulta> {
     return directa;
   }
 
-  const descarga = await descargarConLector(url, clave, quedan);
-  const lector = leerDescarga(descarga, conLector);
+  let descarga = await descargarConLector(url, clave, quedan);
+  let lector = leerDescarga(descarga, conLector);
   if (descarga.ok) {
     // Una linea por lectura: es lo que dice, desde los logs de Vercel, si
     // los votos llegaron y, si no, por que (ver «Leer la ficha con solo el
     // enlace» en el README).
     console.info('[fragrantica] ZenRows', url, descarga.traza, JSON.stringify(huella(descarga, lector)));
+    if (sinVotos(lector) && quedan() >= MINIMO_PARA_REINTENTAR_MS) {
+      const otra = await descargarConLector(url, clave, quedan);
+      const releida = leerDescarga(otra, conLector);
+      if (otra.ok) {
+        console.info('[fragrantica] ZenRows, 2.º intento', url, otra.traza, JSON.stringify(huella(otra, releida)));
+      }
+      // Solo se cambia si la segunda trae los votos: si no, la primera vale.
+      if (releida.ok && !sinVotos(releida)) {
+        descarga = otra;
+        lector = releida;
+      }
+    }
   }
   if (lector.ok) return lector;
   console.warn('[fragrantica] ZenRows no ha traido la ficha:', lector.detalle ?? lector.motivo, url);
@@ -122,6 +161,11 @@ export async function consultarFicha(url: string): Promise<ResultadoConsulta> {
   if (agotado || quedan() < MINIMO_PARA_DIRECTA_MS) return lector;
   const directa = leerDescarga(await descargarDirecto(url, quedan), conLector);
   return directa.ok ? directa : lector;
+}
+
+/** La ficha se ha leido, pero sin ningun voto de estacion ni de momento. */
+function sinVotos(resultado: ResultadoConsulta): boolean {
+  return resultado.ok && !resultado.ficha.estaciones && !resultado.ficha.momentos;
 }
 
 async function descargarDirecto(url: string, quedan: Plazo): Promise<Descarga> {

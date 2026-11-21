@@ -451,3 +451,13 @@ describe('los votos que no se han pintado no se inventan', () => {
     expect(real.momentos?.NOCHE.votos).toBe(2700);
   });
 });
+
+describe('urlCanonicaDeFicha', () => {
+  it('quita el fragmento y los parámetros que no cambian la ficha', async () => {
+    const { urlCanonicaDeFicha, urlDeFichaEn } = await import('@/dominio/fragrantica');
+    const ficha = 'https://www.fragrantica.es/perfume/Afnan/9am-Dive-78611.html';
+    expect(urlCanonicaDeFicha(`${ficha}#:~:text=%E2%98%80%EF%B8%8F,Privacy`)).toBe(ficha);
+    expect(urlCanonicaDeFicha(`${ficha}?utm=x`)).toBe(ficha);
+    expect(urlDeFichaEn([`Mira esto ${ficha}#:~:text=hola`])).toBe(ficha);
+  });
+});

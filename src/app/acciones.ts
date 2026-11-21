@@ -6,6 +6,7 @@
  */
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
+import { esUrlDeFichaValida, urlCanonicaDeFicha } from '@/dominio/fragrantica';
 import { z } from 'zod';
 import { destinoSeguro, esUuid } from '@/dominio/navegacion';
 import { esquemaParecido, MAXIMO_PARECIDOS } from '@/dominio/parecidos';
@@ -397,7 +398,13 @@ const esquemaPerfume = z.object({
   estado: z.enum(['LO_TENGO', 'LO_TUVE', 'MUESTRA']),
   valoracion: z.coerce.number().int().min(1).max(5).nullable().optional(),
   notasPersonales: z.string().max(4000).nullable().optional(),
-  fragranticaUrl: z.string().url().max(500).nullable().optional(),
+  fragranticaUrl: z
+    .string()
+    .url()
+    .max(500)
+    .nullable()
+    .optional()
+    .transform((url) => (url && esUrlDeFichaValida(url) ? urlCanonicaDeFicha(url) : url)),
   /**
    * «Esta fragancia me recuerda a», si se ha leido la ficha en este alta o
    * edicion. La fecha de lectura la pone el servidor. Si no tiene la forma
@@ -535,7 +542,13 @@ const esquemaDeseo = z.object({
   prioridad: z.enum(['EN_EL_RADAR', 'LO_QUIERO', 'LO_NECESITO']),
   precioObjetivo: z.coerce.number().min(0).nullable().optional(),
   notas: z.string().max(2000).nullable().optional(),
-  fragranticaUrl: z.string().url().max(500).nullable().optional(),
+  fragranticaUrl: z
+    .string()
+    .url()
+    .max(500)
+    .nullable()
+    .optional()
+    .transform((url) => (url && esUrlDeFichaValida(url) ? urlCanonicaDeFicha(url) : url)),
   notasFondo: z.array(z.string().min(1).max(80)).max(30).optional(),
 });
 

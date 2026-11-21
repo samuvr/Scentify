@@ -837,7 +837,7 @@ export function urlDeFichaEn(textos: (string | undefined)[]): string | null {
     for (const candidata of texto.match(/https?:\/\/\S+/g) ?? [texto.trim()]) {
       // Chrome a veces arrastra un parentesis o una coma al final del enlace.
       const limpia = candidata.replace(/[).,;]+$/, '');
-      if (esUrlDeFichaValida(limpia)) return limpia;
+      if (esUrlDeFichaValida(limpia)) return urlCanonicaDeFicha(limpia);
     }
   }
   return null;
@@ -871,6 +871,20 @@ function aTexto(segmento: string | undefined): string {
     .replace(/-/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+/**
+ * La URL de la ficha sin lo que va detras de la ruta. Al compartir una
+ * seleccion, Chrome añade `#:~:text=…`, que no cambia la ficha y acababa
+ * guardado en el perfume y en cada peticion a ZenRows.
+ */
+export function urlCanonicaDeFicha(url: string): string {
+  try {
+    const analizada = new URL(url);
+    return `${analizada.origin}${analizada.pathname}`;
+  } catch {
+    return url;
+  }
 }
 
 /** Solo se aceptan URLs de ficha de Fragrantica; nada de recorrer el sitio. */

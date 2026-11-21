@@ -20,6 +20,11 @@ function responder(...respuestas: (() => Response)[]) {
 }
 
 const pagina = () => new Response(HTML, { status: 200 });
+/** La misma ficha con el componente de los votos aun sin pintar. */
+const paginaSinVotos = () =>
+  new Response(HTML.replace('<body', '<seasons-rating-new :perfume_id="1"></seasons-rating-new><body'), {
+    status: 200,
+  });
 /** Un error de ZenRows, con su codigo en el cuerpo como lo manda su API. */
 const error = (status: number, code = 'X001') => () =>
   new Response(JSON.stringify({ code, status, title: 'Error' }), { status });
@@ -97,10 +102,40 @@ describe('con clave de ZenRows', () => {
     const peticion = destino(espia, 0);
     expect(peticion.searchParams.has('wait_for')).toBe(false);
     expect(peticion.searchParams.has('wait')).toBe(false);
+    // Tres esperas encadenadas: hasta 30 s si Fragrantica tarda en cargar los votos.
     expect(JSON.parse(peticion.searchParams.get('js_instructions') ?? 'null')).toEqual([
+      { wait_for: 'div[index] span.tabular-nums' },
+      { wait_for: 'div[index] span.tabular-nums' },
       { wait_for: 'div[index] span.tabular-nums' },
       { wait: 1000 },
     ]);
+  });
+
+  it('si la ficha llega sin votos, la pide otra vez y se queda con la que los trae', async () => {
+    const espia = responder(paginaSinVotos, pagina);
+    const resultado = await consultarFicha(FICHA);
+
+    expect(espia).toHaveBeenCalledTimes(2);
+    expect(resultado.ok).toBe(true);
+    if (resultado.ok) expect(resultado.ficha.estaciones).not.toBeNull();
+  });
+
+  it('si la segunda tampoco trae votos, se queda con la primera sin pedir más', async () => {
+    const espia = responder(paginaSinVotos, paginaSinVotos);
+    const resultado = await consultarFicha(FICHA);
+
+    expect(espia).toHaveBeenCalledTimes(2);
+    expect(resultado.ok).toBe(true);
+    if (resultado.ok) {
+      expect(resultado.ficha.estaciones).toBeNull();
+      expect(resultado.ficha.notas.salida.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('pide la ficha sin el fragmento que añade Chrome al compartir una selección', async () => {
+    const espia = responder(pagina);
+    await consultarFicha(`${FICHA}#:~:text=%E2%98%80%EF%B8%8F,Privacy%20Preferences`);
+    expect(destino(espia, 0).searchParams.get('url')).toBe(FICHA);
   });
 
   it('si ZenRows rechaza la espera con un 400, repite sin ella antes de rendirse', async () => {

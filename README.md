@@ -564,9 +564,14 @@ página desde el móvil (Android) entra por el mismo camino.
   `<!---->` de Vue), por eso traen las barras.
 - **Se espera a los votos, no un tiempo fijo.** Con `wait=2000` llegaban las notas y
   las familias pero no los votos: a los dos segundos el componente seguía sin pintar.
-  Ahora la petición lleva `js_instructions=[{"wait_for":"div[index] span.tabular-nums"},
-  {"wait":1000}]`: espera a que aparezcan los seis recuentos (cuatro estaciones, día y
-  noche), que en el HTML del servidor no están. Va dentro de `js_instructions` y no
+  Ahora la petición lleva `js_instructions` con tres `{"wait_for":"div[index]
+  span.tabular-nums"}` seguidos y un `{"wait":1000}`: espera a que aparezcan los seis
+  recuentos (cuatro estaciones, día y noche), que en el HTML del servidor no están.
+  Son tres porque cada uno se rinde a los 10 s, y hay ratos en que Fragrantica tarda
+  más en cargar los votos (en los logs, la misma ficha llegó sin votos tras 41 s y con
+  ellos en 15 s poco después); si el primero ya los ve, los otros pasan al instante.
+  Si aun así la ficha llega sin votos y quedan al menos 50 s de plazo, se pide una vez
+  más (`2.º intento` en el log) y se usa la segunda solo si los trae. Va dentro de `js_instructions` y no
   como el `wait_for` de primer nivel a propósito: si el selector no aparece (una
   ficha sin votos todavía), el de primer nivel acaba en un 422 y se pierde la página
   entera, notas incluidas; dentro de las instrucciones, ZenRows da ese paso por
