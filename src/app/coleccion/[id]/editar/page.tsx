@@ -6,7 +6,6 @@ import { notFound, redirect } from 'next/navigation';
 import { FormularioPerfume } from '@/componentes/FormularioPerfume';
 import type { ValoresPerfume } from '@/componentes/valores-perfume';
 import { usuarioActual } from '@/servicios/auth';
-import { claudeDisponible } from '@/servicios/claude';
 import {
   fichaDePerfume,
   listarContextos,
@@ -84,7 +83,6 @@ export default async function PaginaEditar({
         contextos={contextos.map((c) => ({ id: c.id, nombre: c.nombre }))}
         familias={familias.map((f) => ({ id: f.id, slug: f.slug, nombre: f.nombre }))}
         notasConocidas={notas.map((n) => n.nombre)}
-        sugerirConIa={claudeDisponible()}
         consultarAlAbrir={fragrantica === '1' && Boolean(iniciales.fragranticaUrl)}
         recienComprado={recienComprado}
       />

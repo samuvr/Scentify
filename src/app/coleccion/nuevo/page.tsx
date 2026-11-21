@@ -7,7 +7,6 @@ import { desempaquetarFicha } from '@/dominio/ficha-compartida';
 import { datosDeUrlFragrantica } from '@/dominio/fragrantica';
 import { esUuid } from '@/dominio/navegacion';
 import { usuarioActual } from '@/servicios/auth';
-import { claudeDisponible } from '@/servicios/claude';
 import {
   fichaParaAlta,
   fichaPorUrl,
@@ -108,7 +107,6 @@ export default async function PaginaNuevoPerfume({
         fichaInicial={desempaquetarFicha(previos.ficha)}
         fichaCatalogo={miFrasco ? null : fichaCatalogo}
         yaLoTengo={Boolean(miFrasco)}
-        sugerirConIa={claudeDisponible()}
         deseoId={esUuid(previos.deseo) ? previos.deseo : undefined}
       />
     </div>
